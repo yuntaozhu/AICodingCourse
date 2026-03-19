@@ -2,7 +2,7 @@ import Slide from "@/components/Slide";
 
 export default function P85() {
   return (
-    <Slide backgroundColor="#020205" notes="代码评审（Code Review）不再是人类的负担。AI 驱动的 CR 可以做到 24/7 实时响应，不仅能发现低级的语法错误，还能指出深层的架构违规、性能瓶颈和安全隐患。人类评审员的角色转变为‘终审法官’。">
+    <Slide backgroundColor="#020205" notes="代码评审（Code Review）不再是人类的负担。AI 驱动的 CR 可以做到 24/7 实时响应，不仅能处理业务 PR，还能自动审核由 AI 代理生成的依赖升级 PR。它不仅能发现低级的语法错误，还能指出深层的架构违规、性能瓶颈和安全隐患。人类评审员的角色转变为‘终审法官’。">
       <div className="flex flex-col justify-center h-full">
         <h2 className="text-5xl mb-12 font-bold text-gemini-cyan">AI 驱动的代码评审 (CR)</h2>
         <div className="bg-white/5 p-8 rounded-2xl border border-white/10">

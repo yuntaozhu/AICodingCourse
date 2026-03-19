@@ -2,7 +2,7 @@ import Slide from "@/components/Slide";
 
 export default function P84() {
   return (
-    <Slide backgroundColor="#020205" notes="在这个流水线中，自主代理（Autonomous Agents）扮演了核心角色。它们不再是简单的脚本，而是具备推理、规划和执行能力的‘数字员工’。它们可以处理复杂的依赖关系，解决代码冲突，甚至在发现架构不合理时提出重构建议。">
+    <Slide backgroundColor="#020205" notes="在这个流水线中，自主代理（Autonomous Agents）扮演了核心角色。它们不再是简单的脚本，而是具备推理、规划和执行能力的‘数字员工’。它们可以处理复杂的依赖关系，解决代码冲突，甚至通过 Browser Use 能力自主进行 E2E 验证，确保业务逻辑的完整性。">
       <div className="flex flex-col justify-center h-full">
         <h2 className="text-5xl mb-12 font-bold text-white">流水线上的“数字员工”</h2>
         <div className="grid grid-cols-2 gap-12">
@@ -20,6 +20,10 @@ export default function P84() {
               <li className="flex gap-3 items-start">
                 <span className="text-gemini-cyan">●</span>
                 <span><strong className="text-white">冲突解决：</strong> 自动处理 Git 冲突，确保代码可合并。</span>
+              </li>
+              <li className="flex gap-3 items-start">
+                <span className="text-gemini-cyan">●</span>
+                <span><strong className="text-white">Browser Use：</strong> 自主操作浏览器进行 E2E 验证与交互。</span>
               </li>
               <li className="flex gap-3 items-start">
                 <span className="text-gemini-cyan">●</span>
