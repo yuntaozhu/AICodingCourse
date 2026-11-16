@@ -36,7 +36,7 @@ export default function P84() {
             <div className="relative bg-black/40 p-8 rounded-2xl border border-white/10 h-full flex flex-col justify-center">
               <div className="text-center space-y-4">
                 <div className="text-6xl">🧠</div>
-                <div className="text-2xl font-bold text-gemini-cyan">Gemini 3.1 Reasoning</div>
+                <div className="text-2xl font-bold text-gemini-cyan">AI Coding Reasoning</div>
                 <p className="text-sm opacity-60">基于超长上下文的全局代码理解与逻辑推理。</p>
               </div>
             </div>

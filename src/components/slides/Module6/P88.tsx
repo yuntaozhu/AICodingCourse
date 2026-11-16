@@ -24,7 +24,7 @@ export default function P88() {
           </div>
           <div className="bg-gemini-purple/10 p-8 rounded-2xl border border-gemini-purple/30">
             <h3 className="text-xl font-bold mb-4 text-gemini-cyan">AI 安全大脑</h3>
-            <p className="text-sm opacity-70 mb-6 italic">“通过 Gemini 3.1 的推理能力，我们可以识别复杂的逻辑漏洞，这些漏洞是传统静态扫描工具无法发现的。”</p>
+            <p className="text-sm opacity-70 mb-6 italic">“通过 AI Coding 的推理能力，我们可以识别复杂的逻辑漏洞，这些漏洞是传统静态扫描工具无法发现的。”</p>
             <div className="flex justify-between text-xs font-mono">
               <span className="text-green-400">✓ 注入攻击防护</span>
               <span className="text-green-400">✓ 越权访问检查</span>

@@ -2,7 +2,7 @@ import Slide from "@/components/Slide";
 
 export default function P84b() {
   return (
-    <Slide backgroundColor="#020205" notes="Gemini 3.1 的 Browser Use 能力让 AI 代理能够像人类一样操作浏览器。这不仅仅是运行脚本，而是 AI 能够理解页面布局、点击按钮、填写表单，并实时验证复杂的业务流程。通过 Playwright 或 Selenium，代理可以跨越不同的状态和交互，确保动态应用的每一处细节都符合预期。">
+    <Slide backgroundColor="#020205" notes="AI Coding 的 Browser Use 能力让 AI 代理能够像人类一样操作浏览器。这不仅仅是运行脚本，而是 AI 能够理解页面布局、点击按钮、填写表单，并实时验证复杂的业务流程。通过 Playwright 或 Selenium，代理可以跨越不同的状态和交互，确保动态应用的每一处细节都符合预期。">
       <div className="flex flex-col justify-center h-full">
         <h2 className="text-5xl mb-12 font-bold text-gemini-cyan italic">Browser Use：自主 E2E 验证</h2>
         
@@ -46,7 +46,7 @@ export default function P84b() {
               </div>
             </div>
             <div className="flex-1 p-6 font-mono text-[10px] space-y-2 text-gemini-cyan/80">
-              <div className="text-white/40"># Gemini 3.1 Browser Session</div>
+              <div className="text-white/40"># AI Coding Browser Session</div>
               <div>{`> `}page.goto('/checkout')</div>
               <div>{`> `}page.fill('#email', 'user@example.com')</div>
               <div>{`> `}page.click('text=Proceed to Payment')</div>

@@ -8,7 +8,8 @@ import P7 from "./P7";
 import P8 from "./P8";
 import P9 from "./P9";
 import P10 from "./P10";
+import { Module1Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module1Slides = [
-  P1, P2, P3, P4, P5, P6, P7, P8, P9, P10
+  P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, Module1Quiz
 ];

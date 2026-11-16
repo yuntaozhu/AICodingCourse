@@ -2,7 +2,7 @@ import Slide from "@/components/Slide";
 
 export default function P98() {
   return (
-    <Slide backgroundColor="#020205" notes="现在是提问环节。欢迎大家就 AI Native 研发范式、Gemini 3.1 的应用、或者任何关于未来的想法进行交流。">
+    <Slide backgroundColor="#020205" notes="现在是提问环节。欢迎大家就 AI Native 研发范式、AI Coding 的应用、或者任何关于未来的想法进行交流。">
       <div className="flex flex-col justify-center items-center h-full text-center">
         <h2 className="text-8xl mb-12 font-bold text-gemini-cyan italic">Q & A</h2>
         <div className="h-1 w-32 bg-gemini-purple mb-12"></div>

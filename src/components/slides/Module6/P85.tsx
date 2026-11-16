@@ -13,16 +13,16 @@ export default function P85() {
           </div>
           <div className="space-y-6">
             <div className="p-4 bg-red-500/10 rounded-lg border-l-4 border-red-500">
-              <div className="font-bold text-red-400 mb-1">Security Alert</div>
-              <p className="text-sm opacity-70">检测到 SQL 注入风险：在第 45 行未对输入进行参数化处理。</p>
+              <div className="font-bold text-red-400 mb-1">Security & Best Practices</div>
+              <p className="text-sm opacity-70">检测到 SQL 注入风险：在第 45 行未对输入进行参数化处理。违反安全编码规范。</p>
             </div>
             <div className="p-4 bg-yellow-500/10 rounded-lg border-l-4 border-yellow-500">
-              <div className="font-bold text-yellow-400 mb-1">Performance Tip</div>
-              <p className="text-sm opacity-70">循环中存在不必要的 API 调用，建议使用批量查询优化。</p>
+              <div className="font-bold text-yellow-400 mb-1">Performance & Scalability</div>
+              <p className="text-sm opacity-70">循环中存在不必要的 API 调用，建议使用批量查询优化。高并发场景下可能导致瓶颈。</p>
             </div>
             <div className="p-4 bg-gemini-cyan/10 rounded-lg border-l-4 border-gemini-cyan">
-              <div className="font-bold text-gemini-cyan mb-1">Architecture Alignment</div>
-              <p className="text-sm opacity-70">代码符合《2026 领域驱动设计规范》。</p>
+              <div className="font-bold text-gemini-cyan mb-1">Architectural Adherence</div>
+              <p className="text-sm opacity-70">代码符合《2026 领域驱动设计规范》，模块解耦良好。</p>
             </div>
           </div>
           <div className="mt-8 text-right">

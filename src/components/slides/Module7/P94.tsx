@@ -2,7 +2,7 @@ import Slide from "@/components/Slide";
 
 export default function P94() {
   return (
-    <Slide backgroundColor="#020205" notes="AI 架构大脑（AI Architecture Brain）是企业的‘数字中枢’。它存储了企业所有的架构意图、业务逻辑和安全规范。通过 Gemini 3.1 的长上下文能力，它能够实时指导 AI 代理的开发工作，确保所有产出都符合企业的‘意志’。">
+    <Slide backgroundColor="#020205" notes="AI 架构大脑（AI Architecture Brain）是企业的‘数字中枢’。它存储了企业所有的架构意图、业务逻辑和安全规范。通过 AI Coding 的长上下文能力，它能够实时指导 AI 代理的开发工作，确保所有产出都符合企业的‘意志’。">
       <div className="flex flex-col justify-center h-full">
         <h2 className="text-5xl mb-12 font-bold text-gemini-cyan">AI 架构大脑：<span className="text-white italic">数字中枢</span></h2>
         <div className="relative p-12 bg-white/5 rounded-3xl border border-white/10 overflow-hidden">
