@@ -19,9 +19,41 @@ interface QuizSlideProps {
 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
+const STORAGE_KEY = "cursor_course_quiz_v1";
+
+function loadStoredModuleAnswers(moduleNumber: number): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Record<string, number>>;
+    return parsed[String(moduleNumber)] || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredModuleAnswers(moduleNumber: number, moduleAnswers: Record<string, number>) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {};
+    if (Object.keys(moduleAnswers).length === 0) {
+      delete parsed[String(moduleNumber)];
+    } else {
+      parsed[String(moduleNumber)] = moduleAnswers;
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+  } catch {
+    // Ignore storage quota or serialization errors
+  }
+}
+
 export default function QuizSlide({ quiz }: QuizSlideProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>(() =>
+    loadStoredModuleAnswers(quiz.moduleNumber)
+  );
   const [showSummary, setShowSummary] = useState(false);
 
   const questions = quiz.questions;
@@ -46,10 +78,14 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const handleSelectOption = (optionIndex: number, e?: MouseEvent) => {
     e?.stopPropagation();
     if (isAnswered) return;
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.id]: optionIndex,
-    }));
+    setAnswers((prev) => {
+      const next = {
+        ...prev,
+        [currentQuestion.id]: optionIndex,
+      };
+      saveStoredModuleAnswers(quiz.moduleNumber, next);
+      return next;
+    });
   };
 
   const handlePrev = (e: MouseEvent) => {
@@ -80,6 +116,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const handleReset = (e: MouseEvent) => {
     e.stopPropagation();
     setAnswers({});
+    saveStoredModuleAnswers(quiz.moduleNumber, {});
     setCurrentIndex(0);
     setShowSummary(false);
   };

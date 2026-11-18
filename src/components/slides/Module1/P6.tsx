@@ -4,172 +4,118 @@ export default function P6() {
   return (
     <section>
       {/* Main Slide */}
-      <Slide notes="跨模态理解是 AI Coding 的杀手锏。它可以直接理解 UI 设计稿。">
+      <Slide notes="产品经理与独立开发者最常卡在“前端还原”。在 Cursor 中，通过拖入高保真截图 + Figma MCP + 10-ui-tailwind.mdc，可直接生成响应式组件并用 Browser MCP 自检。">
         <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <h2 className="text-4xl mb-8 font-black italic tracking-tighter text-gemini-cyan glow-text">
-            跨模态理解：从设计稿到代码
+          <h2 className="text-4xl mb-6 font-bold tracking-tight text-gemini-cyan">
+            跨模态理解：Cursor 中的 Figma ➔ 代码闭环
           </h2>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <div className="p-5 bg-white/5 rounded-xl border border-white/10 hover:border-gemini-cyan/50 transition-all">
-                <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-gemini-cyan/20 rounded-lg flex items-center justify-center text-xs">1</span>
-                  视觉输入 (Visual Input)
-                </h3>
-                <p className="text-base opacity-70">AI 直接理解 Figma/Sketch 设计稿中的布局、间距、阴影和配色。</p>
+          <div className="grid grid-cols-2 gap-8 items-center">
+            <div className="space-y-4">
+              <div className="p-5 bg-white/5 rounded-xl border border-white/10">
+                <div className="text-xs font-mono text-gemini-cyan mb-1">INPUT · 截图 + FIGMA MCP</div>
+                <h3 className="text-lg font-bold mb-1.5 text-white">视觉结构与 Design Token 直读</h3>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  把截图直接拖进 Cursor <code className="text-gemini-cyan">Cmd+I</code>，或通过 <code className="text-gemini-cyan">Figma MCP</code> 读取精确圆角、字体字阶、色值与 AutoLayout 层级。
+                </p>
               </div>
-              <div className="p-5 bg-white/5 rounded-xl border border-white/10 hover:border-gemini-purple/50 transition-all">
-                <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-gemini-purple/20 rounded-lg flex items-center justify-center text-xs">2</span>
-                  语义映射 (Semantic Mapping)
-                </h3>
-                <p className="text-base opacity-70">将视觉元素映射为业务组件和状态逻辑，而非简单的 HTML 堆砌。</p>
+              <div className="p-5 bg-white/5 rounded-xl border border-white/10">
+                <div className="text-xs font-mono text-gemini-purple mb-1">OUTPUT · 组件化 + 规则对齐</div>
+                <h3 className="text-lg font-bold mb-1.5 text-white">自动对齐 .cursor/rules 前端规范</h3>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  挂载 <code className="text-gemini-purple">10-ui-tailwind.mdc</code> 后，Agent 不会输出乱糟糟的绝对定位，而是生成可复用的 React + Tailwind 响应式组件。
+                </p>
               </div>
             </div>
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gemini-cyan/20 blur-3xl rounded-full group-hover:bg-gemini-cyan/40 transition-all"></div>
-              <div className="relative aspect-video bg-black/40 rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden">
-                <div className="text-center">
-                  <div className="text-5xl mb-3">🖼️ ➔ 💻</div>
-                  <div className="text-[10px] font-mono opacity-40">Vision-to-Code Pipeline</div>
+
+            <div className="bg-[#0b0f19] p-6 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+              <div className="text-[11px] font-mono text-slate-400">CURSOR MULTIMODAL WORKFLOW</div>
+              <div className="space-y-2.5 text-xs font-mono">
+                <div className="p-3 rounded-lg bg-black/50 border border-white/10 text-slate-200">
+                  1. 拖入 Figma 截图 / 粘贴节点链接
                 </div>
-                <div className="absolute bottom-3 right-3 animate-bounce text-gemini-cyan">
-                  <span className="text-[10px] font-mono">SCROLL DOWN FOR DETAIL ↓</span>
+                <div className="p-3 rounded-lg bg-black/50 border border-gemini-cyan/30 text-gemini-cyan">
+                  2. Plan 模式拆解组件树 &amp; 断点状态
                 </div>
+                <div className="p-3 rounded-lg bg-black/50 border border-gemini-purple/30 text-gemini-purple">
+                  3. Agent 生成 TSX + Empty/Loading 交互
+                </div>
+                <div className="p-3 rounded-lg bg-black/50 border border-emerald-400/30 text-emerald-300">
+                  4. Playwright MCP 截图自检桌面与手机端
+                </div>
+              </div>
+              <div className="text-right text-[11px] font-mono text-gemini-cyan">
+                ↓ 向下查看前端落地步骤与视觉自检实战
               </div>
             </div>
           </div>
         </div>
       </Slide>
 
-      {/* Sub Slide 1: Visual Analysis */}
-      <Slide backgroundColor="#050505" notes="视觉分析不仅仅是看颜色，而是理解层级。">
+      {/* Sub Slide 1: Visual Analysis & Rules */}
+      <Slide backgroundColor="#050505" notes="如何避免 AI 生成一堆无法维护的硬编码 DIV？核心在于用 Rules 约束组件拆分与主题 Token。">
         <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <h3 className="text-3xl mb-8 font-bold text-gemini-cyan">深度视觉分析 (Deep Visual Analysis)</h3>
+          <div className="text-[11px] font-mono text-gemini-cyan mb-2">FRONTEND PIPELINE</div>
+          <h3 className="text-3xl mb-6 font-bold text-white">告别切图：Cursor 视觉工程三步法</h3>
           <div className="grid grid-cols-3 gap-6">
             <div className="p-5 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-gemini-cyan mb-3 text-sm"># Layout Engine</div>
-              <p className="text-xs opacity-70 leading-relaxed">
-                识别 Flexbox/Grid 布局模式。自动推断响应式断点（sm, md, lg）。
+              <div className="text-xs font-mono text-gemini-cyan mb-2">01 · LAYOUT &amp; TOKENS</div>
+              <h4 className="font-bold text-base mb-2 text-white">提取栅格与主题色</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                先让 Cursor 把设计稿的间距、主色与圆角沉淀到 <code className="text-white">@theme</code>，确保全站组件风格统一。
               </p>
             </div>
             <div className="p-5 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-gemini-cyan mb-3 text-sm"># Design Tokens</div>
-              <p className="text-xs opacity-70 leading-relaxed">
-                自动提取颜色、字体、圆角、阴影。生成符合企业规范的 Tailwind 配置。
+              <div className="text-xs font-mono text-gemini-purple mb-2">02 · STATE COVERAGE</div>
+              <h4 className="font-bold text-base mb-2 text-white">补齐设计稿没画的状态</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Figma 通常只有理想态。提示词里要求同时补齐 <strong className="text-white">Loading 骨架屏、空数据引导与表单报错态</strong>。
               </p>
             </div>
             <div className="p-5 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-gemini-cyan mb-3 text-sm"># Component Extraction</div>
-              <p className="text-xs opacity-70 leading-relaxed">
-                识别重复模式。自动将设计稿拆解为 Button, Card, Input 等原子组件。
+              <div className="text-xs font-mono text-emerald-400 mb-2">03 · COMPONENTIZATION</div>
+              <h4 className="font-bold text-base mb-2 text-white">Props 接口与可访问性</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                拆分为独立的 <code className="text-white">PricingCard</code>、<code className="text-white">FeatureGrid</code>，自动补全键盘可达性与对比度。
               </p>
             </div>
           </div>
-          <div className="mt-8 p-6 bg-gemini-cyan/5 rounded-xl border border-gemini-cyan/20 font-mono text-[10px] text-gemini-cyan/80">
-            {`// AI Vision Output Example
-{
-  "layout": "flex-row",
-  "spacing": "gap-8",
-  "components": ["HeroSection", "FeatureGrid", "CTA"],
-  "tokens": { "primary": "#4cddec", "radius": "2xl" }
-}`}
+          <div className="mt-6 p-4 bg-[#0b0f19] rounded-xl border border-gemini-cyan/20 font-mono text-xs text-slate-200">
+            <span className="text-gemini-cyan"># 实用提示词：</span>
+            {"基于附带 Figma 节点，使用 @src/styles/tokens.css 还原组件，严禁硬编码像素宽度；需同时适配 1280px 桌面与 375px 移动端。"}
           </div>
         </div>
       </Slide>
 
-      {/* Sub Slide 2: Logic Synthesis */}
-      <Slide backgroundColor="#050505" notes="从静态到动态，是跨模态理解的最高境界。">
+      {/* Sub Slide 2: Case Study - Indie Product Pricing & Dashboard */}
+      <Slide backgroundColor="#050505" notes="真实场景：产品经理 15 分钟在 Cursor 中从 Figma 完成可用前端页并自检修复。">
         <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <h3 className="text-3xl mb-8 font-bold text-gemini-purple">逻辑合成 (Logic Synthesis)</h3>
-          <div className="flex gap-8 items-center">
-            <div className="flex-1 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gemini-purple/20 flex items-center justify-center text-gemini-purple text-sm">⚡</div>
-                <div>
-                  <h4 className="font-bold text-sm">交互推断</h4>
-                  <p className="text-xs opacity-60">基于设计稿中的原型连线，自动生成 React 状态管理逻辑。</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gemini-purple/20 flex items-center justify-center text-gemini-purple text-sm">🛡️</div>
-                <div>
-                  <h4 className="font-bold text-sm">无障碍增强</h4>
-                  <p className="text-xs opacity-60">自动补全 ARIA 标签、Tab 顺序和语义化 HTML 标签。</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gemini-purple/20 flex items-center justify-center text-gemini-purple text-sm">📦</div>
-                <div>
-                  <h4 className="font-bold text-sm">数据绑定</h4>
-                  <p className="text-xs opacity-60">识别表单字段，自动生成 Zod 校验 Schema 和 API 提交逻辑。</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex-1 p-5 bg-black/60 rounded-xl border border-white/10 font-mono text-[9px] leading-tight text-white/40">
-              <div className="text-gemini-purple mb-1">// Generated React Component</div>
-              <div className="text-white/80">const CheckoutForm = () =&gt; {'{'}</div>
-              <div className="pl-4">const {'{'} register, handleSubmit {'}'} = useForm();</div>
-              <div className="pl-4">return (</div>
-              <div className="pl-8 text-gemini-cyan">{` <form className="grid grid-cols-2 gap-6" ...>`}</div>
-              <div className="pl-12 text-gemini-cyan">{`   <Input {...register("email")} label="Email" />`}</div>
-              <div className="pl-12 text-gemini-cyan">{`   <Button type="submit">Complete Order</Button>`}</div>
-              <div className="pl-8 text-gemini-cyan">{` </form>`}</div>
-              <div className="pl-4">);</div>
-              <div className="text-white/80">{'}'};</div>
-            </div>
-          </div>
-        </div>
-      </Slide>
-
-      {/* Sub Slide 3: Case Study - From Figma to Dashboard */}
-      <Slide backgroundColor="#050505" notes="一个真实的案例：如何通过一张截图生成复杂的 Dashboard。">
-        <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <div className="text-[10px] font-mono text-gemini-cyan mb-2">CASE STUDY</div>
-          <h3 className="text-3xl mb-8 font-bold text-white">案例：从 Figma 截图到响应式 Dashboard</h3>
+          <div className="text-[11px] font-mono text-gemini-cyan mb-2">CASE STUDY · INDIE BUILDER</div>
+          <h3 className="text-3xl mb-6 font-bold text-white">案例：15 分钟从 Figma 交付响应式 SaaS 定价与看板页</h3>
           <div className="grid grid-cols-4 gap-4">
             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-xl mb-2">📸</div>
-              <h4 className="font-bold text-xs mb-1">1. 截图上传</h4>
-              <p className="text-[10px] opacity-50">上传 Figma 导出的高保真截图，包含复杂的图表和侧边栏。</p>
+              <div className="text-xs font-mono text-gemini-cyan mb-2">Step 01</div>
+              <h4 className="font-bold text-sm mb-1.5 text-white">Figma MCP 拉取节点</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">在 Cursor Agent 直接粘贴 Figma 链接，自动获取三档定价卡片与对比表格结构。</p>
             </div>
             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-xl mb-2">🔍</div>
-              <h4 className="font-bold text-xs mb-1">2. 组件识别</h4>
-              <p className="text-[10px] opacity-50">AI 识别出 Recharts 图表、Lucide 图标和 Tailwind 布局。</p>
+              <div className="text-xs font-mono text-gemini-purple mb-2">Step 02</div>
+              <h4 className="font-bold text-sm mb-1.5 text-white">注入 UI .mdc 规则</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">编辑 <code className="text-white">.tsx</code> 自动激活 <code className="text-white">10-ui-tailwind.mdc</code>，强制使用 <code className="text-white">tabular-nums</code> 对齐金额数字。</p>
             </div>
             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-xl mb-2">⚙️</div>
-              <h4 className="font-bold text-xs mb-1">3. 代码生成</h4>
-              <p className="text-[10px] opacity-50">生成干净的 React 代码，自动处理 Dark Mode 和响应式适配。</p>
+              <div className="text-xs font-mono text-emerald-400 mb-2">Step 03</div>
+              <h4 className="font-bold text-sm mb-1.5 text-white">接入真实年/月付切换</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">用 <code className="text-white">Cmd+K</code> 选中价格区域，补充月付/年付折扣状态与 Stripe Checkout 跳转回调。</p>
             </div>
             <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="text-xl mb-2">🚀</div>
-              <h4 className="font-bold text-xs mb-1">4. 交互注入</h4>
-              <p className="text-[10px] opacity-50">AI 自动添加筛选过滤、分页加载和 Mock 数据。直接运行。</p>
+              <div className="text-xs font-mono text-amber-400 mb-2">Step 04</div>
+              <h4 className="font-bold text-sm mb-1.5 text-white">Browser MCP 自检</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">Agent 打开无头浏览器截屏 375px 手机视图，发现按钮折行后自动改写布局并复测。</p>
             </div>
           </div>
-        </div>
-      </Slide>
-
-      {/* Sub Slide 4: Visual Consistency Check */}
-      <Slide backgroundColor="#050505" notes="视觉还原度是前端开发的灵魂。AI 可以自动进行像素级对比。">
-        <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <div className="text-[10px] font-mono text-gemini-purple mb-2">THE LAST MILE</div>
-          <h3 className="text-3xl mb-8 font-bold text-white">视觉还原度校验 (Visual Consistency)</h3>
-          <div className="flex gap-8 items-center bg-white/5 p-8 rounded-3xl border border-white/10">
-            <div className="flex-1 text-center">
-              <div className="aspect-video bg-black/40 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-[10px] opacity-40">ORIGINAL DESIGN</div>
-            </div>
-            <div className="text-2xl text-gemini-cyan animate-pulse">VS</div>
-            <div className="flex-1 text-center">
-              <div className="aspect-video bg-black/40 rounded-lg border border-gemini-cyan/40 flex items-center justify-center text-[10px] text-gemini-cyan">GENERATED CODE SCREENSHOT</div>
-            </div>
-          </div>
-          <div className="mt-6 p-4 bg-gemini-cyan/10 rounded-xl border border-gemini-cyan/20">
-            <p className="text-xs text-center opacity-80">
-              <span className="font-bold text-gemini-cyan">AI 自我修正：</span> "检测到侧边栏宽度偏差 4px，正在更新 Tailwind Class: <code className="bg-black/40 px-1 rounded text-pink-400">w-64</code> ➔ <code className="bg-black/40 px-1 rounded text-green-400">w-60</code>"
-            </p>
+          <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between text-xs text-slate-300">
+            <span>过去需要设计师标注 + 前端联调 2 天；现在产品经理在 Cursor 内一气呵成。</span>
+            <span className="font-mono text-gemini-cyan font-bold">视觉走查自修复闭环</span>
           </div>
         </div>
       </Slide>

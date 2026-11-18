@@ -4,97 +4,96 @@ export default function P26() {
   return (
     <section>
       {/* Main Slide */}
-      <Slide notes="实战练习：构建一个 AI 驱动的交易引擎。">
+      <Slide notes="独立产品进入 Stage 2 全栈阶段的核心：用 Cursor Plan 模式锁定 Supabase / Postgres Schema、认证权限与 OpenAPI 契约，避免前后端字段各写各的。">
         <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <h2 className="text-4xl mb-8 font-black italic tracking-tighter text-gemini-purple glow-text">
-            实战：AI 驱动的交易引擎
+          <div className="text-xs font-mono text-gemini-purple mb-2">
+            FULL-STACK &amp; SUPABASE · 契约驱动后端开发
+          </div>
+          <h2 className="text-4xl mb-6 font-bold tracking-tight text-white">
+            实战：Supabase 全栈底座与 <span className="text-gemini-purple">OpenAPI 契约驱动</span>
           </h2>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="space-y-6">
-              <p className="text-lg leading-relaxed font-light opacity-80">
-                通过构建一个极速交易引擎，体验 AI Native 研发的全流程。从 Spec 定义到 DoD 验证，AI 贯穿始终。
-              </p>
-              <ul className="space-y-4 text-sm">
-                <li className="flex items-start gap-3 group">
-                  <span className="text-gemini-cyan group-hover:scale-125 transition-transform">▶</span>
-                  <span className="font-bold">Spec: 高并发、低延迟、零拷贝</span>
-                </li>
-                <li className="flex items-start gap-3 group">
-                  <span className="text-gemini-cyan group-hover:scale-125 transition-transform">▶</span>
-                  <span className="font-bold">Action: AI Coding 生成 Rust 核心代码</span>
-                </li>
-                <li className="flex items-start gap-3 group">
-                  <span className="text-gemini-cyan group-hover:scale-125 transition-transform">▶</span>
-                  <span className="font-bold">DoD: 1M TPS, {"<"} 10us latency</span>
-                </li>
-              </ul>
+          <div className="grid grid-cols-2 gap-8 items-stretch">
+            <div className="space-y-4">
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                <h3 className="text-base font-bold text-gemini-cyan mb-2">1. 先定数据表与 RLS 安全策略</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  让 Cursor 先基于 PRD 生成 SQL Schema 与 Supabase Row-Level Security（如 <code className="text-white">auth.uid() = user_id</code>），确保即使前端被调试也无法越权读写他人数据。
+                </p>
+              </div>
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                <h3 className="text-base font-bold text-gemini-purple mb-2">2. OpenAPI + Zod 共享类型源头</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  把请求/响应类型和 Zod 校验收口到共享 <code className="text-white">src/types/</code>。Cursor 编辑 Express/Next API 路由时，用 <code className="text-white">@types</code> 保证前端 fetch 与后端完全一致。
+                </p>
+              </div>
             </div>
-            <div className="bg-gemini-purple/5 p-6 rounded-3xl border border-gemini-purple/20 purple-glow relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gemini-purple to-transparent opacity-50"></div>
-              <pre className="text-xs font-mono text-gemini-purple/80">
-                <code className="language-rust">{`// Rust Trading Engine
-struct Engine {
-    order_book: OrderBook,
-}
-impl Engine {
-    fn process_order(&mut self, order: Order) {
-        // AI generated high-perf logic
-        // Zero-copy deserialization
-        // Lock-free matching
-    }
-}`}</code>
-              </pre>
-              <div className="absolute bottom-4 right-4 animate-bounce text-gemini-purple">
-                <span className="text-[10px] font-mono">RUST CORE GEN ↓</span>
+            <div className="bg-[#0b0f19] p-5 rounded-2xl border border-gemini-purple/35 flex flex-col justify-center">
+              <div className="text-xs font-mono text-gemini-purple mb-2">
+                CURSOR PLAN PROMPT · DB + API CONTRACT
+              </div>
+              <pre className="font-mono text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">{`[Plan Mode] @PRD.md @src/types/api.ts
+
+我要落地「文案生成 SaaS」的 Supabase 后端：
+1. 建立 projects 与 generations 两张表，开启 RLS
+2. 服务端 Route /api/generate 校验登录态、扣减额度、调用 Gemini API
+3. 严禁把 SUPABASE_SERVICE_ROLE_KEY 或 GEMINI_API_KEY 暴露到 VITE_*
+4. 同步生成 /api/docs OpenAPI 规范与 curl 联调脚本`}</pre>
+              <div className="mt-4 text-right text-[11px] font-mono text-gemini-purple">
+                ↓ 向下查看服务端密钥隔离与本地联调 Checklist
               </div>
             </div>
           </div>
         </div>
       </Slide>
 
-      {/* Sub Slide 1: Rust Core Generation */}
-      <Slide backgroundColor="#050505" notes="AI 能够生成符合 Rust 所有权模型的高性能代码。">
+      {/* Sub Slide 1: Backend Guardrails */}
+      <Slide
+        backgroundColor="#050814"
+        notes="后端接口开发中最常见的独立开发者安全坑：前端直连第三方 Key、忘记鉴权与缺少速率限制。"
+      >
         <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
-          <div className="text-[10px] font-mono text-gemini-purple mb-2">RUST CORE GENERATION</div>
-          <h3 className="text-3xl mb-8 font-bold text-white">高性能 Rust 核心生成</h3>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-cyan">内存安全与零拷贝</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                AI 自动应用 Rust 的所有权和借用检查机制，生成无需 GC 的内存安全代码。通过 `std::mem::transmute` 等技术实现数据的零拷贝解析。
+          <div className="text-xs font-mono text-gemini-cyan mb-2">BACKEND SECURITY CHECKLIST</div>
+          <h3 className="text-3xl mb-6 font-bold text-white">
+            独立开发者后端三条不可逾越的安全底线
+          </h3>
+          <div className="grid grid-cols-3 gap-5">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-red-400 mb-2">01 · 严禁密钥进前端</div>
+              <h4 className="text-base font-bold mb-2 text-white">Server-Side Proxy 代理</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                AI Key、数据库 Service Key、支付私钥只能留在 Express / Serverless 后端路由中读取，浏览器端仅与同源 <code className="text-white">/api/*</code> 通信。
               </p>
             </div>
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-purple">极速撮合算法</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                AI 实现基于红黑树或 B-Tree 的高效订单簿管理，确保 O(log N) 的撮合复杂度，并针对缓存行进行数据对齐优化。
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">02 · 服务端算账与校验</div>
+              <h4 className="text-base font-bold mb-2 text-white">不信任任何客户端入参</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                用户额度扣减、商品价格与角色权限必须在服务端重新查库核验，并用 Zod 对 Body 做严格白名单过滤。
+              </p>
+            </div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-emerald-400 mb-2">03 · 环境变量与示例</div>
+              <h4 className="text-base font-bold mb-2 text-white">.env 隔离与健康探针</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                提交代码前用 Bugbot 核查 <code className="text-white">.gitignore</code> 已忽略 <code className="text-white">.env</code>，仅提供无真实密钥的 <code className="text-white">.env.example</code> 与 <code className="text-white">/api/health</code> 探针。
               </p>
             </div>
           </div>
-        </div>
-      </Slide>
-
-      {/* Sub Slide 2: Latency Profiling & DoD */}
-      <Slide backgroundColor="#050505" notes="AI 不仅写代码，还负责验证代码是否达到了性能指标。">
-        <div className="flex flex-col justify-center h-full text-center max-w-6xl mx-auto">
-          <div className="text-[10px] font-mono text-gemini-purple mb-2">LATENCY PROFILING</div>
-          <h3 className="text-3xl mb-10 font-bold text-white">DoD 验证：性能达标</h3>
-          <div className="max-w-5xl mx-auto grid grid-cols-3 gap-6">
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
-              <div className="text-xl mb-3">📊</div>
-              <h4 className="font-bold mb-2 text-sm">吞吐量测试</h4>
-              <p className="text-[10px] opacity-50">AI 自动生成压力测试脚本，验证系统在 1M TPS 下的稳定性。</p>
-            </div>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
-              <div className="text-xl mb-3">⏱️</div>
-              <h4 className="font-bold mb-2 text-sm">延迟分布分析</h4>
-              <p className="text-[10px] opacity-50">通过火焰图和性能采样，AI 识别并消除 P99 延迟中的长尾问题。</p>
-            </div>
-            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
-              <div className="text-xl mb-3">✅</div>
-              <h4 className="font-bold mb-2 text-sm">自动化 DoD 检查</h4>
-              <p className="text-[10px] opacity-50">AI 自动比对测试结果与 Spec 要求，确保每一行代码都符合性能契约。</p>
-            </div>
+          <div className="mt-5 p-4 rounded-xl bg-[#0b0f19] border border-white/15 flex items-center justify-between gap-4 text-xs text-slate-300">
+            <span>
+              延伸拆解：关于 <strong className="text-white">Drizzle (~7KB) vs Prisma</strong> 选型与 <strong className="text-white">Zustand × TanStack Query</strong> 状态分层详解，见新增模块 <code className="text-gemini-cyan">M9 全栈图谱</code>。
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent("reveal:jump-module", { detail: { moduleId: "m9", v: 0 } })
+                )
+              }
+              className="text-gemini-cyan font-mono hover:underline shrink-0 cursor-pointer"
+            >
+              前往 M9 全栈图谱 →
+            </button>
           </div>
         </div>
       </Slide>

@@ -32,3 +32,11 @@ export function Module7Quiz() {
 export function Module8Quiz() {
   return <QuizSlide quiz={MODULE_QUIZZES[8]} />;
 }
+
+export function Module9Quiz() {
+  return <QuizSlide quiz={MODULE_QUIZZES[9]} />;
+}
+
+export function Module10Quiz() {
+  return <QuizSlide quiz={MODULE_QUIZZES[10]} />;
+}

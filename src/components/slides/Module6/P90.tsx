@@ -7,8 +7,8 @@ export default function P90() {
         <div className="text-gemini-purple text-sm font-mono mb-4 tracking-widest uppercase opacity-70">Final Module</div>
         <h2 className="text-6xl mb-8 font-bold">ROI 与进化：<br /><span className="text-gemini-cyan italic">效能度量新标准与 AI 架构大脑</span></h2>
         <div className="h-1 w-32 bg-gemini-purple mb-12"></div>
-        <div className="p-8 bg-white/5 rounded-full border border-white/10 animate-pulse">
-          <p className="text-xl opacity-60">正在加载模块 7...</p>
+        <div className="px-10 py-6 bg-white/5 rounded-2xl border border-gemini-cyan/30">
+          <p className="text-xl opacity-80">下一站：Module 7 · 效能 ROI 与 AI 架构大脑</p>
         </div>
       </div>
     </Slide>

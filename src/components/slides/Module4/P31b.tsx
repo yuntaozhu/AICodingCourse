@@ -2,54 +2,57 @@ import Slide from "@/components/Slide";
 
 export default function P31b() {
   return (
-    <Slide backgroundColor="#020205" notes="SDD 是 AI Native 研发的‘灵魂’。在传统开发中，设计文档往往是过时的。但在 AI Native 时代，SDD 是 AI 的执行蓝图。它定义了系统的边界、数据流、接口契约和核心算法。没有 SDD，AI 研发就是‘盲目试错’；有了 SDD，AI 研发就是‘按图索骥’。">
-      <div className="flex flex-col justify-center h-full">
-        <h2 className="text-5xl mb-12 font-bold text-gemini-cyan italic">SDD：确定性研发的蓝图</h2>
-        <div className="grid grid-cols-2 gap-12">
-          <div className="space-y-6">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <h3 className="text-xl font-bold mb-4 text-gemini-purple">什么是 SDD (Software Design Document)?</h3>
-              <p className="text-sm opacity-70 leading-relaxed">
-                SDD 是对业务需求的结构化翻译。它不包含具体的代码实现，但包含实现代码所需的所有<strong className="text-white">决策信息</strong>。
+    <Slide backgroundColor="#020205" notes="在 Cursor 中，SDD 不是写完就积灰的 Word 文档，而是通过 Plan Mode 生成并沉淀在仓库中的可执行规格说明书。">
+      <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
+        <h2 className="text-4xl mb-8 font-bold text-gemini-cyan">
+          SDD + AGENTS.md：独立产品的确定性蓝图
+        </h2>
+        <div className="grid grid-cols-2 gap-10 items-center">
+          <div className="space-y-5">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <h3 className="text-lg font-bold mb-2 text-gemini-purple">
+                Plan 模式产出结构化 SDD
+              </h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                在 Cursor 中通过 <code className="text-white">Shift+Tab</code> 进入 Plan 模式，先把需求翻译成数据模型、接口契约与文件改造路径，再一键交付 Agent 实施。
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                <div className="text-2xl mb-1">🏗️</div>
-                <div className="text-xs font-bold">架构模式</div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="font-mono text-gemini-cyan mb-1">01 · 目录骨架</div>
+                <div className="text-slate-300">锁定模块边界与命名规范</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                <div className="text-2xl mb-1">📊</div>
-                <div className="text-xs font-bold">数据模型</div>
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="font-mono text-gemini-purple mb-1">02 · 数据契约</div>
+                <div className="text-slate-300">Schema 与 TS 类型共享</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                <div className="text-2xl mb-1">🔌</div>
-                <div className="text-xs font-bold">接口契约</div>
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="font-mono text-emerald-400 mb-1">03 · 权限红线</div>
+                <div className="text-slate-300">鉴权、速率限制与密钥隔离</div>
               </div>
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 text-center">
-                <div className="text-2xl mb-1">🛡️</div>
-                <div className="text-xs font-bold">安全规范</div>
+              <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="font-mono text-amber-400 mb-1">04 · DoD 命令</div>
+                <div className="text-slate-300">可自动验证的构建测试门禁</div>
               </div>
             </div>
           </div>
-          <div className="flex flex-col justify-center">
-            <div className="p-8 bg-gemini-cyan/10 rounded-3xl border border-gemini-cyan/30">
-              <h3 className="text-2xl font-bold mb-6 text-gemini-cyan">SDD 的核心价值</h3>
-              <ul className="space-y-4 text-sm">
-                <li className="flex gap-3">
-                  <span className="text-gemini-cyan">●</span>
-                  <span><strong className="text-white">消除歧义：</strong> 为 AI 提供唯一的“真理来源”。</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="text-gemini-cyan">●</span>
-                  <span><strong className="text-white">确定性输出：</strong> 显著降低 AI 生成代码的随机性。</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="text-gemini-cyan">●</span>
-                  <span><strong className="text-white">可维护性：</strong> 架构大脑的核心组成部分。</span>
-                </li>
-              </ul>
-            </div>
+
+          <div className="p-6 bg-[#0b0f19] rounded-2xl border border-gemini-cyan/30 space-y-4">
+            <h3 className="text-xl font-bold text-gemini-cyan">为什么产品经理更需要 SDD + AGENTS.md？</h3>
+            <ul className="space-y-3 text-sm text-slate-200">
+              <li className="flex gap-2.5">
+                <span className="text-gemini-cyan font-mono">01</span>
+                <span><strong className="text-white">消除口头歧义：</strong>把“做个会员页”变成明确的定价档位、支付回调与异常兜底清单。</span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="text-gemini-cyan font-mono">02</span>
+                <span><strong className="text-white">跨对话不失忆：</strong>将核心约定写入根目录 <code className="text-gemini-cyan">AGENTS.md</code>，新开对话依然稳稳遵守。</span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="text-gemini-cyan font-mono">03</span>
+                <span><strong className="text-white">跨工具通用：</strong><code className="text-white">AGENTS.md</code> 同时兼容 Cursor 与主流 CLI/云端 Agent，一次沉淀全链路复用。</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>

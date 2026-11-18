@@ -9,8 +9,8 @@ export default function P80() {
         <div className="text-gemini-purple text-sm font-mono mb-4 tracking-widest uppercase opacity-70">Next Module</div>
         <h2 className="text-6xl mb-8 font-bold">CI/CD 革命：<br /><span className="text-gemini-cyan italic">Issue-to-PR 的零干预流水线</span></h2>
         <div className="h-1 w-32 bg-gemini-purple mb-12"></div>
-        <div className="p-8 bg-white/5 rounded-full border border-white/10 animate-pulse">
-          <p className="text-xl opacity-60">正在加载模块 6...</p>
+        <div className="px-10 py-6 bg-white/5 rounded-2xl border border-gemini-cyan/30">
+          <p className="text-xl opacity-80">下一站：Module 6 · 异步流水线与自动化评审</p>
         </div>
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
           <div className="text-gemini-cyan text-2xl">↓</div>

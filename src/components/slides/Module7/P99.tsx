@@ -10,8 +10,16 @@ export default function P99() {
           <div className="p-8 bg-gemini-cyan/10 rounded-3xl border border-gemini-cyan/30">
             <p className="text-2xl font-bold text-gemini-cyan">“最好的预测未来的方式，就是去创造它。”</p>
           </div>
-          <button className="mt-8 px-12 py-4 bg-gemini-purple rounded-full text-xl font-bold hover:scale-105 transition-transform">
-            立即开启进化之旅
+          <button
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("reveal:jump-module", { detail: { moduleId: "m8", v: 0 } })
+              )
+            }
+            className="mt-8 px-10 py-3.5 bg-gemini-purple hover:bg-gemini-purple/90 rounded-full text-lg font-bold text-white transition-colors cursor-pointer whitespace-nowrap"
+          >
+            前往 M8 交互沙盘与案例库 →
           </button>
         </div>
       </div>

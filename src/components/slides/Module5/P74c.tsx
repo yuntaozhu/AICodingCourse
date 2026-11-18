@@ -2,42 +2,41 @@ import Slide from "@/components/Slide";
 
 export default function P74c() {
   return (
-    <Slide backgroundColor="#020205" notes="DoD 的提示词设计是质量闭环的关键。它不是简单的‘帮我检查代码’，而是‘根据我的 DoD 规范，验证该 PR 是否满足所有质量红线’。AI 能够自动运行测试、扫描漏洞、分析性能，并生成详细的 DoD 报告。不满足 DoD 的 PR 将被自动打回并附带修复建议。">
-      <div className="flex flex-col justify-center h-full">
-        <h2 className="text-5xl mb-12 font-bold text-white italic">DoD 验证提示词与自动化闭环</h2>
-        <div className="grid grid-cols-2 gap-12">
-          <div className="space-y-6">
-            <div className="p-6 bg-gemini-purple/10 rounded-2xl border border-gemini-purple/30">
-              <h3 className="text-xl font-bold mb-4 text-gemini-cyan">DoD 验证提示词 (Prompt)</h3>
-              <pre className="text-[10px] font-mono text-gemini-cyan/80 bg-black/40 p-4 rounded-xl border border-white/10 whitespace-pre-wrap">
-{`# Role: Quality Assurance Agent
-# Task: Verify DoD for PR #[ID]
-# DoD Standards:
-1. Unit Test Coverage > 90%
-2. No High/Critical Security Vulnerabilities
-3. Performance: Response Time < 200ms
-4. Code Style: ESLint/Prettier Compliant
-5. Documentation: JSDoc for all public APIs
-# Execution: Run automated checks and report status.`}
-              </pre>
-            </div>
+    <Slide backgroundColor="#020205" notes="如何用 Cursor Agent + Bugbot 建立自动验证与打回修复闭环。">
+      <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
+        <h2 className="text-4xl mb-8 font-bold text-white">
+          DoD 验证提示词与 Cursor 自愈闭环
+        </h2>
+        <div className="grid grid-cols-2 gap-10 items-center">
+          <div className="p-6 bg-[#0b0f19] rounded-2xl border border-gemini-purple/35">
+            <h3 className="text-base font-mono font-bold mb-3 text-gemini-cyan">
+              AGENTS.md · DoD 验收段示例
+            </h3>
+            <pre className="text-xs font-mono text-slate-200 bg-black/50 p-4 rounded-xl border border-white/10 whitespace-pre-wrap leading-relaxed">{`## Verification Commands (Mandatory DoD)
+1. TypeCheck: npx tsc --noEmit
+2. Lint: npm run lint
+3. Build: npm run build
+4. Browser Check: Verify desktop (1280px) & mobile (375px)
+
+# Agent Execution Rule:
+If any command fails, read stdout/stderr, fix the root cause,
+and re-run until all checks pass.`}</pre>
           </div>
-          <div className="flex flex-col justify-center space-y-6">
-            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-              <h3 className="text-xl font-bold mb-4 text-gemini-purple">自动化质量闭环</h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gemini-cyan/20 flex items-center justify-center text-xl">🛠️</div>
-                  <div className="text-xs"><strong>AI Agent:</strong> 自动执行测试与扫描。</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gemini-purple/20 flex items-center justify-center text-xl">📊</div>
-                  <div className="text-xs"><strong>AI Judge:</strong> 对比 DoD 规范与执行结果。</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gemini-cyan/20 flex items-center justify-center text-xl">🔄</div>
-                  <div className="text-xs"><strong>Loop:</strong> 自动打回并提供修复建议。</div>
-                </div>
+
+          <div className="p-6 bg-white/5 rounded-2xl border border-white/10 space-y-4">
+            <h3 className="text-xl font-bold text-gemini-purple">三步自动化质量闭环</h3>
+            <div className="space-y-3 text-sm text-slate-200">
+              <div className="p-3.5 rounded-xl bg-black/40 border border-white/10">
+                <span className="font-mono text-gemini-cyan font-bold mr-2">01 · Terminal Auto-Run</span>
+                <span>Cursor Agent 在终端执行类型、Lint 与构建检查。</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-black/40 border border-white/10">
+                <span className="font-mono text-gemini-purple font-bold mr-2">02 · Bugbot Diff Guard</span>
+                <span>提交 PR 时 Bugbot 自动扫描 SQL 注入、竞态与死代码。</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-black/40 border border-white/10">
+                <span className="font-mono text-emerald-400 font-bold mr-2">03 · Fix in Cursor</span>
+                <span>点击 Bugbot 评论上的 Fix in Cursor，自动定位行号秒级修补。</span>
               </div>
             </div>
           </div>

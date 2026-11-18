@@ -4,76 +4,102 @@ export default function P40() {
   return (
     <section>
       {/* Main Slide */}
-      <Slide notes="Agent 核心能力总结。从工具到 Agent 的全面演进。">
-        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center px-8">
-          <h2 className="text-4xl mb-8 font-black italic tracking-tighter text-gemini-purple glow-text text-center">
-            Agent 核心能力总结
+      <Slide notes="总结 Cursor 工程底座的三大核心支柱，并展示个人开发者效率演进的四级阶梯。">
+        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
+          <h2 className="text-4xl mb-8 font-bold tracking-tight text-gemini-purple text-center">
+            Cursor Agent 工程底座总结
           </h2>
-          <div className="flex flex-col gap-10">
-            <div className="grid grid-cols-3 gap-6">
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/10 hover:border-gemini-cyan transition-all">
-                <h3 className="text-lg mb-3 font-bold text-gemini-cyan">Browser Use</h3>
-                <p className="text-xs opacity-60 leading-relaxed">Agent 的“眼睛”与“手”，通过视觉感知与动作执行，打破了模型与现实世界的隔阂。</p>
-              </div>
-              <div className="p-6 bg-white/5 rounded-3xl border border-white/10 hover:border-gemini-purple transition-all">
-                <h3 className="text-lg mb-3 font-bold text-gemini-purple">Grounding</h3>
-                <p className="text-xs opacity-60 leading-relaxed">Agent 的“实时大脑”，通过检索增强与工具调用，确保决策的准确性与时效性。</p>
-              </div>
-              <div className="p-6 bg-gemini-purple/10 rounded-3xl border border-gemini-purple/30 shadow-[0_0_30px_rgba(168,85,247,0.2)]">
-                <h3 className="text-lg mb-3 font-bold text-white">Agentic Workflow</h3>
-                <p className="text-xs opacity-80 font-medium leading-relaxed">Agent 的“协作与闭环”，通过多智能体编排与自我进化，实现了研发全流程的自动化。</p>
-              </div>
-            </div>
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-gemini-purple to-transparent opacity-30"></div>
-            <div className="text-center animate-bounce text-gemini-purple">
-              <span className="text-[10px] font-mono uppercase tracking-widest">Evolution Path ↓</span>
-            </div>
-          </div>
-        </div>
-      </Slide>
-
-      {/* Sub Slide 1: Evolution Path */}
-      <Slide backgroundColor="#050505" notes="展示从静态工具到自主智能体的演进路径。">
-        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center px-8">
-          <div className="text-[10px] font-mono text-gemini-purple mb-2">EVOLUTION PATH</div>
-          <h3 className="text-3xl mb-10 font-bold text-white">演进之路：从辅助工具到自主智能体</h3>
-          <div className="relative h-48 flex items-center justify-between px-12">
-            <div className="absolute top-1/2 left-0 w-full h-px bg-white/10 -translate-y-1/2"></div>
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="w-3 h-3 rounded-full bg-white/20 mb-3"></div>
-              <div className="text-xs font-bold opacity-40">L1: Copilot</div>
-              <div className="text-[8px] opacity-20">代码补全 / 聊天辅助</div>
-            </div>
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="w-3 h-3 rounded-full bg-gemini-cyan/40 mb-3"></div>
-              <div className="text-xs font-bold text-gemini-cyan">L2: Tool-User</div>
-              <div className="text-[8px] text-gemini-cyan/60">函数调用 / 简单任务</div>
-            </div>
-            <div className="relative z-10 flex flex-col items-center">
-              <div className="w-6 h-6 rounded-full bg-gemini-purple shadow-[0_0_20px_rgba(168,85,247,0.6)] mb-3 animate-pulse"></div>
-              <div className="text-base font-black italic text-gemini-purple">L3: Autonomous Agent</div>
-              <div className="text-[10px] text-gemini-purple/80">端到端交付 / 闭环进化</div>
-            </div>
-          </div>
-        </div>
-      </Slide>
-
-      {/* Sub Slide 2: Future Vision */}
-      <Slide backgroundColor="#050505" notes="对未来 AI 驱动研发的展望。">
-        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center text-center px-8">
-          <div className="text-[10px] font-mono text-gemini-purple mb-2">FUTURE VISION</div>
-          <h3 className="text-3xl mb-10 font-bold text-white">未来展望：软件开发的范式转移</h3>
-          <div className="grid grid-cols-2 gap-10 text-left">
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-cyan">从“写代码”到“定义意图”</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                开发者将从繁琐的语法实现中解放出来，专注于业务逻辑的定义与系统架构的设计，由 Agent 负责具体的工程落地。
+          <div className="grid grid-cols-3 gap-6">
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">01 · CONTEXT &amp; RULES</div>
+              <h3 className="text-lg mb-2 font-bold text-white">.mdc 规则 + AGENTS.md</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                把技术栈偏好、安全防线与 DoD 门禁固化进仓库，通过 globs 按路径精准注入上下文。
               </p>
             </div>
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-purple">实时演进的软件系统</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                软件不再是静态的代码集合，而是能够根据用户反馈、环境变化和性能指标实时自我优化、自我修复的动态生命体。
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-purple mb-2">02 · MCP EXTENSIONS</div>
+              <h3 className="text-lg mb-2 font-bold text-white">Figma / DB / Browser MCP</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                让 Agent 直读设计稿、数据库结构与浏览器实时渲染结果，用确定事实替代臆测。
+              </p>
+            </div>
+            <div className="p-6 bg-gemini-purple/10 rounded-2xl border border-gemini-purple/35">
+              <div className="text-xs font-mono text-emerald-400 mb-2">03 · AGENTIC LOOP</div>
+              <h3 className="text-lg mb-2 font-bold text-white">Plan ➔ Agent ➔ Verify</h3>
+              <p className="text-xs text-slate-200 leading-relaxed">
+                先出规格蓝图、人审后再改多文件、终端自动跑测自愈，形成可靠交付闭环。
+              </p>
+            </div>
+          </div>
+          <div className="mt-8 text-center text-xs font-mono text-gemini-purple">
+            ↓ 向下查看 Cursor 能力演进四级阶梯
+          </div>
+        </div>
+      </Slide>
+
+      {/* Sub Slide 1: L1-L4 Evolution Path */}
+      <Slide backgroundColor="#050505" notes="从 L1 Tab 补全到 L4 Background Agents & Bugbot 的四级跃迁。">
+        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
+          <div className="text-[11px] font-mono text-gemini-purple mb-2">CURSOR MATURITY LADDER</div>
+          <h3 className="text-3xl mb-8 font-bold text-white">个人开发者的 Cursor 能力四级跃迁</h3>
+          <div className="grid grid-cols-4 gap-4">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-slate-400 mb-2">L1 · TAB 预测</div>
+              <h4 className="font-bold text-sm text-white mb-1.5">Cursor Tab 连击</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">多行补全与跨位置跳转预测，省去重复样板敲击。</p>
+            </div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">L2 · CMD+K 手术</div>
+              <h4 className="font-bold text-sm text-white mb-1.5">行内局部重构</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">选中精确代码块快速改写类型、提取组件或补注释。</p>
+            </div>
+            <div className="p-5 bg-gemini-cyan/10 rounded-2xl border border-gemini-cyan/35">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">L3 · PLAN + AGENT</div>
+              <h4 className="font-bold text-sm text-white mb-1.5">端到端功能闭环</h4>
+              <p className="text-xs text-slate-200 leading-relaxed">Plan 规划 + Rules 护栏 + MCP 联调 + 终端自动验收。</p>
+            </div>
+            <div className="p-5 bg-gemini-purple/15 rounded-2xl border border-gemini-purple/45">
+              <div className="text-xs font-mono text-gemini-purple mb-2">L4 · ASYNC FACTORY</div>
+              <h4 className="font-bold text-sm text-white mb-1.5">Background + Bugbot</h4>
+              <p className="text-xs text-slate-200 leading-relaxed">云端异步代理并行推进需求，Bugbot 自动守卫 PR 质量。</p>
+            </div>
+          </div>
+        </div>
+      </Slide>
+
+      {/* Sub Slide 2: Grounded in AI Architecture Books */}
+      <Slide
+        backgroundColor="#040711"
+        notes="衔接知识库中 O'Reilly《Building Applications with AI Agents》《Generative AI Design Patterns》与 arXiv:2408.08435，夯实多 Agent 架构原理。"
+      >
+        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
+          <div className="text-xs font-mono text-gemini-purple mb-2">
+            KNOWLEDGE BASE BACKING · 多智能体与设计模式底座
+          </div>
+          <h3 className="text-3xl mb-6 font-bold text-white">
+            从书库理论到 Cursor 工程：三本必读架构基石
+          </h3>
+          <div className="grid grid-cols-3 gap-5">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">BUILDING APPS WITH AI AGENTS</div>
+              <h4 className="text-base font-bold text-white mb-2">状态契约与工具沙盒</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                清晰定义多 Agent 间的监督者/路由器模式与只读-确认写隔离策略，直接对应 Cursor MCP 的安全分级权限设计。
+              </p>
+            </div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-purple mb-2">GENERATIVE AI DESIGN PATTERNS</div>
+              <h4 className="text-base font-bold text-white mb-2">30+ 可复用生成式设计模式</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                把结构化输出、Context Caching、流式回退与语义护栏提炼进 <code className="text-white">.cursor/rules/*.mdc</code>，避免重复踩坑。
+              </p>
+            </div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-emerald-400 mb-2">ARXIV:2408.08435 · ADAS</div>
+              <h4 className="text-base font-bold text-white mb-2">《Automated Design of Agentic Systems》</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                启发团队把不断迭代成功的排障与编码习惯沉淀成标准化 <code className="text-white">SKILL.md</code>，实现工作流的跨项目复用。
               </p>
             </div>
           </div>

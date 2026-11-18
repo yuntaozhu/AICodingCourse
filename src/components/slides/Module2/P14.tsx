@@ -97,6 +97,47 @@ export default function P14() {
           </div>
         </div>
       </Slide>
+
+      {/* Sub Slide 3: .cursorignore & Semantic Indexing */}
+      <Slide
+        backgroundColor="#040711"
+        notes="参考 ai-coding-with-cursor 第二章：用 .cursorignore 排除 CSV/日志/构建产物，并用面向意图的注释提升 Cursor @Codebase 向量检索召回精度。"
+      >
+        <div className="flex flex-col justify-center h-full max-w-6xl mx-auto">
+          <div className="text-xs font-mono text-gemini-cyan mb-2">
+            CODEBASE INDEXING HYGIENE · .cursorignore 与注释增强召回
+          </div>
+          <h3 className="text-3xl mb-6 font-bold text-white">
+            让 <code className="text-gemini-purple">@Codebase</code> 只检索高价值源码，拒绝噪音污染
+          </h3>
+          <div className="grid grid-cols-2 gap-6 text-xs">
+            <div className="p-5 bg-[#0b0f19] rounded-2xl border border-white/10 space-y-3">
+              <div className="font-mono text-gemini-cyan">01 · .cursorignore 隔离构建与大数据噪音</div>
+              <pre className="p-3 rounded-xl bg-black/50 border border-white/10 font-mono text-slate-200 leading-relaxed whitespace-pre-wrap">{`# Exclude heavy & generated assets from vector index
+node_modules/
+dist/
+*.csv
+*.parquet
+supabase/migrations/*.sql
+coverage/`}</pre>
+              <p className="text-slate-300 leading-relaxed">
+                大型数据文件、构建产物与自动生成文件会稀释嵌入索引向量，写入 <code className="text-white">.cursorignore</code> 可立竿见影加快索引同步与召回精准度。
+              </p>
+            </div>
+
+            <div className="p-5 bg-[#0b0f19] rounded-2xl border border-gemini-purple/35 space-y-3">
+              <div className="font-mono text-gemini-purple">02 · Comment-Boosted Indexing（注释喂养索引）</div>
+              <pre className="p-3 rounded-xl bg-black/50 border border-white/10 font-mono text-slate-200 leading-relaxed whitespace-pre-wrap">{`Prompt（useful_prompts_for_cursor）:
+"为关键函数、条件分支与循环补充精炼注释，重点解释
+这段代码【为什么这样设计 (Why)】与业务不变量，从而让
+Cursor @Codebase 语义检索更准确命中调用链。"`}</pre>
+              <p className="text-slate-300 leading-relaxed">
+                好的代码注释不只是给人看，更是给 <code className="text-white">Embedding + Reranker</code> 检索器铺路——业务意图清晰的模块能被 Agent 一次定位。
+              </p>
+            </div>
+          </div>
+        </div>
+      </Slide>
     </section>
   );
 }

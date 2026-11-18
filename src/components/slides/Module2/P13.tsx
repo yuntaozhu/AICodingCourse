@@ -24,7 +24,7 @@ export default function P13() {
               <div className="w-full h-64 bg-gemini-cyan/5 border border-gemini-cyan/20 rounded-3xl flex items-center justify-center overflow-hidden">
                  <div className="relative w-full h-full flex items-center justify-center">
                    {/* Animated dependency nodes */}
-                   <div className="absolute w-4 h-4 bg-gemini-cyan rounded-full animate-pulse"></div>
+                   <div className="absolute w-4 h-4 bg-gemini-cyan rounded-full shadow-[0_0_16px_rgba(34,211,238,0.65)]"></div>
                    <div className="absolute w-24 h-24 border border-gemini-cyan/20 rounded-full animate-spin-slow"></div>
                    <div className="absolute w-36 h-36 border border-gemini-purple/20 rounded-full animate-reverse-spin-slow"></div>
                    <span className="text-lg font-mono text-gemini-cyan z-10 bg-black/80 px-4 py-2 rounded-lg border border-gemini-cyan/30">Dependency Graph</span>

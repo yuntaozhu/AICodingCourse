@@ -10,12 +10,12 @@ export default function P83() {
             <div className="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center text-3xl border border-red-500/40">📝</div>
             <div className="text-sm font-mono">Issue Created</div>
           </div>
-          <div className="text-gemini-purple text-4xl animate-pulse">→</div>
+          <div className="text-gemini-purple/80 text-4xl">→</div>
           <div className="flex flex-col items-center gap-4">
             <div className="w-24 h-24 bg-gemini-purple/20 rounded-full flex items-center justify-center text-4xl border border-gemini-purple/40">🤖</div>
             <div className="text-sm font-mono text-gemini-purple">AI Agent</div>
           </div>
-          <div className="text-gemini-purple text-4xl animate-pulse">→</div>
+          <div className="text-gemini-purple/80 text-4xl">→</div>
           <div className="flex flex-col items-center gap-4">
             <div className="w-20 h-20 bg-gemini-cyan/20 rounded-2xl flex items-center justify-center text-3xl border border-gemini-cyan/40">🚀</div>
             <div className="text-sm font-mono text-gemini-cyan">PR Submitted</div>

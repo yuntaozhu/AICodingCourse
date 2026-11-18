@@ -16,12 +16,12 @@ export default function P85c() {
             </div>
 
             <div className="h-px flex-1 bg-gradient-to-r from-white/20 to-gemini-purple/50 mx-4 relative">
-              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-mono text-gemini-purple animate-pulse">Trigger Webhook</div>
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-mono text-gemini-purple">Trigger Webhook</div>
             </div>
 
             <div className="flex flex-col items-center gap-4 z-10">
               <div className="relative">
-                <div className="absolute inset-0 bg-gemini-purple/30 blur-xl rounded-full animate-pulse"></div>
+                <div className="absolute inset-0 bg-gemini-purple/20 blur-xl rounded-full"></div>
                 <div className="w-24 h-24 bg-gemini-purple/20 rounded-full flex items-center justify-center text-4xl border-2 border-gemini-purple relative">🤖</div>
               </div>
               <div className="text-sm font-bold text-gemini-purple">AI Coding CR Agent</div>

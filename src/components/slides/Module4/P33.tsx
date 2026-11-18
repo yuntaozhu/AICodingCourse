@@ -4,82 +4,91 @@ export default function P33() {
   return (
     <section>
       {/* Main Slide */}
-      <Slide notes="Grounding 是 Agent 的核心能力。Agent 可以基于实时信息进行决策。">
+      <Slide notes="解决模型知识截止时间（Cutoff）与库版本幻觉的核心方案：在 Cursor 中使用 @Web、@Docs 与 Context7 MCP 拉取实时官方文档。">
         <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
-          <h2 className="text-3xl mb-8 font-black italic tracking-tighter text-gemini-cyan glow-text text-center">
-            Grounding: Agent 的实时大脑
+          <div className="text-xs font-mono text-gemini-cyan mb-2">
+            REAL-TIME CONTEXT · 消除过时 API 幻觉
+          </div>
+          <h2 className="text-4xl mb-6 font-bold tracking-tight text-white text-center">
+            MCP + @Docs：<span className="text-gemini-cyan">让 Cursor 实时读取最新文档</span>
           </h2>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="flex flex-col justify-center gap-5">
-              <div className="p-5 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group">
-                <h3 className="text-xl mb-1 font-bold text-gemini-cyan">Real-time Information</h3>
-                <p className="text-xs opacity-60 leading-relaxed">
-                  Agent 不再受限于训练数据的截止日期。通过实时搜索和工具调用，它能够获取最新的新闻、股价、天气或技术文档，确保决策的时效性。
+          <div className="grid grid-cols-2 gap-8 items-stretch">
+            <div className="flex flex-col justify-center gap-4">
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                <h3 className="text-base mb-1.5 font-bold text-gemini-cyan">为什么模型常写错 Tailwind v4 / Next 16？</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  前端与 AI SDK 迭代极快，模型训练权重停留在几个月前。直接开写往往会混用旧版配置文件、废弃钩子或不存在的 SDK 方法名。
                 </p>
               </div>
-              <div className="p-5 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all group">
-                <h3 className="text-xl mb-1 font-bold text-gemini-purple">Contextual Grounding</h3>
-                <p className="text-xs opacity-60 leading-relaxed">
-                  将 Agent 锚定在特定的上下文（如企业私有文档、代码库或用户个人数据）中，消除幻觉，提供精准且符合事实的回答。
+              <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+                <h3 className="text-base mb-1.5 font-bold text-gemini-purple">Context7 MCP + @Docs + @Web 三连击</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  通过 <strong className="text-white">Context7 MCP</strong> 按版本号实时拉取最新版库文档片段，结合 Cursor 内置 <code className="text-white">@Docs</code> 索引与 <code className="text-white">@Web</code> 搜索，让生成代码一次命中最新 API。
                 </p>
               </div>
             </div>
-            <div className="flex items-center justify-center relative">
-              <div className="w-full h-72 bg-gemini-cyan/5 border border-gemini-cyan/20 rounded-3xl flex items-center justify-center overflow-hidden">
-                <div className="relative w-full h-full flex items-center justify-center text-center p-8">
-                  <div className="space-y-4">
-                    <div className="text-4xl animate-pulse">🌍</div>
-                    <div className="text-xl font-mono text-gemini-cyan">Grounding Assistant</div>
-                    <div className="text-xs opacity-40">"Verifying facts against real-world data..."</div>
-                  </div>
-                </div>
+            <div className="bg-[#0b0f19] border border-gemini-cyan/30 rounded-2xl p-5 flex flex-col justify-between font-mono text-xs text-slate-200">
+              <div>
+                <div className="text-gemini-cyan mb-2"># 实战：强锚定最新版文档再生成</div>
+                <pre className="whitespace-pre-wrap leading-relaxed">{`# Use Context7 MCP + @package.json
+我要升级 @google/genai 到最新版本并接入服务端代理：
+
+1. 先调用 Context7 查询 @google/genai 最新 TypeScript SDK 写法
+2. 禁止使用已废弃的旧包名 @google/generative-ai
+3. 按最新官方文档生成 server.ts 路由与错误处理`}</pre>
               </div>
-              <div className="absolute bottom-4 right-4 animate-bounce text-gemini-cyan">
-                <span className="text-[10px] font-mono">GOOGLE SEARCH ↓</span>
+              <div className="mt-4 pt-3 border-t border-white/10 text-[11px] text-slate-400 text-right">
+                ↓ 向下查看公共文档锚定与私有业务知识注入
               </div>
             </div>
           </div>
         </div>
       </Slide>
 
-      {/* Sub Slide 1: Google Search Grounding */}
-      <Slide backgroundColor="#050505" notes="AI 可以直接访问互联网，获取最新信息。">
-        <div className="max-w-5xl mx-auto h-full flex flex-col justify-center">
-          <div className="text-[10px] font-mono text-gemini-cyan mb-2">GOOGLE SEARCH GROUNDING</div>
-          <h3 className="text-3xl mb-6 font-bold text-white">实时搜索：连接世界</h3>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-cyan">动态事实核查</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                当用户询问最近发生的事件时，Agent 自动触发搜索，提取多个可靠来源的信息进行交叉验证，并给出带有引用链接的回答。
+      {/* Sub Slide 1: @Web & Context7 */}
+      <Slide backgroundColor="#050814" notes="对比零散网页复制粘贴与 MCP 结构化文档拉取的效率差异。">
+        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
+          <div className="text-xs font-mono text-gemini-cyan mb-2">REAL-TIME SDK ANCHORING</div>
+          <h3 className="text-3xl mb-6 font-bold text-white">外部文档注入的三种标准方式</h3>
+          <div className="grid grid-cols-3 gap-5">
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-cyan mb-2">@Docs 自定义索引</div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                在 Cursor Settings 添加常用框架文档 URL（如 Supabase、Stripe、Tailwind），输入 <code className="text-white">@Docs</code> 即可秒级引用最新接口签名。
               </p>
             </div>
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-purple">趋势分析与预测</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                基于最新的市场数据 or 社交媒体趋势，Agent 能够进行实时的分析 and 预测，为决策提供数据支撑。
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-gemini-purple mb-2">Context7 MCP</div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                开源高人气 MCP 服务，自动按 <code className="text-white">package.json</code> 中的精准版本号获取对应 API 代码示例，大幅消除版本错配。
+              </p>
+            </div>
+            <div className="p-5 bg-white/5 rounded-2xl border border-white/10">
+              <div className="text-xs font-mono text-emerald-400 mb-2">@Web 实时排错</div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                遇到全新工具报错或 Vercel/Cloudflare 最新变更时，在对话框输入 <code className="text-white">@Web</code> 检索最新 Issue 解决方案。
               </p>
             </div>
           </div>
         </div>
       </Slide>
 
-      {/* Sub Slide 2: Enterprise Data Grounding */}
-      <Slide backgroundColor="#050505" notes="AI 可以基于企业内部数据提供精准服务。">
-        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center text-center">
-          <div className="text-[10px] font-mono text-gemini-cyan mb-2">ENTERPRISE DATA GROUNDING</div>
-          <h3 className="text-3xl mb-8 font-bold text-white">私有知识：企业级大脑</h3>
-          <div className="grid grid-cols-2 gap-8 text-left">
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-cyan">全量上下文注入</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                利用超长上下文窗口，将整个项目文档 or 代码库作为背景，Agent 能够理解复杂的内部逻辑 and 业务术语，提供专家级的咨询。
+      {/* Sub Slide 2: Private Repo Knowledge */}
+      <Slide backgroundColor="#050814" notes="如何让 Cursor 读懂你的业务私有规范与历史决策。">
+        <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
+          <div className="text-xs font-mono text-gemini-purple mb-2">PRIVATE KNOWLEDGE ANCHORING</div>
+          <h3 className="text-3xl mb-6 font-bold text-white">私有业务知识：让团队经验沉淀进仓库</h3>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="text-lg font-bold mb-2 text-gemini-cyan">docs/specs 与 ADR 决策记录</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                把历史踩坑、数据表设计意图与合规要求写成仓库内的 Markdown 文档，用 <code className="text-white">@docs/specs</code> 引用或写入 <code className="text-white">AGENTS.md</code>，新开对话也能一秒继承全部背景。
               </p>
             </div>
-            <div className="p-6 bg-white/5 rounded-3xl border border-white/10">
-              <h4 className="text-lg font-bold mb-3 text-gemini-purple">安全与隐私保护</h4>
-              <p className="text-xs opacity-60 leading-relaxed">
-                在确保数据不出域的前提下，实现高效的知识检索 and 问答，满足企业对数据安全 and 合规性的严苛要求。
+            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="text-lg font-bold mb-2 text-gemini-purple">Obsidian / 私有 MCP 串联</h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                独立开发者还可以将 Notion、Linear、GitHub Issues 通过 MCP 接入 Cursor，无需手动复制需求文档即可直接排期与编码。
               </p>
             </div>
           </div>
