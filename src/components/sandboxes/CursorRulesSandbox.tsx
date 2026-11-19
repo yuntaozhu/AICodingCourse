@@ -8,6 +8,8 @@ import {
   type RuleTemplate,
 } from "@/data/cursorPresets";
 import { CopySnippetButton } from "./SandboxFrame";
+import LabPracticePanel from "./LabPracticePanel";
+import { auditCursorRules } from "@/data/labPracticeEngine";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
 export default function CursorRulesSandbox() {
@@ -16,6 +18,7 @@ export default function CursorRulesSandbox() {
   const [activeRuleId, setActiveRuleId] = useState(RULE_TEMPLATES[1].id);
   const [simulatedFile, setSimulatedFile] = useState(PRODUCT_ARCHETYPES[0].defaultFiles[0]);
   const [previewTab, setPreviewTab] = useState<"mdc" | "agents">("mdc");
+  const [viewMode, setViewMode] = useState<"workbench" | "practice">("workbench");
 
   const activeArchetype = useMemo(
     () => PRODUCT_ARCHETYPES.find((a) => a.id === archetypeId) || PRODUCT_ARCHETYPES[0],
@@ -76,6 +79,8 @@ export default function CursorRulesSandbox() {
   const activeCount = injectionAnalysis.filter((item) => item.active).length;
   const mdcOutput = useMemo(() => compileMdcFile(selectedRule), [selectedRule]);
   const copyOutput = previewTab === "mdc" ? mdcOutput : activeArchetype.agentsSummary;
+  const auditReport = useMemo(() => auditCursorRules(rules), [rules]);
+  const auditPassedCount = auditReport.checks.filter((c) => c.passed).length;
 
   return (
     <div
@@ -94,6 +99,38 @@ export default function CursorRulesSandbox() {
           </h3>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono tabular-nums">
+          <div
+            className="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10"
+            role="tablist"
+            aria-label="Lab 02 模式切换"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "workbench"}
+              onClick={() => setViewMode("workbench")}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                viewMode === "workbench"
+                  ? "bg-white text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              规则编译与命中
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "practice"}
+              onClick={() => setViewMode("practice")}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                viewMode === "practice"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              练习与 DoD ({auditPassedCount}/{auditReport.checks.length})
+            </button>
+          </div>
           <div className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300">
             命中规则 <span className="text-gemini-cyan font-bold">{activeCount}</span>/{rules.length}
           </div>
@@ -104,8 +141,14 @@ export default function CursorRulesSandbox() {
         </div>
       </div>
 
-      {/* Two-zone 60/40 Split */}
-      <div className="grid grid-cols-12 gap-4 items-stretch">
+      {viewMode === "practice" ? (
+        <LabPracticePanel
+          labId="cursor-rules"
+          auditReport={auditReport}
+          auditTitle=".mdc 规则隔离与 Token 预算审计"
+        />
+      ) : (
+        <div className="grid grid-cols-12 gap-4 items-stretch">
         {/* Left 60%: Rule Selector + Glob Simulator + Rule Body Editor */}
         <div className="col-span-7 flex flex-col gap-2.5">
           {/* Archetype + Simulated Active File */}
@@ -253,6 +296,7 @@ export default function CursorRulesSandbox() {
           </pre>
         </div>
       </div>
+      )}
     </div>
   );
 }

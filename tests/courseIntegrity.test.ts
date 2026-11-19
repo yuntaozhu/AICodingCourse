@@ -280,4 +280,59 @@ test("courseCurriculum aligns 10 modules, 16 labs, 4 learner paths, and verified
   }
 });
 
+test("labPracticeEngine audits Plan prompts, .mdc rules, and computes DoD lab completion", async () => {
+  const {
+    auditCursorRules,
+    auditPlanPrompt,
+    getCompletedLabIds,
+  } = await import("../src/data/labPracticeEngine");
+  const { RULE_TEMPLATES } = await import("../src/data/cursorPresets");
+
+  const cleanPlan = auditPlanPrompt({
+    idea: "实现按团队隔离的 SaaS 账单订阅路由与服务端 Webhook 验签",
+    mode: "Plan",
+    selectedTags: ["@Codebase", "@Files"],
+    selectedDod: ["tsc", "lint", "security"],
+  });
+  assert.equal(cleanPlan.score, 100);
+  assert.equal(cleanPlan.warnings.length, 0);
+
+  const leakyPlan = auditPlanPrompt({
+    idea: "随便写写 sk-1234567890abcdef1234567890",
+    mode: "Agent",
+    selectedTags: [],
+    selectedDod: [],
+  });
+  assert.ok(leakyPlan.score < 50);
+  assert.ok(leakyPlan.warnings.length >= 4);
+
+  const defaultRulesAudit = auditCursorRules(RULE_TEMPLATES);
+  assert.equal(defaultRulesAudit.score, 50);
+  assert.equal(defaultRulesAudit.warnings.length, 2);
+
+  const tunedRules = RULE_TEMPLATES.map((r) =>
+    r.id === "self-improve"
+      ? { ...r, alwaysApply: false }
+      : r.id === "workflow-git"
+      ? { ...r, globs: [".github/**/*.yml", "package.json"] }
+      : r
+  );
+  const cleanRules = auditCursorRules(tunedRules);
+  assert.equal(cleanRules.score, 100);
+  assert.equal(cleanRules.warnings.length, 0);
+
+  const noisyRules = auditCursorRules(
+    RULE_TEMPLATES.map((r) => ({ ...r, alwaysApply: true, globs: ["**/*"] }))
+  );
+  assert.ok(noisyRules.score < 100);
+  assert.ok(noisyRules.warnings.length >= 1);
+
+  const completed = getCompletedLabIds({
+    "plan-prompt": { 0: true, 1: true, 2: true },
+    "cursor-rules": { 0: true },
+  });
+  assert.deepEqual(completed, ["plan-prompt"]);
+});
+
+
 

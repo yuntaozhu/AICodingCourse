@@ -37,6 +37,7 @@ function saveCheckedDod(ids: string[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(DOD_STORAGE_KEY, JSON.stringify(ids));
+    window.dispatchEvent(new CustomEvent("course:lab-progress-updated"));
   } catch {
     // Ignore storage quota errors
   }

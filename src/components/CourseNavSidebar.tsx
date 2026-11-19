@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   CheckCircle2,
@@ -20,6 +20,10 @@ import {
   type LearnerPersonaId,
   type ModuleShortCode,
 } from "@/data/courseCurriculum";
+import {
+  getCompletedLabIds,
+  loadAllLabDodProgress,
+} from "@/data/labPracticeEngine";
 
 interface CourseNavSidebarProps {
   isOpen: boolean;
@@ -78,6 +82,21 @@ export default function CourseNavSidebar({
 }: CourseNavSidebarProps) {
   const [selectedPath, setSelectedPath] = useState<PathFilter>(() => loadSavedPath());
   const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+  const [completedLabIds, setCompletedLabIds] = useState<string[]>(() =>
+    getCompletedLabIds(loadAllLabDodProgress())
+  );
+
+  useEffect(() => {
+    const syncLabs = () => {
+      setCompletedLabIds(getCompletedLabIds(loadAllLabDodProgress()));
+    };
+    window.addEventListener("course:lab-progress-updated", syncLabs);
+    window.addEventListener("storage", syncLabs);
+    return () => {
+      window.removeEventListener("course:lab-progress-updated", syncLabs);
+      window.removeEventListener("storage", syncLabs);
+    };
+  }, []);
 
   const totalModules = modules.length;
   const currentModule = modules[activeModuleIndex];
@@ -195,10 +214,10 @@ export default function CourseNavSidebar({
 
             <div className="mt-2 flex items-center justify-between text-[11px] font-mono text-slate-400 tabular-nums">
               <span>
-                第 {totalModules > 0 ? activeModuleIndex + 1 : 0}/{totalModules} 模块
+                模块 {completedCount}/{totalModules}
               </span>
               <span>
-                已完成 {completedCount}/{totalModules}
+                实操验收 {completedLabIds.length}/{COURSE_LABS.length}
               </span>
             </div>
 
@@ -485,17 +504,27 @@ export default function CourseNavSidebar({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          {moduleLabs.map((lab) => (
-                            <button
-                              key={lab.id}
-                              type="button"
-                              onClick={() => handleJumpLab(lab.id)}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/10 hover:bg-gemini-cyan hover:text-slate-950 text-slate-200 font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                            >
-                              <FlaskConical className="w-3 h-3" />
-                              <span>Lab {lab.code}</span>
-                            </button>
-                          ))}
+                          {moduleLabs.map((lab) => {
+                            const labDone = completedLabIds.includes(lab.id);
+                            return (
+                              <button
+                                key={lab.id}
+                                type="button"
+                                onClick={() => handleJumpLab(lab.id)}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                  labDone
+                                    ? "bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/25"
+                                    : "bg-white/10 hover:bg-gemini-cyan hover:text-slate-950 text-slate-200"
+                                }`}
+                              >
+                                <FlaskConical className="w-3 h-3" />
+                                <span>
+                                  Lab {lab.code}
+                                  {labDone ? " · 已验收" : ""}
+                                </span>
+                              </button>
+                            );
+                          })}
                           <button
                             type="button"
                             onClick={() => handleOpenModuleResources(meta.code)}

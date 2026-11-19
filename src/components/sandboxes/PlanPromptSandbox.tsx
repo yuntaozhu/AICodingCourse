@@ -6,6 +6,8 @@ import {
   PRODUCT_ARCHETYPES,
 } from "@/data/cursorPresets";
 import { CopySnippetButton } from "./SandboxFrame";
+import LabPracticePanel from "./LabPracticePanel";
+import { auditPlanPrompt } from "@/data/labPracticeEngine";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
 type CursorMode = "Plan" | "Agent" | "Ask" | "Debug";
@@ -23,6 +25,7 @@ export default function PlanPromptSandbox() {
   const [mode, setMode] = useState<CursorMode>("Plan");
   const [selectedTags, setSelectedTags] = useState<string[]>(["@Codebase", "@Files", "@Docs"]);
   const [selectedDod, setSelectedDod] = useState<string[]>(["tsc", "lint", "states", "security"]);
+  const [activeTab, setActiveTab] = useState<"workbench" | "practice">("workbench");
 
   const handleSelectPreset = (id: string) => {
     setSelectedPresetId(id);
@@ -81,15 +84,18 @@ ${
 ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型检查通过"}`;
   }, [activePreset.stackSummary, idea, mode, selectedDod, selectedTags]);
 
-  const tokenScore = useMemo(() => {
-    const tagTokens = CONTEXT_TAGS.filter((t) => selectedTags.includes(t.tag)).reduce(
-      (acc, t) => acc + t.tokenWeight,
-      0
-    );
-    const hasPlanFirst = mode === "Plan" ? 30 : 15;
-    const dodScore = Math.min(40, selectedDod.length * 10);
-    return Math.min(100, hasPlanFirst + dodScore + (selectedTags.length > 0 ? 30 - Math.max(0, tagTokens - 45) : 10));
-  }, [mode, selectedDod.length, selectedTags]);
+  const auditReport = useMemo(
+    () =>
+      auditPlanPrompt({
+        idea,
+        mode,
+        selectedTags,
+        selectedDod,
+      }),
+    [idea, mode, selectedDod, selectedTags]
+  );
+
+  const auditPassedCount = auditReport.checks.filter((c) => c.passed).length;
 
   return (
     <div
@@ -107,16 +113,54 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
             Plan → Agent → DoD 提示词装配沙盘
           </h3>
         </div>
-        <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
+        <div className="flex items-center gap-2 text-xs font-mono tabular-nums">
+          <div
+            className="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10"
+            role="tablist"
+            aria-label="Lab 01 模式切换"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "workbench"}
+              onClick={() => setActiveTab("workbench")}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                activeTab === "workbench"
+                  ? "bg-white text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              提示词装配
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "practice"}
+              onClick={() => setActiveTab("practice")}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                activeTab === "practice"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              练习与 DoD ({auditPassedCount}/{auditReport.checks.length})
+            </button>
+          </div>
           <div className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300">
-            确定性评分 <span className="text-gemini-cyan font-bold">{tokenScore}</span>/100
+            蓝图审计 <span className="text-gemini-cyan font-bold">{auditReport.score}</span>/100
           </div>
           <CopySnippetButton text={compiledPrompt} label="复制 Cursor 提示词" />
         </div>
       </div>
 
-      {/* Two-zone 60/40 Split */}
-      <div className="grid grid-cols-12 gap-4 items-stretch">
+      {activeTab === "practice" ? (
+        <LabPracticePanel
+          labId="plan-prompt"
+          auditReport={auditReport}
+          auditTitle="Plan 蓝图确定性审计"
+        />
+      ) : (
+        <div className="grid grid-cols-12 gap-4 items-stretch">
         {/* Left 60% Controls */}
         <div className="col-span-7 flex flex-col gap-2.5">
           {/* Scenario Preset Selector */}
@@ -246,6 +290,7 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
           </pre>
         </div>
       </div>
+      )}
     </div>
   );
 }
