@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
+import "d3-transition";
 import { Cpu, GitBranch, Layers, RotateCcw, Users } from "lucide-react";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 

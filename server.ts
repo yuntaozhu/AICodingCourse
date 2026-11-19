@@ -291,7 +291,12 @@ async function startServer() {
       },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+    app.use((req, res, next) => {
+      if (req.url?.startsWith("/api/")) {
+        return next();
+      }
+      return vite.middlewares(req, res, next);
+    });
   } else {
     const distDir = path.resolve(__dirname, "dist");
     app.use(express.static(distDir));
