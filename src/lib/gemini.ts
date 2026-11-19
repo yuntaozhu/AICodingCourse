@@ -1,3 +1,5 @@
+import { recordAiApiCall } from "@/lib/performanceTelemetry";
+
 export interface BugbotFinding {
   id: string;
   severity: "critical" | "warning" | "info";
@@ -19,31 +21,50 @@ export async function reviewCode(
   code: string,
   options: Omit<ReviewRequestPayload, "code"> = { rules: [] }
 ): Promise<{ feedback: string; model: string }> {
-  const response = await fetch("/api/review", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      code,
-      rules: options.rules,
-      customRule: options.customRule,
-      mode: options.mode ?? "bugbot",
-    }),
-  });
+  const startedAt = performance.now();
+  try {
+    const response = await fetch("/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code,
+        rules: options.rules,
+        customRule: options.customRule,
+        mode: options.mode ?? "bugbot",
+      }),
+    });
 
-  const data = (await response.json().catch(() => ({}))) as {
-    feedback?: string;
-    model?: string;
-    error?: string;
-  };
+    const data = (await response.json().catch(() => ({}))) as {
+      feedback?: string;
+      model?: string;
+      error?: string;
+    };
 
-  if (!response.ok) {
-    throw new Error(data.error || `AI 评审请求失败 (HTTP ${response.status})`);
+    const latencyMs = performance.now() - startedAt;
+    recordAiApiCall({
+      endpoint: "/api/review",
+      ok: response.ok,
+      latencyMs,
+    });
+
+    if (!response.ok) {
+      throw new Error(data.error || `AI 评审请求失败 (HTTP ${response.status})`);
+    }
+
+    return {
+      feedback: data.feedback || "未返回评审内容。",
+      model: data.model || "gemini-4-hydrogen",
+    };
+  } catch (err) {
+    if (err instanceof Error && !err.message.includes("AI 评审请求失败")) {
+      recordAiApiCall({
+        endpoint: "/api/review",
+        ok: false,
+        latencyMs: performance.now() - startedAt,
+      });
+    }
+    throw err;
   }
-
-  return {
-    feedback: data.feedback || "未返回评审内容。",
-    model: data.model || "gemini-4-hydrogen",
-  };
 }
 
 export function runLocalBugbotCheck(code: string, activeRules: string[]): BugbotFinding[] {
@@ -182,26 +203,44 @@ export async function synthesizeCourseFromBooks(payload: {
   outputMode: KbOutputMode;
   selectedBooks: KbBookSynthesisInput[];
 }): Promise<{ content: string; model: string }> {
-  const response = await fetch("/api/kb/synthesize", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const startedAt = performance.now();
+  try {
+    const response = await fetch("/api/kb/synthesize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  const data = (await response.json().catch(() => ({}))) as {
-    content?: string;
-    model?: string;
-    error?: string;
-  };
+    const data = (await response.json().catch(() => ({}))) as {
+      content?: string;
+      model?: string;
+      error?: string;
+    };
 
-  if (!response.ok) {
-    throw new Error(data.error || `知识库备课生成失败 (HTTP ${response.status})`);
+    recordAiApiCall({
+      endpoint: "/api/kb/synthesize",
+      ok: response.ok,
+      latencyMs: performance.now() - startedAt,
+    });
+
+    if (!response.ok) {
+      throw new Error(data.error || `知识库备课生成失败 (HTTP ${response.status})`);
+    }
+
+    return {
+      content: data.content || "未返回备课内容。",
+      model: data.model || "gemini-4-hydrogen",
+    };
+  } catch (err) {
+    if (err instanceof Error && !err.message.includes("知识库备课生成失败")) {
+      recordAiApiCall({
+        endpoint: "/api/kb/synthesize",
+        ok: false,
+        latencyMs: performance.now() - startedAt,
+      });
+    }
+    throw err;
   }
-
-  return {
-    content: data.content || "未返回备课内容。",
-    model: data.model || "gemini-4-hydrogen",
-  };
 }
 
 export function buildOfflineCourseSynthesis(params: {
@@ -277,26 +316,44 @@ export interface CraftRulesPayload {
 export async function craftCursorConfig(
   payload: CraftRulesPayload
 ): Promise<{ content: string; model: string }> {
-  const response = await fetch("/api/craft-rules", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const startedAt = performance.now();
+  try {
+    const response = await fetch("/api/craft-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  const data = (await response.json().catch(() => ({}))) as {
-    content?: string;
-    model?: string;
-    error?: string;
-  };
+    const data = (await response.json().catch(() => ({}))) as {
+      content?: string;
+      model?: string;
+      error?: string;
+    };
 
-  if (!response.ok) {
-    throw new Error(data.error || `AI 配置生成失败 (HTTP ${response.status})`);
+    recordAiApiCall({
+      endpoint: "/api/craft-rules",
+      ok: response.ok,
+      latencyMs: performance.now() - startedAt,
+    });
+
+    if (!response.ok) {
+      throw new Error(data.error || `AI 配置生成失败 (HTTP ${response.status})`);
+    }
+
+    return {
+      content: data.content || "未返回生成内容。",
+      model: data.model || "gemini-4-hydrogen",
+    };
+  } catch (err) {
+    if (err instanceof Error && !err.message.includes("AI 配置生成失败")) {
+      recordAiApiCall({
+        endpoint: "/api/craft-rules",
+        ok: false,
+        latencyMs: performance.now() - startedAt,
+      });
+    }
+    throw err;
   }
-
-  return {
-    content: data.content || "未返回生成内容。",
-    model: data.model || "gemini-4-hydrogen",
-  };
 }
 
 export function buildOfflineCursorConfig(payload: CraftRulesPayload): string {

@@ -3,6 +3,7 @@ import P31b from "./P31b";
 import P31c from "./P31c";
 import P31d from "./P31d";
 import P32 from "./P32";
+import P32b from "./P32b";
 import P33 from "./P33";
 import P34 from "./P34";
 import P35 from "./P35";
@@ -14,5 +15,5 @@ import P40 from "./P40";
 import { Module4Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module4Slides = [
-  P31, P31b, P31c, P31d, P32, P33, P34, P35, P36, P37, P38, P39, P40, Module4Quiz
+  P31, P31b, P31c, P31d, P32, P32b, P33, P34, P35, P36, P37, P38, P39, P40, Module4Quiz
 ];

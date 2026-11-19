@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, PanelLeftClose, RotateCcw } from "lucide-react";
 import type { ModuleNavItem } from "@/components/Presentation";
+import SidebarPerformanceMonitor from "@/components/SidebarPerformanceMonitor";
 import { stopRevealKey, stopRevealWheel } from "@/components/sandboxes/revealEvents";
 
 interface CourseNavSidebarProps {
@@ -191,6 +192,13 @@ export default function CourseNavSidebar({
               );
             })}
           </nav>
+
+          {/* Floating Performance & Efficiency Monitor */}
+          <SidebarPerformanceMonitor
+            completedModulesCount={completedCount}
+            totalModulesCount={totalModules}
+            sidebarOpen={true}
+          />
 
           {/* Footer */}
           <div className="px-4 py-2.5 border-t border-white/10 flex items-center justify-between gap-2 text-[11px] font-mono text-slate-400 shrink-0">

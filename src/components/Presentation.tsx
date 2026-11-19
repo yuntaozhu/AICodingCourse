@@ -3,7 +3,13 @@ import Reveal from "reveal.js";
 import { BookOpen, Check, ChevronDown, FlaskConical, PanelLeft } from "lucide-react";
 import CourseNavSidebar from "@/components/CourseNavSidebar";
 import KnowledgeBaseSidebar from "@/components/KnowledgeBaseSidebar";
+import SidebarPerformanceMonitor from "@/components/SidebarPerformanceMonitor";
 import { AI_BOOKS_KNOWLEDGE_BASE } from "@/data/aiBooksKnowledgeBase";
+import {
+  probeServerHealth,
+  recordInteractionLatency,
+  resetSandboxTelemetryScore,
+} from "@/lib/performanceTelemetry";
 
 export interface ModuleNavItem {
   id: string;
@@ -240,6 +246,34 @@ export default function Presentation({
     return () => window.clearTimeout(timer);
   }, [courseSidebarOpen]);
 
+  // Real interaction-to-frame response timing + initial server readiness probe
+  useEffect(() => {
+    void probeServerHealth();
+
+    const measureInteraction = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      const isInteractiveTarget = Boolean(
+        target?.closest("button, a, input, select, textarea, [role='button']")
+      );
+      if (!isInteractiveTarget) return;
+
+      const start = performance.now();
+      const insideSandboxSlide = Boolean(target?.closest(".slides"));
+      window.requestAnimationFrame(() => {
+        const elapsed = performance.now() - start;
+        recordInteractionLatency(elapsed, insideSandboxSlide);
+      });
+    };
+
+    window.addEventListener("pointerdown", measureInteraction, { passive: true });
+    window.addEventListener("keydown", measureInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", measureInteraction);
+      window.removeEventListener("keydown", measureInteraction);
+    };
+  }, []);
+
   const activeModuleIndex = modules.reduce((acc, mod, idx) => {
     return currentH >= mod.startIndex ? idx : acc;
   }, 0);
@@ -262,6 +296,7 @@ export default function Presentation({
   const handleResetProgress = () => {
     setCompletedModuleIds([]);
     saveCompletedModules([]);
+    resetSandboxTelemetryScore();
     handleJumpTo(0, 0);
   };
 
@@ -286,6 +321,16 @@ export default function Presentation({
           totalH={totalH}
           onSelectModule={handleSelectSidebarModule}
           onResetProgress={handleResetProgress}
+        />
+      )}
+
+      {modules.length > 0 && !courseSidebarOpen && (
+        <SidebarPerformanceMonitor
+          completedModulesCount={
+            modules.filter((m) => completedModuleIds.includes(m.id)).length
+          }
+          totalModulesCount={modules.length}
+          sidebarOpen={false}
         />
       )}
 

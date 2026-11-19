@@ -16,6 +16,7 @@ import P7 from "@/components/slides/Module1/P7";
 import P31c from "@/components/slides/Module4/P31c";
 import P31d from "@/components/slides/Module4/P31d";
 import P32 from "@/components/slides/Module4/P32";
+import P32b from "@/components/slides/Module4/P32b";
 import P85d from "@/components/slides/Module6/P85d";
 import P85e from "@/components/slides/Module6/P85e";
 import P85f from "@/components/slides/Module6/P85f";
@@ -73,6 +74,7 @@ function App() {
     { id: "code-health-sim", label: "13 Code Health 演化模拟器 (M6)", h: allSlides.indexOf(P85g), v: 0 },
     { id: "prompt-crafting", label: "14 Prompt Crafting 规则生成器 (M4)", h: allSlides.indexOf(P31d), v: 0 },
     { id: "velocity-heatmap", label: "15 Developer Velocity 热力图 (D3.js)", h: allSlides.indexOf(P92d), v: 0 },
+    { id: "mcp-registry", label: "16 MCP Registry 浏览器 (M4)", h: allSlides.indexOf(P32b), v: 0 },
   ];
 
   return (
