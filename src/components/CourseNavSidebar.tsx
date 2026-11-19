@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Circle,
   Compass,
+  Copy,
   FlaskConical,
   PanelLeftClose,
   RotateCcw,
@@ -21,8 +23,10 @@ import {
   type ModuleShortCode,
 } from "@/data/courseCurriculum";
 import {
+  buildEngineeringHandoffMarkdown,
   getCompletedLabIds,
   loadAllLabDodProgress,
+  loadLabArtifacts,
 } from "@/data/labPracticeEngine";
 
 interface CourseNavSidebarProps {
@@ -85,6 +89,7 @@ export default function CourseNavSidebar({
   const [completedLabIds, setCompletedLabIds] = useState<string[]>(() =>
     getCompletedLabIds(loadAllLabDodProgress())
   );
+  const [copiedHandoff, setCopiedHandoff] = useState(false);
 
   useEffect(() => {
     const syncLabs = () => {
@@ -226,6 +231,43 @@ export default function CourseNavSidebar({
                 当前：{currentModule.label}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                const md = buildEngineeringHandoffMarkdown({
+                  pathLabel: activePathDef?.label,
+                  completedModuleIds,
+                  completedLabIds,
+                  artifacts: loadLabArtifacts(),
+                });
+                try {
+                  await navigator.clipboard.writeText(md);
+                  setCopiedHandoff(true);
+                  window.setTimeout(() => setCopiedHandoff(false), 2000);
+                } catch {
+                  setCopiedHandoff(false);
+                }
+              }}
+              title="汇总 Lab 01–03 的规格蓝图、.mdc 规则、.cursor/mcp.json 与 DoD 清单"
+              className={`mt-2 w-full px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                copiedHandoff
+                  ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-300"
+                  : "bg-white/5 border-white/15 text-slate-200 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {copiedHandoff ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>已复制工程交付包 (.md)</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-gemini-cyan" />
+                  <span>复制我的工程交付包 (.md)</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Learner Persona Path Switcher */}

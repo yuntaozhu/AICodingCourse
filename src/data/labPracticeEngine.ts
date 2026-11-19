@@ -230,3 +230,154 @@ export function isLabDodComplete(
 export function getCompletedLabIds(progressMap: LabDodProgressMap): string[] {
   return COURSE_LABS.filter((lab) => isLabDodComplete(lab, progressMap)).map((l) => l.id);
 }
+
+export function auditBugbotSession(input: {
+  enabledRulesCount: number;
+  ranLocalCheck: boolean;
+  findingsCount: number;
+  usedAiReview: boolean;
+}): LabAuditReport {
+  const warnings: string[] = [];
+  const hasRuleCoverage = input.enabledRulesCount >= 2;
+  const ranCheck = input.ranLocalCheck || input.usedAiReview;
+  const securityRuleActive = input.enabledRulesCount >= 1;
+  const reviewedFindings = ranCheck && input.findingsCount >= 0;
+
+  if (!hasRuleCoverage) {
+    warnings.push("建议至少挂载 2 条 .cursor/rules（含安全护栏与 DoD 检查）再执行 PR 评审。");
+  }
+  if (!ranCheck) {
+    warnings.push("请先点击「本地规则秒检」或「AI 深度评审」完成首轮风险扫描。");
+  }
+
+  const checks: LabAuditCheck[] = [
+    {
+      id: "rule-coverage",
+      label: "已挂载 ≥2 条结构化 .mdc 评审规则",
+      passed: hasRuleCoverage,
+      detail: `当前挂载 ${input.enabledRulesCount} 条规则`,
+    },
+    {
+      id: "deterministic-scan",
+      label: "已执行静态或独立上下文代码扫描",
+      passed: ranCheck,
+      detail: ranCheck
+        ? `已检出 ${input.findingsCount} 项待确认发现`
+        : "尚未触发评审扫描",
+    },
+    {
+      id: "security-baseline",
+      label: "保留权限/SQLi/密钥底线检查规则",
+      passed: securityRuleActive,
+      detail: securityRuleActive ? "安全底线规则生效中" : "缺少安全规则挂载",
+    },
+    {
+      id: "human-signoff",
+      label: "人工复核高危项并禁止盲目合并",
+      passed: reviewedFindings,
+      detail: reviewedFindings ? "请逐条确认修复指令后在右侧勾选 DoD" : "等待完成扫描后人工确认",
+    },
+  ];
+
+  const passedCount = checks.filter((c) => c.passed).length;
+  return {
+    score: Math.round((passedCount / checks.length) * 100),
+    checks,
+    warnings,
+  };
+}
+
+export const LAB_ARTIFACTS_STORAGE_KEY = "cursor_course_lab_artifacts_v1";
+
+export interface LabArtifactsStore {
+  planPrompt?: string;
+  mdcRuleSlug?: string;
+  mdcRuleContent?: string;
+  mcpConfigJson?: string;
+  updatedAt?: string;
+}
+
+export function loadLabArtifacts(): LabArtifactsStore {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LAB_ARTIFACTS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as LabArtifactsStore)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveLabArtifact(partial: Partial<LabArtifactsStore>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const prev = loadLabArtifacts();
+    const next: LabArtifactsStore = {
+      ...prev,
+      ...partial,
+      updatedAt: new Date().toISOString().slice(0, 10),
+    };
+    window.localStorage.setItem(LAB_ARTIFACTS_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function buildEngineeringHandoffMarkdown(params: {
+  pathLabel?: string;
+  completedModuleIds: string[];
+  completedLabIds: string[];
+  artifacts: LabArtifactsStore;
+}): string {
+  const pathText = params.pathLabel || "完整课程路径";
+  const planSection =
+    params.artifacts.planPrompt?.trim() ||
+    `[Cursor Plan Mode | Cmd+I]\nContext: @Codebase @Files @Docs\nIntent: 请在 Lab 01 沙盘输入您的产品需求并复制结构化 Plan 蓝图`;
+  const ruleSlug = params.artifacts.mdcRuleSlug || "10-ui-tailwind";
+  const ruleSection =
+    params.artifacts.mdcRuleContent?.trim() ||
+    `---\ndescription: 请在 Lab 02 沙盘编辑并导出您的项目级 .mdc 规则\nglobs:\n  - src/**/*.tsx\nalwaysApply: false\n---`;
+  const mcpSection =
+    params.artifacts.mcpConfigJson?.trim() ||
+    `{\n  "mcpServers": {\n    "github": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-github"],\n      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "\${env:GITHUB_PERSONAL_ACCESS_TOKEN}" }\n    }\n  }\n}`;
+
+  return [
+    `# AICodingCourse 工程化交付包`,
+    ``,
+    `- 学习路径：${pathText}`,
+    `- 模块进度：已完成 ${params.completedModuleIds.length}/10 (${params.completedModuleIds.join(", ") || "尚未记录"})`,
+    `- 实操验收：已验收 ${params.completedLabIds.length}/${COURSE_LABS.length} (${params.completedLabIds.join(", ") || "尚未记录"})`,
+    `- 导出日期：${params.artifacts.updatedAt || "2026-11-18"}（仅基于浏览器本地练习产物生成）`,
+    ``,
+    `## 1. 需求规格蓝图 (Lab 01 · Plan -> Agent Spec)`,
+    ``,
+    "```text",
+    planSection,
+    "```",
+    ``,
+    `## 2. 仓库上下文规则 (.cursor/rules/${ruleSlug}.mdc · Lab 02)`,
+    ``,
+    "```markdown",
+    ruleSection,
+    "```",
+    ``,
+    `## 3. 最小特权 MCP 配置 (.cursor/mcp.json · Lab 03)`,
+    ``,
+    "```json",
+    mcpSection,
+    "```",
+    ``,
+    `## 4. 上线前 DoD 与人工审核门禁`,
+    ``,
+    `- [ ] \`npm run lint\`（0 错误）`,
+    `- [ ] \`npx tsc --noEmit\`（0 类型错误）`,
+    `- [ ] \`npm test\`（单元测试全量通过）`,
+    `- [ ] \`npm run build\`（生产构建通过）`,
+    `- [ ] 人工确认：所有密钥仅通过 \`\${env:...}\` 或服务端环境变量注入；支付/鉴权/写库路径未经人工复核禁止自动上线。`,
+    ``,
+  ].join("\n");
+}
+

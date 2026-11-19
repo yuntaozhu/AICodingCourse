@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Terminal, Layers } from "lucide-react";
 import {
   CONTEXT_TAGS,
@@ -7,7 +7,7 @@ import {
 } from "@/data/cursorPresets";
 import { CopySnippetButton } from "./SandboxFrame";
 import LabPracticePanel from "./LabPracticePanel";
-import { auditPlanPrompt } from "@/data/labPracticeEngine";
+import { auditPlanPrompt, saveLabArtifact } from "@/data/labPracticeEngine";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
 type CursorMode = "Plan" | "Agent" | "Ask" | "Debug";
@@ -83,6 +83,10 @@ ${
 # 3. 验收门禁 (DoD)
 ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型检查通过"}`;
   }, [activePreset.stackSummary, idea, mode, selectedDod, selectedTags]);
+
+  useEffect(() => {
+    saveLabArtifact({ planPrompt: compiledPrompt });
+  }, [compiledPrompt]);
 
   const auditReport = useMemo(
     () =>

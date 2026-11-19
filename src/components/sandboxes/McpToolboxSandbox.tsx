@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { MCP_SERVERS, type McpServerConfig } from "@/data/cursorPresets";
 import { auditMcpConfigJson, MCP_LAB_GUIDE } from "@/data/mcpLabGuide";
+import { saveLabArtifact } from "@/data/labPracticeEngine";
 import { CopySnippetButton } from "./SandboxFrame";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
@@ -88,6 +89,10 @@ export default function McpToolboxSandbox() {
     });
     return JSON.stringify({ mcpServers }, null, 2);
   }, [enabledIds]);
+
+  useEffect(() => {
+    saveLabArtifact({ mcpConfigJson: mcpJson });
+  }, [mcpJson]);
 
   const tracePreview = useMemo(() => {
     if (scenario === "figma-browser") {

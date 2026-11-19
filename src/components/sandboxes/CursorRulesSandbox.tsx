@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileCode2, ShieldCheck } from "lucide-react";
 import {
   compileMdcFile,
@@ -9,7 +9,7 @@ import {
 } from "@/data/cursorPresets";
 import { CopySnippetButton } from "./SandboxFrame";
 import LabPracticePanel from "./LabPracticePanel";
-import { auditCursorRules } from "@/data/labPracticeEngine";
+import { auditCursorRules, saveLabArtifact } from "@/data/labPracticeEngine";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
 export default function CursorRulesSandbox() {
@@ -81,6 +81,13 @@ export default function CursorRulesSandbox() {
   const copyOutput = previewTab === "mdc" ? mdcOutput : activeArchetype.agentsSummary;
   const auditReport = useMemo(() => auditCursorRules(rules), [rules]);
   const auditPassedCount = auditReport.checks.filter((c) => c.passed).length;
+
+  useEffect(() => {
+    saveLabArtifact({
+      mdcRuleSlug: selectedRule.slug,
+      mdcRuleContent: mdcOutput,
+    });
+  }, [mdcOutput, selectedRule.slug]);
 
   return (
     <div

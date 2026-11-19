@@ -332,7 +332,46 @@ test("labPracticeEngine audits Plan prompts, .mdc rules, and computes DoD lab co
     "cursor-rules": { 0: true },
   });
   assert.deepEqual(completed, ["plan-prompt"]);
+
+  const { auditBugbotSession, buildEngineeringHandoffMarkdown } = await import(
+    "../src/data/labPracticeEngine"
+  );
+  const bugbotWait = auditBugbotSession({
+    enabledRulesCount: 1,
+    ranLocalCheck: false,
+    findingsCount: 0,
+    usedAiReview: false,
+  });
+  assert.ok(bugbotWait.score < 100);
+  assert.ok(bugbotWait.warnings.length >= 2);
+
+  const bugbotReady = auditBugbotSession({
+    enabledRulesCount: 3,
+    ranLocalCheck: true,
+    findingsCount: 4,
+    usedAiReview: false,
+  });
+  assert.equal(bugbotReady.score, 100);
+  assert.equal(bugbotReady.warnings.length, 0);
+
+  const handoff = buildEngineeringHandoffMarkdown({
+    pathLabel: "独立开发者",
+    completedModuleIds: ["m1", "m4"],
+    completedLabIds: ["plan-prompt"],
+    artifacts: {
+      planPrompt: "Intent: 验证订单支付回退",
+      mdcRuleSlug: "20-api-security",
+      mdcRuleContent: "Always validate webhooks",
+      mcpConfigJson: "{ \"mcpServers\": {} }",
+      updatedAt: "2026-11-18",
+    },
+  });
+  assert.ok(handoff.includes("独立开发者"));
+  assert.ok(handoff.includes("Intent: 验证订单支付回退"));
+  assert.ok(handoff.includes(".cursor/rules/20-api-security.mdc"));
+  assert.ok(handoff.includes("npx tsc --noEmit"));
 });
+
 
 
 

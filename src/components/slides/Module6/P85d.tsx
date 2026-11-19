@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Slide from "@/components/Slide";
 import Markdown from "react-markdown";
 import { ShieldAlert, Sparkles, Terminal } from "lucide-react";
@@ -8,6 +8,8 @@ import {
   runLocalBugbotCheck,
   type BugbotFinding,
 } from "@/lib/gemini";
+import LabPracticePanel from "@/components/sandboxes/LabPracticePanel";
+import { auditBugbotSession } from "@/data/labPracticeEngine";
 import { CopySnippetButton } from "@/components/sandboxes/SandboxFrame";
 import { stopRevealKey, stopRevealWheel } from "@/components/sandboxes/revealEvents";
 
@@ -26,6 +28,19 @@ export default function P85d() {
   const [modelUsed, setModelUsed] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"review" | "practice">("review");
+
+  const bugbotAudit = useMemo(
+    () =>
+      auditBugbotSession({
+        enabledRulesCount: enabledRules.length,
+        ranLocalCheck: localFindings !== null,
+        findingsCount: localFindings?.length ?? 0,
+        usedAiReview: Boolean(aiFeedback),
+      }),
+    [aiFeedback, enabledRules.length, localFindings]
+  );
+  const bugbotPassedCount = bugbotAudit.checks.filter((c) => c.passed).length;
 
   const handleSelectPreset = (id: string) => {
     setPresetId(id);
@@ -90,7 +105,39 @@ export default function P85d() {
               Cursor Bugbot 规则对齐与实时代码审查台
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10"
+              role="tablist"
+              aria-label="Lab 04 模式切换"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "review"}
+                onClick={() => setActiveTab("review")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                  activeTab === "review"
+                    ? "bg-white text-slate-950 font-semibold"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                PR 审查台
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "practice"}
+                onClick={() => setActiveTab("practice")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                  activeTab === "practice"
+                    ? "bg-gemini-cyan text-slate-950 font-semibold"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                练习与 DoD ({bugbotPassedCount}/{bugbotAudit.checks.length})
+              </button>
+            </div>
             {BUGBOT_CODE_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -108,30 +155,38 @@ export default function P85d() {
           </div>
         </div>
 
-        {/* Rule Pills */}
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="font-mono text-slate-400">挂载 .cursor/rules:</span>
-          {RULE_OPTIONS.map((rule) => {
-            const active = enabledRules.includes(rule);
-            return (
-              <button
-                key={rule}
-                type="button"
-                onClick={() => toggleRule(rule)}
-                className={`px-2.5 py-1 rounded-lg font-mono cursor-pointer border transition-colors ${
-                  active
-                    ? "bg-gemini-purple/20 border-gemini-purple text-white"
-                    : "bg-white/[0.03] border-white/10 text-slate-400"
-                }`}
-              >
-                {rule.split(" ")[0]}
-              </button>
-            );
-          })}
-        </div>
+        {activeTab === "practice" ? (
+          <LabPracticePanel
+            labId="bugbot-review"
+            auditReport={bugbotAudit}
+            auditTitle="Bugbot 独立审查与安全审计"
+          />
+        ) : (
+          <>
+            {/* Rule Pills */}
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-mono text-slate-400">挂载 .cursor/rules:</span>
+              {RULE_OPTIONS.map((rule) => {
+                const active = enabledRules.includes(rule);
+                return (
+                  <button
+                    key={rule}
+                    type="button"
+                    onClick={() => toggleRule(rule)}
+                    className={`px-2.5 py-1 rounded-lg font-mono cursor-pointer border transition-colors ${
+                      active
+                        ? "bg-gemini-purple/20 border-gemini-purple text-white"
+                        : "bg-white/[0.03] border-white/10 text-slate-400"
+                    }`}
+                  >
+                    {rule.split(" ")[0]}
+                  </button>
+                );
+              })}
+            </div>
 
-        {/* Two-Zone 60/40 Split */}
-        <div className="grid grid-cols-12 gap-4 h-[390px]">
+            {/* Two-Zone 60/40 Split */}
+            <div className="grid grid-cols-12 gap-4 h-[390px]">
           {/* Left 60%: Code Editor */}
           <div className="col-span-6 bg-[#0b0f19] rounded-2xl border border-white/10 overflow-hidden flex flex-col">
             <div className="bg-white/5 px-3 py-2 border-b border-white/10 flex flex-wrap justify-between items-center gap-2">
@@ -247,6 +302,8 @@ export default function P85d() {
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
     </Slide>
   );
