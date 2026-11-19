@@ -178,9 +178,15 @@ export default function Presentation({
       }
     };
 
+    const handleOpenResourcesEvent = () => {
+      setKbSidebarOpen(true);
+      setLabMenuOpen(false);
+    };
+
     window.addEventListener("reveal:jump", handleJumpEvent);
     window.addEventListener("reveal:jump-lab", handleJumpLabEvent);
     window.addEventListener("reveal:jump-module", handleJumpModuleEvent);
+    window.addEventListener("course:open-resources", handleOpenResourcesEvent);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!cancelled && readyDone) {
@@ -224,6 +230,7 @@ export default function Presentation({
       window.removeEventListener("reveal:jump", handleJumpEvent);
       window.removeEventListener("reveal:jump-lab", handleJumpLabEvent);
       window.removeEventListener("reveal:jump-module", handleJumpModuleEvent);
+      window.removeEventListener("course:open-resources", handleOpenResourcesEvent);
       if (readyDone) {
         try {
           deck.off("slidechanged", handleSlideChange);

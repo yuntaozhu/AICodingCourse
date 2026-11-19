@@ -1,3 +1,9 @@
+export interface QuizReviewTarget {
+  label: string;
+  labId?: string;
+  moduleId?: string;
+}
+
 export interface QuizQuestion {
   id: string;
   topic: string;
@@ -5,6 +11,7 @@ export interface QuizQuestion {
   options: [string, string, string, string];
   correctIndex: number;
   explanation: string;
+  reviewTarget?: QuizReviewTarget;
 }
 
 export interface ModuleQuiz {
@@ -35,6 +42,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "代码已成为可随时再生的中间产物，架构师的核心价值在于用高纯度意图抽象问题、用 DoD 评估交付物，并编排多 Agent 协同落地。",
+        reviewTarget: { labId: "plan-prompt", label: "实操 Lab 01 · Plan→Agent 提示词沙盘" },
       },
       {
         id: "m1-q2",
@@ -49,6 +57,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 0,
         explanation:
           "代码依赖跨文件分布，Chunking 会割裂函数与类型约束；全量上下文保留完整调用链，Context Caching 则将代码库预加载到 KV Cache，显著降低成本与延迟。",
+        reviewTarget: { labId: "agent-harness", label: "深入 Lab 06 · 上下文压缩与 Harness" },
       },
       {
         id: "m1-q3",
@@ -63,6 +72,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 2,
         explanation:
           "SDD（软件设计文档）在编码前约束接口、数据结构与边界；DoD（完成定义）通过静态扫描与自动化测试强制 AI 闭环纠错，消除“开盲盒”式交付。",
+        reviewTarget: { labId: "plan-prompt", label: "复盘 Lab 01 · SDD 与 DoD 检查点" },
       },
       {
         id: "m1-q4",
@@ -77,6 +87,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "记忆语法正在过时，但若不知道存在七维系统权衡，就无法向 Agent 发出正确约束；同时 AI 系统直接从你的数据源获取上下文，且正确架构是随阶段移动的靶心，全靠人提供关键工程上下文。",
+        reviewTarget: { moduleId: "m1", label: "回看 Module 1 核心讲义" },
       },
     ],
   },
@@ -99,6 +110,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "全量上下文不等于垃圾倾倒。剔除 node_modules、dist 等冗余产物能显著提升信噪比，让模型注意力聚焦在真实业务逻辑与依赖关系上。",
+        reviewTarget: { moduleId: "m2", label: "回看 Module 2 · 上下文去噪讲义" },
       },
       {
         id: "m2-q2",
@@ -113,6 +125,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "具备全局视野的 AI 能同时看到接口定义、各模块调用方、Mock 数据与边界测试，从而一次性掌控重构引发的连锁反应。",
+        reviewTarget: { labId: "agent-harness", label: "体验 Lab 06 · 跨文件上下文压缩" },
       },
       {
         id: "m2-q3",
@@ -127,6 +140,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 2,
         explanation:
           "安全漏洞往往隐藏在多层函数调用与全局拦截器之间，全量上下文让 AI 能够沿真实数据流追踪鉴权遗漏与注入风险。",
+        reviewTarget: { labId: "smart-code-review", label: "实操 Lab 12 · Bugbot 安全规则审查" },
       },
     ],
   },
@@ -149,6 +163,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "跳转成功页仅用于前端友好提示。真正可靠的权益发放必须依赖后端接收 Stripe 签名 Webhook、校验 stripe-signature 并做 event.id 幂等落库。",
+        reviewTarget: { moduleId: "m3", label: "回看 Module 3 · 支付与服务端安全" },
       },
       {
         id: "m3-q2",
@@ -163,6 +178,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "Vibe Debugging 的核心是用完整现场（截图+Console+Network）缩小搜索空间，并用 Git/Checkpoint 作为安全锚点及时止损回滚，再把根因写入 .cursor/rules。",
+        reviewTarget: { labId: "vibe-stack-map", label: "打开 Lab 07 · 报错解码与排障矩阵" },
       },
       {
         id: "m3-q3",
@@ -177,6 +193,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 2,
         explanation:
           "把完成判断权交给客观校验脚本与清单状态机，同时禁止篡改断言与按特性细粒度提交，才能保证长时自主编码不偏移。",
+        reviewTarget: { labId: "efficiency-assessment", label: "自测 Lab 09 · Sonar 7 Habits 门禁" },
       },
       {
         id: "m3-q4",
@@ -191,6 +208,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "审美判断力源于高信噪比输入：给 AI 看整页叙事顺序、保留哪些留白比例，或者直接从 React Bits / Vue Bits / Codrops 等站喂给精确参数、依赖与源码，远比堆砌形容词精准得多。",
+        reviewTarget: { labId: "ui-inspiration", label: "浏览 Lab 08 · 23 站 UI 参考库" },
       },
     ],
   },
@@ -213,6 +231,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "基于 globs 路径匹配（如 server/routes/**/*.ts）和按需描述触发规则，既保证修改关键路径时自动注入安全红线，又避免日常编码被无关规则稀释注意力。",
+        reviewTarget: { labId: "cursor-rules", label: "实操 Lab 02 · .mdc 规则与 AGENTS 沙盘" },
       },
       {
         id: "m4-q2",
@@ -227,6 +246,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "根据 OPENDEV 与模板工程实践，全量挂载工具 Schema 会直接吞噬大量 Token；按任务隔离 MCP、用 Context7 两步查最新文档、对 Memory/TaskMaster 写操作加确认门槛才是工程正解。",
+        reviewTarget: { labId: "mcp-toolbox", label: "实操 Lab 03 · MCP 配置与 DoD 验收" },
       },
       {
         id: "m4-q3",
@@ -241,6 +261,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "每一次踩坑都应转化为规则资产（self-improve 闭环），这正是独立开发者“越用 Cursor 越稳定”的长期复利来源。",
+        reviewTarget: { labId: "prompt-crafting", label: "演练 Lab 14 · Prompt Crafting 规则生成" },
       },
     ],
   },
@@ -263,6 +284,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "git blame 永远指向提交代码的开发者而非 AI。必须严格清扫 AI 产出的冗余导入与死代码（No Stray Code）、压低认知复杂度（Keep It Simple）并自动化全量扫描。",
+        reviewTarget: { labId: "efficiency-assessment", label: "自测 Lab 09 · Sonar 7 Habits 评估" },
       },
       {
         id: "m5-q2",
@@ -277,6 +299,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "Sonar 第 6 习惯与 arXiv:2410.02156 均强调：AI 擅长写 Happy Path 测试，但极易弱化断言自欺欺人；高可靠工程（如 IASalut 医疗 AI 指南）需人工定义边界与五层测试金字塔，并监控圈复杂度与 Halstead 复杂度。",
+        reviewTarget: { labId: "smart-code-review", label: "演练 Lab 12 · 测试作弊与规则审查" },
       },
       {
         id: "m5-q3",
@@ -291,6 +314,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "DoD 是确定性的退出门禁，搭配有界自愈次数与 Git Checkpoint 止损，能防止 Agent 在错误方向越改越乱（Two Steps Back）。",
+        reviewTarget: { moduleId: "m5", label: "回看 Module 5 · DoD 自愈闭环讲义" },
       },
     ],
   },
@@ -313,6 +337,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "Background Agent 在隔离分支上运行，只有当需求边界清晰、具备自动化测试和构建门禁时，异步提交的 PR 才能真正做到“人类 2 分钟审阅合并”。",
+        reviewTarget: { labId: "code-health-sim", label: "仿真 Lab 13 · Agent 代码健康度曲线" },
       },
       {
         id: "m6-q2",
@@ -327,6 +352,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 0,
         explanation:
           "隔离上下文审查配合确定性静态规则（如 SQLi、鉴权遗漏、Stray Code 与 Reward Hacking 检测），才能打破“自己批改自己试卷”的幻觉盲区。",
+        reviewTarget: { labId: "bugbot-review", label: "实操 Lab 04 · Bugbot 实时评审台" },
       },
       {
         id: "m6-q3",
@@ -341,6 +367,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "不能把安全寄托在模型“自觉遵守”。本地 Hook、CI 密钥扫雷与 CodeQL/Bugbot 构成不可绕过的自动化门禁，将风险消灭在合并前。",
+        reviewTarget: { labId: "smart-code-review", label: "实操 Lab 12 · 安全门禁规则沙盘" },
       },
     ],
   },
@@ -363,6 +390,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "快速原型极易让人跳过心智模型积累；进入生产迭代期（Iterator）必须切换为“总编（Editor-in-Chief）”思维，用 Context Engineering 与工程内功驾驭最后 30%。",
+        reviewTarget: { moduleId: "m7", label: "回看 Module 7 · 70% 困境与 ROI 讲义" },
       },
       {
         id: "m7-q2",
@@ -377,6 +405,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "代码量毫无意义（甚至冗余代码是负资产）。真正创造商业价值的是从创意到安全上线收款的速度与一次性交付确定性。",
+        reviewTarget: { labId: "velocity-heatmap", label: "查看 Lab 15 · Developer Velocity 热力图" },
       },
       {
         id: "m7-q3",
@@ -391,6 +420,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "代码只是临时产物，经过实战检验的 Rules、Skills、安全门禁与审美样本库，才是独立开发者最核心的复利护城河。",
+        reviewTarget: { labId: "book-kb", label: "打开 Lab 05 · AI 书籍知识库备课台" },
       },
     ],
   },
@@ -413,6 +443,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "先用规则文件确立目录规范与服务端密钥安全红线，再用 Plan + MCP 分步接入真实 DB 与权限校验，才能平滑实现从演示原型到可收费产品的跃迁。",
+        reviewTarget: { moduleId: "m8", label: "回看 Module 8 · 迁移与案例讲义" },
       },
       {
         id: "m8-q2",
@@ -427,6 +458,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "契约先行加上 Worktree/目录写入隔离，使前后端 Agent 在同一套类型源头下并行演进，最后由独立上下文的 Reviewer 与 Bugbot 验收合入。",
+        reviewTarget: { labId: "agent-harness", label: "演练 Lab 06 · Agent Harness 隔离架构" },
       },
       {
         id: "m8-q3",
@@ -441,6 +473,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "规则负责日常编码时的自动防呆守卫，技能包负责封装可移植的标准操作流，二者共同构成独立开发者的个人架构大脑资产。",
+        reviewTarget: { labId: "cursor-rules", label: "实操 Lab 02 · .mdc 规则配置沙盘" },
       },
     ],
   },
@@ -463,6 +496,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "《The Vibe Coder's Handbook》将工具清晰分为 Either/Or（如 React vs Vue、Drizzle vs Prisma）与 Work Together（Next.js 构建在 React 上；Zustand 管客户端状态 + TanStack Query 管服务端状态）。",
+        reviewTarget: { labId: "vibe-stack-map", label: "查看 Lab 07 · Vibe 全栈工具图谱" },
       },
       {
         id: "m9-q2",
@@ -477,6 +511,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 2,
         explanation:
           "前端代码可被任意用户用 DevTools 修改。只有“密钥驻留服务端 + Zod 边界验证 + ORM 防 SQL 注入 + 密码哈希/HTTPS”四道机制同时在位，才能避免高危漏洞。",
+        reviewTarget: { labId: "arch-decision-sim", label: "挑战 Lab 11 · 架构决策模拟器" },
       },
       {
         id: "m9-q3",
@@ -491,6 +526,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "90% 的前端与构建报错在第一行已指明问题本质；配合“切莫手改 node_modules”、核对 Console/Network 及清缓存重启 5 步法即可快速复位。",
+        reviewTarget: { labId: "vibe-stack-map", label: "查看 Lab 07 · 报错解码实验室" },
       },
     ],
   },
@@ -513,6 +549,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "审美（Taste）源于大量输入积累下的取舍判断力。指出喜欢参考案例里的具体某一点（如字图占比、叙事顺序或 hover 结构）并配合源码参数，远比空洞形容词精准。",
+        reviewTarget: { labId: "ui-inspiration", label: "浏览 Lab 08 · 高信噪比 UI 参考库" },
       },
       {
         id: "m10-q2",
@@ -527,6 +564,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "单看都很出彩的区块强拼在一起往往风格冲突割裂。正确做法是先用 Land-book / Lapa Ninja 确定内容结构与叙事节奏，再用统一视觉语言统一收口。",
+        reviewTarget: { labId: "ui-inspiration", label: "对比 Lab 08 · 整站类参考案例" },
       },
       {
         id: "m10-q3",
@@ -541,6 +579,7 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 1,
         explanation:
           "只给收起态截图 AI 无法猜出展开下拉面板的信息分组；页脚则需结合真实业务链接清单、场景视觉与手机端视图避免虎头蛇尾。",
+        reviewTarget: { moduleId: "m10", label: "回看 Module 10 · 审美与局部盲区讲义" },
       },
       {
         id: "m10-q4",
@@ -555,7 +594,54 @@ export const MODULE_QUIZZES: Record<number, ModuleQuiz> = {
         correctIndex: 2,
         explanation:
           "代码与参数直喂是最高信噪比输入：选对原生框架库、用具体毫秒与开关选项替代抽象感觉、先定主角保持动效克制，并统一主题配色避免集市拼盘感。",
+        reviewTarget: { labId: "ui-inspiration", label: "提取 Lab 08 · 源码类组件 Prompt" },
       },
     ],
   },
 };
+
+export interface QuizReviewSummary {
+  totalCount: number;
+  answeredCount: number;
+  correctCount: number;
+  accuracyPct: number;
+  missedQuestions: QuizQuestion[];
+  recommendedTargets: QuizReviewTarget[];
+}
+
+export function getQuizReviewSummary(
+  quiz: ModuleQuiz,
+  answers: Record<string, number>
+): QuizReviewSummary {
+  const questions = quiz.questions;
+  const totalCount = questions.length;
+  const answeredCount = questions.filter((q) => answers[q.id] !== undefined).length;
+  const correctCount = questions.filter(
+    (q) => answers[q.id] !== undefined && answers[q.id] === q.correctIndex
+  ).length;
+  const accuracyPct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+  const missedQuestions = questions.filter(
+    (q) => answers[q.id] !== undefined && answers[q.id] !== q.correctIndex
+  );
+
+  const seenKeys = new Set<string>();
+  const recommendedTargets: QuizReviewTarget[] = [];
+  for (const q of missedQuestions) {
+    if (!q.reviewTarget) continue;
+    const key = `${q.reviewTarget.labId ?? ""}:${q.reviewTarget.moduleId ?? ""}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      recommendedTargets.push(q.reviewTarget);
+    }
+  }
+
+  return {
+    totalCount,
+    answeredCount,
+    correctCount,
+    accuracyPct,
+    missedQuestions,
+    recommendedTargets,
+  };
+}

@@ -1,7 +1,25 @@
-import { CheckCircle2, Circle, PanelLeftClose, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import {
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Compass,
+  FlaskConical,
+  PanelLeftClose,
+  RotateCcw,
+} from "lucide-react";
 import type { ModuleNavItem } from "@/components/Presentation";
 import SidebarPerformanceMonitor from "@/components/SidebarPerformanceMonitor";
 import { stopRevealKey, stopRevealWheel } from "@/components/sandboxes/revealEvents";
+import {
+  COURSE_LABS,
+  COURSE_MODULES,
+  LEARNER_PATHS,
+  type LearnerPersonaId,
+  type ModuleShortCode,
+} from "@/data/courseCurriculum";
 
 interface CourseNavSidebarProps {
   isOpen: boolean;
@@ -15,6 +33,38 @@ interface CourseNavSidebarProps {
   onResetProgress: () => void;
 }
 
+type PathFilter = "all" | LearnerPersonaId;
+
+const PATH_STORAGE_KEY = "cursor_course_learner_path_v1";
+
+function loadSavedPath(): PathFilter {
+  if (typeof window === "undefined") return "all";
+  try {
+    const val = window.localStorage.getItem(PATH_STORAGE_KEY);
+    if (
+      val === "all" ||
+      val === "indie-dev" ||
+      val === "eng-team" ||
+      val === "non-tech" ||
+      val === "cs-student"
+    ) {
+      return val;
+    }
+    return "all";
+  } catch {
+    return "all";
+  }
+}
+
+function savePath(val: PathFilter) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PATH_STORAGE_KEY, val);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export default function CourseNavSidebar({
   isOpen,
   onClose,
@@ -26,11 +76,54 @@ export default function CourseNavSidebar({
   onSelectModule,
   onResetProgress,
 }: CourseNavSidebarProps) {
+  const [selectedPath, setSelectedPath] = useState<PathFilter>(() => loadSavedPath());
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+
   const totalModules = modules.length;
   const currentModule = modules[activeModuleIndex];
   const modulePercent =
     totalModules > 0 ? Math.round(((activeModuleIndex + 1) / totalModules) * 100) : 0;
   const completedCount = modules.filter((m) => completedModuleIds.includes(m.id)).length;
+
+  const activePathDef =
+    selectedPath === "all"
+      ? null
+      : LEARNER_PATHS.find((p) => p.id === selectedPath) ?? null;
+
+  const handleSelectPath = (path: PathFilter) => {
+    setSelectedPath(path);
+    savePath(path);
+  };
+
+  const handleJumpLab = (labId: string) => {
+    window.dispatchEvent(new CustomEvent("reveal:jump-lab", { detail: { labId } }));
+  };
+
+  const handleOpenModuleResources = (moduleCode: ModuleShortCode) => {
+    window.dispatchEvent(
+      new CustomEvent("course:open-resources", { detail: { moduleCode } })
+    );
+  };
+
+  const pathOrderMap = new Map<string, number>();
+  if (activePathDef) {
+    activePathDef.recommendedModuleIds.forEach((modId, index) => {
+      pathOrderMap.set(modId, index + 1);
+    });
+  }
+
+  const orderedModules = activePathDef
+    ? [
+        ...modules
+          .filter((m) => pathOrderMap.has(m.id))
+          .sort((a, b) => (pathOrderMap.get(a.id) ?? 99) - (pathOrderMap.get(b.id) ?? 99)),
+        ...modules.filter((m) => !pathOrderMap.has(m.id)),
+      ]
+    : modules;
+
+  const firstPathModule = activePathDef
+    ? modules.find((m) => m.id === activePathDef.recommendedModuleIds[0])
+    : undefined;
 
   return (
     <>
@@ -49,19 +142,19 @@ export default function CourseNavSidebar({
         onKeyDown={stopRevealKey}
         className={`fixed lg:relative inset-y-0 left-0 z-40 lg:z-20 shrink-0 bg-[#070a12]/96 backdrop-blur-md border-white/10 flex flex-col transition-all duration-200 ease-out overflow-hidden ${
           isOpen
-            ? "w-68 border-r translate-x-0"
-            : "w-68 lg:w-0 -translate-x-full lg:translate-x-0 border-r-0 pointer-events-none"
+            ? "w-76 border-r translate-x-0"
+            : "w-76 lg:w-0 -translate-x-full lg:translate-x-0 border-r-0 pointer-events-none"
         }`}
       >
-        <div className="w-68 h-full flex flex-col">
+        <div className="w-76 h-full flex flex-col">
           {/* Header */}
           <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-2 shrink-0">
             <div className="min-w-0">
-              <div className="text-xs font-mono uppercase tracking-wider text-gemini-cyan">
-                Curriculum Map
+              <div className="text-xs font-mono tracking-wider text-gemini-cyan">
+                课程导航与学习路径
               </div>
               <h2 className="text-sm font-semibold text-white truncate">
-                课程目录与学习进度
+                AI Coding 工程化目录
               </h2>
             </div>
             <button
@@ -76,7 +169,7 @@ export default function CourseNavSidebar({
           </div>
 
           {/* Course Progress Bar */}
-          <div className="px-4 py-3.5 border-b border-white/10 bg-white/[0.02] shrink-0">
+          <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02] shrink-0">
             <div className="flex items-baseline justify-between gap-2 mb-1.5">
               <span className="text-xs text-slate-300 font-medium">
                 当前模块课程占比
@@ -110,8 +203,103 @@ export default function CourseNavSidebar({
             </div>
 
             {currentModule && (
-              <div className="mt-1.5 text-[11px] text-slate-400 truncate" title={currentModule.title}>
+              <div className="mt-1 text-[11px] text-slate-400 truncate" title={currentModule.title}>
                 当前：{currentModule.label}
+              </div>
+            )}
+          </div>
+
+          {/* Learner Persona Path Switcher */}
+          <div className="px-3 py-2.5 border-b border-white/10 bg-[#090d16] shrink-0 space-y-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-300">
+              <span className="inline-flex items-center gap-1 font-medium">
+                <Compass className="w-3.5 h-3.5 text-gemini-cyan" />
+                按学习者角色筛选路径
+              </span>
+              {activePathDef && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectPath("all")}
+                  className="text-[11px] text-slate-400 hover:text-white cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  恢复全部
+                </button>
+              )}
+            </div>
+
+            <div
+              className="grid grid-cols-5 gap-1 p-1 rounded-lg bg-white/[0.04] border border-white/10"
+              role="tablist"
+              aria-label="学习者角色路径切换"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedPath === "all"}
+                onClick={() => handleSelectPath("all")}
+                className={`px-1.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap truncate ${
+                  selectedPath === "all"
+                    ? "bg-white text-slate-950 font-semibold"
+                    : "text-slate-300 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                全部
+              </button>
+              {LEARNER_PATHS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedPath === p.id}
+                  onClick={() => handleSelectPath(p.id)}
+                  title={p.label}
+                  className={`px-1 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap truncate ${
+                    selectedPath === p.id
+                      ? "bg-gemini-cyan text-slate-950 font-semibold"
+                      : "text-slate-300 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {p.id === "indie-dev"
+                    ? "独立"
+                    : p.id === "eng-team"
+                    ? "团队"
+                    : p.id === "non-tech"
+                    ? "PM"
+                    : "学生"}
+                </button>
+              ))}
+            </div>
+
+            {activePathDef && (
+              <div className="rounded-lg bg-white/[0.03] border border-gemini-cyan/25 p-2 space-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white">{activePathDef.label}</span>
+                  <span className="font-mono text-slate-400 tabular-nums whitespace-nowrap shrink-0">
+                    {activePathDef.recommendedModuleIds.length} 模块 · {activePathDef.estimatedTotalHours}
+                  </span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">{activePathDef.goal}</p>
+                <p className="text-amber-300/90 leading-relaxed">
+                  安全边界：{activePathDef.focusBoundary}
+                </p>
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  {firstPathModule && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectModule(firstPathModule.startIndex)}
+                      className="flex-1 px-2 py-1 rounded bg-gemini-cyan text-slate-950 font-semibold text-[11px] hover:opacity-90 transition-opacity cursor-pointer whitespace-nowrap truncate"
+                    >
+                      从首站 {firstPathModule.id.toUpperCase()} 开始
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleJumpLab(activePathDef.starterLabId)}
+                    className="px-2 py-1 rounded bg-white/10 hover:bg-white/15 text-slate-200 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    起点沙盘
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -119,76 +307,208 @@ export default function CourseNavSidebar({
           {/* Module List */}
           <nav
             aria-label="课程模块列表"
-            className="flex-1 overflow-y-auto custom-scrollbar px-2.5 py-2.5 space-y-1"
+            className="flex-1 overflow-y-auto custom-scrollbar px-2.5 py-2.5 space-y-1.5"
           >
-            {modules.map((mod, idx) => {
-              const isActive = idx === activeModuleIndex;
+            {orderedModules.map((mod, renderIdx) => {
+              const originalIndex = modules.findIndex((m) => m.id === mod.id);
+              const isActive = originalIndex === activeModuleIndex;
               const isCompleted = completedModuleIds.includes(mod.id);
               const shortTitle = mod.title.replace(/^Module\s+\d+:\s*/i, "");
+              const meta = COURSE_MODULES.find((cm) => cm.id === mod.id);
+              const pathStep = pathOrderMap.get(mod.id);
+              const isOutOfPath = Boolean(activePathDef && !pathStep);
+              const prevMod = renderIdx > 0 ? orderedModules[renderIdx - 1] : null;
+              const showOutOfPathDivider = Boolean(
+                activePathDef && isOutOfPath && prevMod && pathOrderMap.has(prevMod.id)
+              );
+              const isExpanded = expandedModuleId === mod.id;
+              const moduleLabs = meta
+                ? COURSE_LABS.filter((lab) => meta.labIds.includes(lab.id))
+                : [];
 
               return (
-                <button
-                  key={mod.id}
-                  type="button"
-                  onClick={() => onSelectModule(mod.startIndex)}
-                  title={mod.title}
-                  aria-current={isActive ? "step" : undefined}
-                  className={`w-full text-left px-2.5 py-2 rounded-xl border transition-colors cursor-pointer flex items-start gap-2.5 ${
-                    isActive
-                      ? "bg-gemini-cyan/12 border-gemini-cyan/45 text-white"
-                      : isCompleted
-                      ? "bg-white/[0.025] border-white/8 text-slate-200 hover:bg-white/[0.06] hover:border-white/15"
-                      : "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <span className="mt-0.5 shrink-0" aria-hidden="true">
-                    {isCompleted ? (
-                      <CheckCircle2
-                        className={`w-4 h-4 ${
-                          isActive ? "text-gemini-cyan" : "text-emerald-400"
-                        }`}
-                      />
-                    ) : isActive ? (
-                      <span className="inline-flex items-center justify-center w-4 h-4">
-                        <span className="w-2.5 h-2.5 rounded-full bg-gemini-cyan shadow-[0_0_8px_rgba(76,221,236,0.75)]" />
-                      </span>
-                    ) : (
-                      <Circle className="w-4 h-4 text-slate-600" />
-                    )}
-                  </span>
+                <div key={mod.id}>
+                  {showOutOfPathDivider && (
+                    <div className="px-2 pt-2 pb-1 text-[10px] font-mono text-slate-500 border-t border-white/10 mt-1">
+                      路径外可扩展阅读模块
+                    </div>
+                  )}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <span
-                        className={`text-xs font-semibold truncate ${
-                          isActive ? "text-gemini-cyan" : "text-slate-200"
-                        }`}
+                  <div
+                    className={`rounded-xl border transition-colors ${
+                      isActive
+                        ? "bg-gemini-cyan/12 border-gemini-cyan/45 text-white"
+                        : isCompleted
+                        ? "bg-white/[0.025] border-white/8 text-slate-200"
+                        : isOutOfPath
+                        ? "bg-transparent border-transparent text-slate-500"
+                        : "bg-transparent border-white/5 text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-start gap-1.5 px-2.5 py-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectModule(mod.startIndex)}
+                        title={mod.title}
+                        aria-current={isActive ? "step" : undefined}
+                        className="flex-1 min-w-0 text-left flex items-start gap-2 cursor-pointer"
                       >
-                        {mod.label}
-                      </span>
-                      <span
-                        className={`text-[10px] font-mono whitespace-nowrap shrink-0 ${
-                          isActive
-                            ? "text-gemini-cyan"
-                            : isCompleted
-                            ? "text-emerald-400"
-                            : "text-slate-500 tabular-nums"
-                        }`}
-                      >
-                        {isActive
-                          ? "学习中"
-                          : isCompleted
-                          ? "已完成"
-                          : mod.slideCount
-                          ? `${mod.slideCount} 节`
-                          : ""}
-                      </span>
+                        <span className="mt-0.5 shrink-0" aria-hidden="true">
+                          {isCompleted ? (
+                            <CheckCircle2
+                              className={`w-4 h-4 ${
+                                isActive ? "text-gemini-cyan" : "text-emerald-400"
+                              }`}
+                            />
+                          ) : isActive ? (
+                            <span className="inline-flex items-center justify-center w-4 h-4">
+                              <span className="w-2.5 h-2.5 rounded-full bg-gemini-cyan shadow-[0_0_8px_rgba(76,221,236,0.75)]" />
+                            </span>
+                          ) : (
+                            <Circle className="w-4 h-4 text-slate-600" />
+                          )}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span
+                              className={`text-xs font-semibold truncate ${
+                                isActive
+                                  ? "text-gemini-cyan"
+                                  : isOutOfPath
+                                  ? "text-slate-400"
+                                  : "text-slate-200"
+                              }`}
+                            >
+                              {pathStep ? `第${pathStep}站 · ` : ""}
+                              {mod.label}
+                            </span>
+                            <span
+                              className={`text-[10px] font-mono whitespace-nowrap shrink-0 tabular-nums ${
+                                isActive
+                                  ? "text-gemini-cyan"
+                                  : isCompleted
+                                  ? "text-emerald-400"
+                                  : "text-slate-500"
+                              }`}
+                            >
+                              {isActive
+                                ? "学习中"
+                                : isCompleted
+                                ? "已完成"
+                                : meta
+                                ? `${meta.estimatedMinutes}m`
+                                : ""}
+                            </span>
+                          </div>
+                          <div
+                            className={`text-[11px] truncate mt-0.5 ${
+                              isOutOfPath ? "text-slate-500" : "text-slate-400"
+                            }`}
+                          >
+                            {shortTitle}
+                          </div>
+                          {meta && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5 tabular-nums truncate">
+                              {meta.slideCount} 节 · {meta.labIds.length} 沙盘 ·{" "}
+                              {meta.status === "needs-review" ? "待复核" : "已核验"}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+
+                      {meta && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedModuleId((prev) => (prev === mod.id ? null : mod.id))
+                          }
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? "收起" : "展开"}${mod.label}大纲与交付物`}
+                          title="查看先修知识、目标、交付物与关联沙盘"
+                          className="mt-0.5 p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
-                    <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                      {shortTitle}
-                    </div>
+
+                    {isExpanded && meta && (
+                      <div className="px-2.5 pb-2.5 pt-2 border-t border-white/10 space-y-2 text-[11px]">
+                        <div className="text-slate-400 font-mono tabular-nums">
+                          {meta.estimatedMinutes} 分钟 · {meta.slideCount} 节 · 核验 {meta.lastReviewedAt} ·{" "}
+                          <span
+                            className={
+                              meta.status === "needs-review" ? "text-amber-300" : "text-emerald-300"
+                            }
+                          >
+                            {meta.status === "needs-review" ? "部分内容待复核" : "结构已核验"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-400 font-medium mb-0.5">先修要求</div>
+                          <div className="text-slate-300 leading-relaxed">
+                            {meta.prerequisites.join("；")}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-400 font-medium mb-0.5">可验证学习目标</div>
+                          <ul className="space-y-1 text-slate-200 leading-relaxed">
+                            {meta.learningObjectives.map((obj, idx) => (
+                              <li key={idx} className="flex items-start gap-1.5">
+                                <span className="text-gemini-cyan font-mono shrink-0">
+                                  {idx + 1}.
+                                </span>
+                                <span>{obj}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-400 font-medium mb-0.5">模块交付物</div>
+                          <ul className="space-y-0.5 text-slate-300 leading-relaxed">
+                            {meta.deliverables.map((d, idx) => (
+                              <li key={idx}>· {d}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="text-amber-300/90 leading-relaxed">
+                          边界与安全：{meta.boundaryNote}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          {moduleLabs.map((lab) => (
+                            <button
+                              key={lab.id}
+                              type="button"
+                              onClick={() => handleJumpLab(lab.id)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/10 hover:bg-gemini-cyan hover:text-slate-950 text-slate-200 font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                            >
+                              <FlaskConical className="w-3 h-3" />
+                              <span>Lab {lab.code}</span>
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenModuleResources(meta.code)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 hover:bg-white/15 border border-white/15 text-slate-300 hover:text-white font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            <BookOpen className="w-3 h-3" />
+                            <span>来源索引 ({meta.resourceIds.length})</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </button>
+                </div>
               );
             })}
           </nav>

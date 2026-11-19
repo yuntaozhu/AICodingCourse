@@ -7,10 +7,21 @@ import {
   ArrowRight,
   Award,
   BookOpenCheck,
+  Compass,
+  RefreshCw,
   Target,
 } from "lucide-react";
 import Slide from "@/components/Slide";
-import type { ModuleQuiz } from "@/data/moduleQuizzes";
+import {
+  getQuizReviewSummary,
+  type ModuleQuiz,
+  type QuizReviewTarget,
+} from "@/data/moduleQuizzes";
+import {
+  buildRetryWrongAnswersState,
+  getQuestionRemediation,
+  MODULE_OBJECTIVES,
+} from "@/data/quizRemediation";
 import { cn } from "@/lib/utils";
 
 interface QuizSlideProps {
@@ -64,12 +75,26 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const isAnswered = selectedOption !== undefined;
   const isCurrentCorrect = isAnswered && selectedOption === currentQuestion.correctIndex;
 
-  const answeredCount = questions.filter((q) => answers[q.id] !== undefined).length;
-  const correctCount = questions.filter(
-    (q) => answers[q.id] !== undefined && answers[q.id] === q.correctIndex
-  ).length;
+  const summary = getQuizReviewSummary(quiz, answers);
+  const { answeredCount, correctCount, accuracyPct } = summary;
   const allAnswered = answeredCount === totalCount;
-  const accuracyPct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+  const handleJumpToReviewTarget = (target: QuizReviewTarget, e: MouseEvent) => {
+    e.stopPropagation();
+    if (target.labId) {
+      window.dispatchEvent(
+        new CustomEvent("reveal:jump-lab", {
+          detail: { labId: target.labId },
+        })
+      );
+    } else if (target.moduleId) {
+      window.dispatchEvent(
+        new CustomEvent("reveal:jump-module", {
+          detail: { moduleId: target.moduleId, v: 0 },
+        })
+      );
+    }
+  };
 
   const stopRevealPropagation = (e: MouseEvent | WheelEvent) => {
     e.stopPropagation();
@@ -120,6 +145,18 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
     setCurrentIndex(0);
     setShowSummary(false);
   };
+
+  const handleRetryWrongOnly = (e: MouseEvent) => {
+    e.stopPropagation();
+    const { keptAnswers, firstWrongIndex } = buildRetryWrongAnswersState(questions, answers);
+    setAnswers(keptAnswers);
+    saveStoredModuleAnswers(quiz.moduleNumber, keptAnswers);
+    setCurrentIndex(firstWrongIndex);
+    setShowSummary(false);
+  };
+
+  const currentRemediation = getQuestionRemediation(currentQuestion.id, quiz.moduleNumber);
+  const moduleObjective = MODULE_OBJECTIVES[quiz.moduleNumber];
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (showSummary) return;
@@ -179,15 +216,21 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
         onWheel={stopRevealPropagation}
       >
         {/* Top Module & Progress Bar */}
-        <div className="flex items-end justify-between border-b border-white/10 pb-4 mb-5">
+        <div className="flex items-end justify-between border-b border-white/10 pb-3.5 mb-4">
           <div>
-            <div className="text-[11px] font-mono tracking-[0.18em] text-gemini-cyan uppercase mb-1.5">
+            <div className="text-[11px] font-mono tracking-[0.18em] text-gemini-cyan uppercase mb-1">
               MODULE {String(quiz.moduleNumber).padStart(2, "0")} · 课后知识测验
             </div>
             <div className="text-2xl font-bold text-white tracking-tight leading-tight">
               {quiz.moduleTitle}
               <span className="text-white/40 font-normal text-base ml-3">{quiz.subtitle}</span>
             </div>
+            {moduleObjective && (
+              <div className="text-xs text-slate-400 mt-1">
+                <span className="text-emerald-300/90 font-mono">验收目标：</span>
+                {moduleObjective.observableOutcome}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-6 shrink-0">
@@ -249,9 +292,12 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                   )}
                 </div>
 
-                <h4 className="text-lg font-bold text-white leading-snug mb-4">
+                <h4 className="text-lg font-bold text-white leading-snug mb-1.5">
                   {currentQuestion.question}
                 </h4>
+                <div className="text-[11px] font-mono text-slate-400 mb-3">
+                  考察目标：{currentRemediation.learningObjective}
+                </div>
 
                 {/* 4 Options */}
                 <div className="space-y-2.5">
@@ -334,13 +380,50 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                 )}
               >
                 {isAnswered ? (
-                  <div className="flex items-start gap-2.5">
-                    <BookOpenCheck className="w-4 h-4 text-gemini-cyan shrink-0 mt-0.5" />
-                    <div className="text-[13px] leading-relaxed text-white/85">
-                      <span className="font-semibold text-gemini-cyan mr-1.5">
-                        核心解析：
+                  <div className="space-y-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <BookOpenCheck className="w-4 h-4 text-gemini-cyan shrink-0 mt-0.5" />
+                      <div className="text-[13px] leading-relaxed text-white/85">
+                        <span className="font-semibold text-gemini-cyan mr-1.5">
+                          核心解析：
+                        </span>
+                        {currentQuestion.explanation}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+                      <span className="text-[11px] font-mono text-white/65">
+                        {isCurrentCorrect ? "关联巩固：" : "复习建议："}
+                        <span className="text-slate-300 font-sans ml-1">
+                          {currentRemediation.reviewAction}
+                        </span>
                       </span>
-                      {currentQuestion.explanation}
+                      <button
+                        type="button"
+                        onClick={(e) =>
+                          handleJumpToReviewTarget(
+                            currentQuestion.reviewTarget ?? {
+                              label: currentRemediation.labLabel ?? `M${quiz.moduleNumber} 首页`,
+                              labId: currentRemediation.labId,
+                              moduleId: currentRemediation.moduleId,
+                            },
+                            e
+                          )
+                        }
+                        className={cn(
+                          "px-2.5 py-1 rounded-lg border text-[11px] font-mono inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0",
+                          isCurrentCorrect
+                            ? "bg-white/5 border-white/15 text-slate-200 hover:border-gemini-cyan/50 hover:text-gemini-cyan"
+                            : "bg-amber-500/15 border-amber-400/45 text-amber-200 hover:bg-amber-500/25"
+                        )}
+                      >
+                        <Compass className="w-3 h-3 shrink-0" />
+                        <span>
+                          {currentQuestion.reviewTarget?.label ??
+                            currentRemediation.labLabel ??
+                            `回看 M${quiz.moduleNumber} 首页`}
+                        </span>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -511,25 +594,58 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                 <div className="text-sm text-white/75 leading-relaxed">
                   {mastery.summaryText}
                 </div>
+
+                {summary.recommendedTargets.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
+                    <div className="text-[11px] font-mono text-amber-300">
+                      针对错题直达复习（共 {summary.missedQuestions.length} 处待巩固）：
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {summary.recommendedTargets.map((target) => (
+                        <button
+                          key={`${target.labId ?? ""}-${target.moduleId ?? ""}-${target.label}`}
+                          type="button"
+                          onClick={(e) => handleJumpToReviewTarget(target, e)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/12 hover:bg-amber-500/22 border border-amber-400/40 text-[11px] font-mono text-amber-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          <Compass className="w-3 h-3 shrink-0" />
+                          <span>{target.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-5 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="min-h-[44px] px-4 py-2.5 rounded-xl border border-white/15 bg-white/[0.03] text-xs font-medium text-white hover:bg-white/10 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>返回复盘题目</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-gemini-cyan text-black text-xs font-semibold hover:bg-gemini-cyan/90 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>重新开始测验</span>
-                </button>
+              <div className="space-y-2.5 pt-5 border-t border-white/10">
+                {correctCount < totalCount && answeredCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRetryWrongOnly}
+                    className="w-full min-h-[40px] px-4 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/45 text-xs font-semibold text-amber-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>仅重练错题/未答 ({totalCount - correctCount} 题)</span>
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    className="min-h-[44px] px-4 py-2.5 rounded-xl border border-white/15 bg-white/[0.03] text-xs font-medium text-white hover:bg-white/10 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>返回复盘题目</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="min-h-[44px] px-4 py-2.5 rounded-xl bg-gemini-cyan text-black text-xs font-semibold hover:bg-gemini-cyan/90 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>全部重测</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -581,9 +697,9 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-white/50">
-                <span>提示：按键盘方向键 → 可继续前往下一模块内容</span>
-                <span className="font-mono tabular-nums">
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3 text-xs text-white/50">
+                <span>作答记录仅保存在当前浏览器 localStorage（非云端同步）</span>
+                <span className="font-mono tabular-nums shrink-0">
                   MODULE {String(quiz.moduleNumber).padStart(2, "0")} COMPLETE
                 </span>
               </div>

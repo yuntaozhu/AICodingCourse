@@ -1,5 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import {
+  Activity,
   AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
@@ -17,9 +19,15 @@ import {
   Sparkles,
   Terminal,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { CopySnippetButton } from "./SandboxFrame";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
+
+interface TelemetryPoint {
+  uptime: number; // 0..100 %
+  errorRate: number; // 0..100 %
+}
 
 interface JsonRpcLogEntry {
   uid: string;
@@ -255,6 +263,292 @@ const QUICK_LOAD_BUNDLES: QuickLoadBundle[] = [
   },
 ];
 
+const SERVER_TELEMETRY_PROFILES: Record<
+  string,
+  { baseUptime: number; baseError: number; spikeMinute: number; spikeError: number; seed: number }
+> = {
+  github: { baseUptime: 99.6, baseError: 0.3, spikeMinute: 36, spikeError: 4.8, seed: 11 },
+  postgres: { baseUptime: 99.9, baseError: 0.1, spikeMinute: 22, spikeError: 1.6, seed: 23 },
+  slack: { baseUptime: 98.4, baseError: 0.9, spikeMinute: 44, spikeError: 6.4, seed: 37 },
+  playwright: { baseUptime: 97.2, baseError: 1.4, spikeMinute: 48, spikeError: 7.9, seed: 53 },
+  context7: { baseUptime: 99.7, baseError: 0.2, spikeMinute: 18, spikeError: 2.1, seed: 67 },
+  sentry: { baseUptime: 98.9, baseError: 0.7, spikeMinute: 51, spikeError: 5.5, seed: 83 },
+};
+
+function seededWave(seed: number, step: number): number {
+  const x = Math.sin(seed * 12.9898 + step * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function createInitialTelemetry(): Record<string, TelemetryPoint[]> {
+  const map: Record<string, TelemetryPoint[]> = {};
+  for (const srv of REGISTRY_SERVERS) {
+    const profile = SERVER_TELEMETRY_PROFILES[srv.id] ?? {
+      baseUptime: 99.0,
+      baseError: 0.4,
+      spikeMinute: 30,
+      spikeError: 3.0,
+      seed: 19,
+    };
+    const points: TelemetryPoint[] = [];
+    for (let m = 0; m < 60; m++) {
+      const noise = seededWave(profile.seed, m);
+      const distFromSpike = Math.abs(m - profile.spikeMinute);
+      const isSpike = distFromSpike <= 1;
+      const spikeFactor = distFromSpike === 0 ? 1 : distFromSpike === 1 ? 0.55 : 0;
+      const errorRate = Number(
+        Math.min(
+          18,
+          Math.max(
+            0,
+            profile.baseError +
+              noise * 0.6 +
+              (isSpike ? profile.spikeError * spikeFactor : 0)
+          )
+        ).toFixed(1)
+      );
+      const uptime = Number(
+        Math.max(
+          82,
+          Math.min(
+            100,
+            profile.baseUptime -
+              noise * 0.7 -
+              (isSpike ? profile.spikeError * 0.9 * spikeFactor : 0)
+          )
+        ).toFixed(1)
+      );
+      points.push({ uptime, errorRate });
+    }
+    map[srv.id] = points;
+  }
+  return map;
+}
+
+interface ServerSparklineProps {
+  serverId: string;
+  enabled: boolean;
+  points: TelemetryPoint[];
+}
+
+function ServerSparkline({ serverId, enabled, points }: ServerSparklineProps) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const stats = useMemo(() => {
+    const count = points.length || 1;
+    const sumUp = points.reduce((acc, p) => acc + p.uptime, 0);
+    const sumErr = points.reduce((acc, p) => acc + p.errorRate, 0);
+    const avgUptime = sumUp / count;
+    const avgError = sumErr / count;
+    const peakError = points.reduce((m, p) => Math.max(m, p.errorRate), 0);
+    return { avgUptime, avgError, peakError };
+  }, [points]);
+
+  const width = 180;
+  const height = 26;
+  const padTop = 2;
+  const plotBottom = 24;
+  const plotHeight = plotBottom - padTop;
+
+  const mapUptimeY = (uptime: number): number => {
+    if (uptime <= 0) return plotBottom;
+    // Map [80%, 100%] cleanly to [plotBottom, padTop] so SLA dips and 0% drops stand out
+    const clamped = Math.max(80, Math.min(100, uptime));
+    return plotBottom - ((clamped - 80) / 20) * plotHeight;
+  };
+
+  const mapErrorHeight = (err: number): number => {
+    if (err <= 0.15) return 0;
+    const clamped = Math.min(15, err);
+    return Math.max(1.5, (clamped / 15) * 16);
+  };
+
+  const lineCoords = points.map((pt, idx) => {
+    const x = points.length > 1 ? (idx / (points.length - 1)) * width : width;
+    const y = mapUptimeY(pt.uptime);
+    return { x, y, pt };
+  });
+
+  const polylinePoints = lineCoords
+    .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(" ");
+  const areaPoints = `0,${plotBottom} ${polylinePoints} ${width},${plotBottom}`;
+  const sla95Y = mapUptimeY(95);
+
+  const activePoint = hoverIdx !== null ? points[hoverIdx] : null;
+  const displayUptime = activePoint ? activePoint.uptime : stats.avgUptime;
+  const displayError = activePoint ? activePoint.errorRate : stats.avgError;
+  const isHealthy = enabled && stats.avgUptime >= 98.5 && stats.avgError < 1.5;
+  const isDegraded = enabled && !isHealthy;
+
+  const strokeColor = !enabled
+    ? "#64748b"
+    : isHealthy
+    ? "#34d399"
+    : "#fbbf24";
+  const gradId = `mcp-spark-${serverId}`;
+
+  const handleMouseMove = (e: MouseEvent<SVGSVGElement>) => {
+    if (points.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const idx = Math.round(ratio * (points.length - 1));
+    setHoverIdx(idx);
+  };
+
+  const timeLabel =
+    hoverIdx === null
+      ? "60m"
+      : hoverIdx === points.length - 1
+      ? "now"
+      : `-${points.length - 1 - hoverIdx}m`;
+
+  return (
+    <div
+      className="pt-1.5 border-t border-white/8 space-y-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center justify-between gap-1 text-[9.5px] font-mono tabular-nums">
+        <span
+          className={`inline-flex items-center gap-1 font-medium ${
+            !enabled
+              ? "text-slate-400"
+              : displayUptime < 95
+              ? "text-amber-300"
+              : "text-emerald-300"
+          }`}
+        >
+          {!enabled ? (
+            <XCircle className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+          ) : displayUptime < 95 || displayError >= 2.5 ? (
+            <AlertTriangle className="w-2.5 h-2.5 shrink-0 text-amber-300" />
+          ) : (
+            <CheckCircle2 className="w-2.5 h-2.5 shrink-0 text-emerald-300" />
+          )}
+          <span>Up {displayUptime.toFixed(1)}%</span>
+          {!enabled && <span className="text-slate-500">· 离线</span>}
+        </span>
+
+        <span className="inline-flex items-center gap-1.5 text-slate-400">
+          <span
+            className={
+              displayError >= 2.5
+                ? "text-rose-300 font-semibold"
+                : displayError >= 1.0
+                ? "text-amber-300"
+                : "text-slate-300"
+            }
+          >
+            Err {displayError.toFixed(1)}%
+          </span>
+          <span className="text-slate-500">{timeLabel}</span>
+        </span>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
+        role="img"
+        aria-label={`${serverId} 过去 60 分钟可用率 ${stats.avgUptime.toFixed(
+          1
+        )}% 与错误率 ${stats.avgError.toFixed(1)}% 迷你走势图`}
+        className="w-full h-6 block cursor-crosshair overflow-visible"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity={enabled ? 0.28 : 0.12} />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity={0.01} />
+          </linearGradient>
+        </defs>
+
+        {/* 95% SLA reference hairline */}
+        <line
+          x1={0}
+          y1={sla95Y}
+          x2={width}
+          y2={sla95Y}
+          stroke="rgba(148, 163, 184, 0.18)"
+          strokeDasharray="2 2"
+          strokeWidth={0.75}
+        />
+
+        {/* Baseline */}
+        <line
+          x1={0}
+          y1={plotBottom}
+          x2={width}
+          y2={plotBottom}
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={0.75}
+        />
+
+        {/* Uptime Area & Curve */}
+        <polygon points={areaPoints} fill={`url(#${gradId})`} />
+        <polyline
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={1.35}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          points={polylinePoints}
+        />
+
+        {/* Error Rate Micro-Bars along baseline */}
+        {lineCoords.map((c, idx) => {
+          const barH = mapErrorHeight(c.pt.errorRate);
+          if (barH <= 0) return null;
+          const isHovered = hoverIdx === idx;
+          const barColor =
+            c.pt.errorRate >= 2.5
+              ? isHovered
+                ? "#fda4af"
+                : "#fb7185"
+              : isHovered
+              ? "#fcd34d"
+              : "#f59e0b";
+          return (
+            <rect
+              key={idx}
+              x={Math.max(0, c.x - 1)}
+              y={plotBottom - barH}
+              width={2}
+              height={barH}
+              rx={0.5}
+              fill={barColor}
+              fillOpacity={isHovered ? 1 : isDegraded || c.pt.errorRate >= 2.5 ? 0.85 : 0.55}
+            />
+          );
+        })}
+
+        {/* Hover Scrubber */}
+        {hoverIdx !== null && lineCoords[hoverIdx] && (
+          <g>
+            <line
+              x1={lineCoords[hoverIdx].x}
+              y1={0}
+              x2={lineCoords[hoverIdx].x}
+              y2={plotBottom}
+              stroke="#4cddec"
+              strokeWidth={0.9}
+              strokeDasharray="2 1"
+            />
+            <circle
+              cx={lineCoords[hoverIdx].x}
+              cy={lineCoords[hoverIdx].y}
+              r={2.2}
+              fill="#070b14"
+              stroke="#4cddec"
+              strokeWidth={1.2}
+            />
+          </g>
+        )}
+      </svg>
+    </div>
+  );
+}
+
 export default function McpRegistryBrowser() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<RegistryCategory>("all");
@@ -262,7 +556,11 @@ export default function McpRegistryBrowser() {
   const [activeBundleId, setActiveBundleId] = useState<string>("custom");
   const [focusedId, setFocusedId] = useState<string>("github");
   const [lazyDiscovery, setLazyDiscovery] = useState<boolean>(true);
+  const [telemetryMap, setTelemetryMap] = useState<Record<string, TelemetryPoint[]>>(() =>
+    createInitialTelemetry()
+  );
   const rpcCounterRef = useRef<number>(105);
+  const simTickRef = useRef<number>(60);
 
   const [eventLogs, setEventLogs] = useState<JsonRpcLogEntry[]>(() => [
     {
@@ -356,6 +654,54 @@ export default function McpRegistryBrowser() {
     }
   };
 
+  const pushTelemetryPoint = (serverId: string, point: TelemetryPoint) => {
+    setTelemetryMap((prev) => {
+      const current = prev[serverId] ?? [];
+      const nextSeries = [...current.slice(1), point];
+      return { ...prev, [serverId]: nextSeries };
+    });
+  };
+
+  // Gentle 60-minute rolling simulation tick every 3.5s
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      simTickRef.current += 1;
+      const tick = simTickRef.current;
+      setTelemetryMap((prev) => {
+        const next: Record<string, TelemetryPoint[]> = {};
+        for (const srv of REGISTRY_SERVERS) {
+          const series = prev[srv.id] ?? [];
+          const profile = SERVER_TELEMETRY_PROFILES[srv.id] ?? {
+            baseUptime: 99.0,
+            baseError: 0.4,
+            spikeMinute: 30,
+            spikeError: 3.0,
+            seed: 19,
+          };
+          const isOnline = enabledIds.includes(srv.id);
+          const wave = seededWave(profile.seed, tick);
+          const occasionalRipple = wave > 0.91 ? 2.4 * wave : 0;
+          const nextPoint: TelemetryPoint = isOnline
+            ? {
+                uptime: Number(
+                  Math.max(
+                    88,
+                    Math.min(100, profile.baseUptime - wave * 0.6 - occasionalRipple * 0.7)
+                  ).toFixed(1)
+                ),
+                errorRate: Number(
+                  Math.min(12, profile.baseError + wave * 0.5 + occasionalRipple).toFixed(1)
+                ),
+              }
+            : { uptime: 0, errorRate: 0 };
+          next[srv.id] = [...series.slice(1), nextPoint];
+        }
+        return next;
+      });
+    }, 3500);
+    return () => window.clearInterval(timer);
+  }, [enabledIds]);
+
   const filteredServers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return REGISTRY_SERVERS.filter((srv) => {
@@ -382,6 +728,19 @@ export default function McpRegistryBrowser() {
     if (bundle.serverIds[0]) {
       setFocusedId(bundle.serverIds[0]);
     }
+    setTelemetryMap((prev) => {
+      const next: Record<string, TelemetryPoint[]> = {};
+      for (const srv of REGISTRY_SERVERS) {
+        const series = prev[srv.id] ?? [];
+        const isOn = bundle.serverIds.includes(srv.id);
+        const profile = SERVER_TELEMETRY_PROFILES[srv.id];
+        const pt: TelemetryPoint = isOn
+          ? { uptime: profile?.baseUptime ?? 99.5, errorRate: profile?.baseError ?? 0.2 }
+          : { uptime: 0, errorRate: 0 };
+        next[srv.id] = [...series.slice(1), pt];
+      }
+      return next;
+    });
 
     const reqId = rpcCounterRef.current++;
     const mountedNames = REGISTRY_SERVERS.filter((s) =>
@@ -444,6 +803,10 @@ export default function McpRegistryBrowser() {
     if (!srv) return;
 
     if (willEnable) {
+      pushTelemetryPoint(srv.id, {
+        uptime: SERVER_TELEMETRY_PROFILES[srv.id]?.baseUptime ?? 99.6,
+        errorRate: SERVER_TELEMETRY_PROFILES[srv.id]?.baseError ?? 0.2,
+      });
       const initId = rpcCounterRef.current++;
       const listId = rpcCounterRef.current++;
       appendRpcLogs([
@@ -484,6 +847,7 @@ export default function McpRegistryBrowser() {
         },
       ]);
     } else {
+      pushTelemetryPoint(srv.id, { uptime: 0, errorRate: 0 });
       const shutId = rpcCounterRef.current++;
       appendRpcLogs([
         {
@@ -519,7 +883,50 @@ export default function McpRegistryBrowser() {
   };
 
   const handleSimulateToolCall = (srv: McpRegistryEntry, toolName: string) => {
+    const isEnabled = enabledIds.includes(srv.id);
     const callId = rpcCounterRef.current++;
+
+    if (!isEnabled) {
+      pushTelemetryPoint(srv.id, { uptime: 0, errorRate: 12.5 });
+      appendRpcLogs([
+        {
+          rpcId: callId,
+          direction: "host->mcp",
+          serverId: srv.id,
+          method: "tools/call",
+          summary: `尝试调用未挂载工具 ${srv.id}.${toolName}()`,
+          payload: JSON.stringify(
+            {
+              jsonrpc: "2.0",
+              id: callId,
+              method: "tools/call",
+              params: { name: toolName },
+            },
+            null,
+            2
+          ),
+        },
+        {
+          rpcId: callId,
+          direction: "mcp->host",
+          serverId: srv.id,
+          method: "tools/call:error",
+          summary: `${srv.name} 处于离线状态 (-32002 ServerDisconnected)`,
+          payload: JSON.stringify(
+            {
+              jsonrpc: "2.0",
+              id: callId,
+              error: { code: -32002, message: `MCP server '${srv.id}' is not enabled` },
+            },
+            null,
+            2
+          ),
+        },
+      ]);
+      return;
+    }
+
+    pushTelemetryPoint(srv.id, { uptime: 100, errorRate: 0 });
     const sampleResult = buildSampleToolResult(srv.id, toolName);
     appendRpcLogs([
       {
@@ -551,6 +958,33 @@ export default function McpRegistryBrowser() {
             id: callId,
             result: {
               content: [{ type: "application/json", data: sampleResult }],
+            },
+          },
+          null,
+          2
+        ),
+      },
+    ]);
+  };
+
+  const handleSimulateFaultSpike = (srv: McpRegistryEntry) => {
+    const callId = rpcCounterRef.current++;
+    pushTelemetryPoint(srv.id, { uptime: 86.5, errorRate: 11.4 });
+    appendRpcLogs([
+      {
+        rpcId: callId,
+        direction: "mcp->host",
+        serverId: srv.id,
+        method: "tools/call:error",
+        summary: `${srv.name} 模拟 429/Timeout 抖动（Sparkline 记录故障尖峰）`,
+        payload: JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: callId,
+            error: {
+              code: -32005,
+              message: "Upstream rate limit / connection timeout",
+              data: { retryAfterMs: 1200, recordedErrorRate: "11.4%" },
             },
           },
           null,
@@ -639,10 +1073,10 @@ export default function McpRegistryBrowser() {
     <div
       onWheel={stopRevealWheel}
       onKeyDown={stopRevealKey}
-      className="max-w-6xl mx-auto w-full rounded-2xl bg-[#070b14]/95 border border-white/12 p-5 shadow-2xl flex flex-col gap-3"
+      className="max-w-6xl mx-auto w-full rounded-2xl bg-[#070b14]/95 border border-white/12 p-4 shadow-2xl flex flex-col gap-2.5"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-white/10">
         <div>
           <div className="text-[11px] font-mono text-gemini-purple tracking-wide">
             Module 4 · MCP Registry Browser · 搜索并挂载外部工具上下文
@@ -769,17 +1203,18 @@ export default function McpRegistryBrowser() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               {filteredServers.map((srv) => {
                 const enabled = enabledIds.includes(srv.id);
                 const focused = focusedId === srv.id;
                 const Icon = SERVER_ICONS[srv.id] ?? Server;
+                const telemetryPoints = telemetryMap[srv.id] ?? [];
 
                 return (
                   <div
                     key={srv.id}
                     onClick={() => setFocusedId(srv.id)}
-                    className={`p-3 rounded-xl border transition-colors cursor-pointer flex flex-col justify-between gap-2 ${
+                    className={`p-2.5 rounded-xl border transition-colors cursor-pointer flex flex-col justify-between gap-1.5 ${
                       enabled
                         ? focused
                           ? "bg-[#10192b] border-gemini-cyan/60"
@@ -789,7 +1224,7 @@ export default function McpRegistryBrowser() {
                         : "bg-[#0b0f19] border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <Icon
@@ -823,12 +1258,21 @@ export default function McpRegistryBrowser() {
                         </button>
                       </div>
 
-                      <p className="text-[10.5px] text-slate-300 leading-snug line-clamp-2">
+                      <p
+                        title={srv.description}
+                        className="text-[10px] text-slate-300 leading-tight line-clamp-1"
+                      >
                         {srv.description}
                       </p>
                     </div>
 
-                    <div className="pt-1.5 border-t border-white/8 flex items-center justify-between text-[10px] font-mono text-slate-400 tabular-nums">
+                    <ServerSparkline
+                      serverId={srv.id}
+                      enabled={enabled}
+                      points={telemetryPoints}
+                    />
+
+                    <div className="pt-1 border-t border-white/8 flex items-center justify-between text-[10px] font-mono text-slate-400 tabular-nums">
                       <span>{srv.tools.length} Tools · {srv.privilegeLevel}</span>
                       <span>+{srv.tokenOverhead} tok</span>
                     </div>
@@ -839,7 +1283,7 @@ export default function McpRegistryBrowser() {
           )}
 
           {/* Selected Server Tool Inspection & Simulated JSON-RPC Call Footer */}
-          <div className="p-2.5 rounded-xl bg-[#0b0f19] border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+          <div className="p-2 rounded-xl bg-[#0b0f19] border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
             <div className="flex flex-wrap items-center gap-1.5 min-w-0">
               <span className="font-mono text-gemini-cyan shrink-0">
                 {focusedServer.name}：
@@ -857,9 +1301,15 @@ export default function McpRegistryBrowser() {
                 </button>
               ))}
             </div>
-            <span className="text-slate-400 font-mono text-[10px] shrink-0">
-              点击工具可触发 JSON-RPC 实时调用
-            </span>
+            <button
+              type="button"
+              onClick={() => handleSimulateFaultSpike(focusedServer)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/10 hover:bg-rose-500/20 border border-rose-400/35 text-[10px] font-mono text-rose-300 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              title={`向 ${focusedServer.name} 注入模拟 429/Timeout 异常以观察 60m Sparkline 波动`}
+            >
+              <Activity className="w-2.5 h-2.5 shrink-0" />
+              <span>注入抖动</span>
+            </button>
           </div>
         </div>
 
