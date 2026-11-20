@@ -6,9 +6,10 @@ import V5 from "./V5";
 import V5b from "./V5b";
 import V5c from "./V5c";
 import V5d from "./V5d";
+import V5e from "./V5e";
 import V6 from "./V6";
 import { Module9Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module9Slides = [
-  V1, V2, V3, V4, V5, V5b, V5c, V5d, V6, Module9Quiz
+  V1, V2, V3, V4, V5, V5b, V5c, V5d, V5e, V6, Module9Quiz
 ];

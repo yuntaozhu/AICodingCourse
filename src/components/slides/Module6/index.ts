@@ -12,6 +12,7 @@ import P85d from "./P85d";
 import P85e from "./P85e";
 import P85f from "./P85f";
 import P85g from "./P85g";
+import P85h from "./P85h";
 import P86 from "./P86";
 import P87 from "./P87";
 import P88 from "./P88";
@@ -20,5 +21,5 @@ import P90 from "./P90";
 import { Module6Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module6Slides = [
-  P81, P82, P83, P84, P84b, P84c, P84d, P85, P85b, P85c, P85d, P85f, P85g, P85e, P86, P87, P88, P89, P90, Module6Quiz
+  P81, P82, P83, P84, P84b, P84c, P84d, P85, P85b, P85c, P85d, P85f, P85g, P85e, P85h, P86, P87, P88, P89, P90, Module6Quiz
 ];

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import CourseSystemApp from "@/components/course/CourseSystemApp";
 import Presentation, { type LabJumpItem, type ModuleNavItem } from "@/components/Presentation";
 import { Module1Slides } from "@/components/slides/Module1";
 import { Module2Slides } from "@/components/slides/Module2";
@@ -29,7 +31,21 @@ import V5 from "@/components/slides/Module9/V5";
 import V5d from "@/components/slides/Module9/V5d";
 import { AI_BOOKS_KNOWLEDGE_BASE } from "@/data/aiBooksKnowledgeBase";
 
+type AppViewMode = "workspace" | "slides";
+
 function App() {
+  const [appMode, setAppMode] = useState<AppViewMode>(() => {
+    if (typeof window !== "undefined" && window.location.hash.startsWith("#/")) {
+      return "slides";
+    }
+    return "workspace";
+  });
+  const [workspaceModuleId, setWorkspaceModuleId] = useState<string | undefined>(undefined);
+  const [pendingRevealTarget, setPendingRevealTarget] = useState<{
+    h: number;
+    v?: number;
+  } | null>(null);
+
   const moduleGroups = [
     { id: "m1", label: "M1 Cursor范式", title: "Module 1: Cursor AI Coding 研发范式革命", slides: Module1Slides },
     { id: "m2", label: "M2 @上下文", title: "Module 2: Cursor 上下文工程与全量理解", slides: Module2Slides },
@@ -77,13 +93,64 @@ function App() {
     { id: "mcp-registry", label: "16 MCP Registry 浏览器 (M4)", h: allSlides.indexOf(P32b), v: 0 },
   ];
 
+  const handleSwitchToReveal = (target: {
+    moduleId?: string;
+    labId?: string;
+    slideOffset?: number;
+  }) => {
+    if (target.labId) {
+      const lab = labs.find((l) => l.id === target.labId);
+      if (lab && lab.h >= 0) {
+        setPendingRevealTarget({ h: lab.h, v: lab.v });
+        setAppMode("slides");
+        return;
+      }
+    }
+    if (target.moduleId) {
+      const mod = modules.find((m) => m.id === target.moduleId);
+      if (mod) {
+        setPendingRevealTarget({ h: mod.startIndex + (target.slideOffset ?? 0), v: 0 });
+        setAppMode("slides");
+        return;
+      }
+    }
+    setPendingRevealTarget(null);
+    setAppMode("slides");
+  };
+
+  const handleOpenCourseSystem = (moduleId?: string) => {
+    setWorkspaceModuleId(moduleId);
+    if (typeof window !== "undefined" && window.location.hash.startsWith("#/")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    setAppMode("workspace");
+  };
+
   return (
-    <main className="h-screen w-screen overflow-hidden bg-[#020205]">
-      <Presentation modules={modules} labs={labs}>
-        {allSlides.map((SlideComponent, index) => (
-          <SlideComponent key={index} />
-        ))}
-      </Presentation>
+    <main
+      className={
+        appMode === "slides"
+          ? "h-screen w-screen overflow-hidden bg-[#020205]"
+          : "min-h-screen w-screen bg-[#020205]"
+      }
+    >
+      {appMode === "workspace" ? (
+        <CourseSystemApp
+          initialModuleId={workspaceModuleId}
+          onSwitchToReveal={handleSwitchToReveal}
+        />
+      ) : (
+        <Presentation
+          modules={modules}
+          labs={labs}
+          initialJumpTarget={pendingRevealTarget}
+          onOpenCourseSystem={handleOpenCourseSystem}
+        >
+          {allSlides.map((SlideComponent, index) => (
+            <SlideComponent key={index} />
+          ))}
+        </Presentation>
+      )}
     </main>
   );
 }

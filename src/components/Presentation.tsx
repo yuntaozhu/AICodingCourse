@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Reveal from "reveal.js";
-import { BookOpen, Check, ChevronDown, FlaskConical, PanelLeft } from "lucide-react";
+import { BookOpen, Check, ChevronDown, FlaskConical, LayoutGrid, PanelLeft } from "lucide-react";
 import CourseNavSidebar from "@/components/CourseNavSidebar";
 import KnowledgeBaseSidebar from "@/components/KnowledgeBaseSidebar";
 import SidebarPerformanceMonitor from "@/components/SidebarPerformanceMonitor";
@@ -30,6 +30,8 @@ interface PresentationProps {
   children: React.ReactNode;
   modules?: ModuleNavItem[];
   labs?: LabJumpItem[];
+  initialJumpTarget?: { h: number; v?: number } | null;
+  onOpenCourseSystem?: (moduleId?: string) => void;
 }
 
 type RevealInstance = InstanceType<typeof Reveal>;
@@ -61,11 +63,14 @@ export default function Presentation({
   children,
   modules = [],
   labs = [],
+  initialJumpTarget = null,
+  onOpenCourseSystem,
 }: PresentationProps) {
   const deckRef = useRef<HTMLDivElement>(null);
   const revealInstanceRef = useRef<RevealInstance | null>(null);
   const labsRef = useRef<LabJumpItem[]>(labs);
   const modulesRef = useRef<ModuleNavItem[]>(modules);
+  const initialJumpRef = useRef<{ h: number; v?: number } | null>(initialJumpTarget);
 
   useEffect(() => {
     labsRef.current = labs;
@@ -74,6 +79,13 @@ export default function Presentation({
   useEffect(() => {
     modulesRef.current = modules;
   }, [modules]);
+
+  useEffect(() => {
+    initialJumpRef.current = initialJumpTarget;
+    if (initialJumpTarget && revealInstanceRef.current) {
+      revealInstanceRef.current.slide(initialJumpTarget.h, initialJumpTarget.v ?? 0);
+    }
+  }, [initialJumpTarget]);
 
   const [currentH, setCurrentH] = useState(0);
   const [totalH, setTotalH] = useState(0);
@@ -187,6 +199,7 @@ export default function Presentation({
     window.addEventListener("reveal:jump-lab", handleJumpLabEvent);
     window.addEventListener("reveal:jump-module", handleJumpModuleEvent);
     window.addEventListener("course:open-resources", handleOpenResourcesEvent);
+    window.addEventListener("course:open-team-kb", handleOpenResourcesEvent);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!cancelled && readyDone) {
@@ -214,6 +227,9 @@ export default function Presentation({
         revealInstanceRef.current = deck;
         deck.sync();
         deck.layout();
+        if (initialJumpRef.current && initialJumpRef.current.h >= 0) {
+          deck.slide(initialJumpRef.current.h, initialJumpRef.current.v ?? 0);
+        }
         handleSlideChange();
         deck.on("slidechanged", handleSlideChange);
       })
@@ -231,6 +247,7 @@ export default function Presentation({
       window.removeEventListener("reveal:jump-lab", handleJumpLabEvent);
       window.removeEventListener("reveal:jump-module", handleJumpModuleEvent);
       window.removeEventListener("course:open-resources", handleOpenResourcesEvent);
+      window.removeEventListener("course:open-team-kb", handleOpenResourcesEvent);
       if (readyDone) {
         try {
           deck.off("slidechanged", handleSlideChange);
@@ -345,6 +362,18 @@ export default function Presentation({
         {modules.length > 0 && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[96%]">
             <div className="flex items-center gap-1.5 rounded-xl bg-[#0b0f19]/92 backdrop-blur-md border border-white/10 px-2.5 py-1.5 shadow-lg max-w-full overflow-x-auto">
+              {onOpenCourseSystem && (
+                <button
+                  type="button"
+                  onClick={() => onOpenCourseSystem(modules[activeModuleIndex]?.id)}
+                  className="px-2.5 py-1 rounded-lg bg-gemini-cyan/15 hover:bg-gemini-cyan/25 border border-gemini-cyan/40 text-xs font-semibold text-gemini-cyan transition-colors whitespace-nowrap shrink-0 cursor-pointer inline-flex items-center gap-1"
+                  title="返回课程课件系统（课程目录 / 单元学习 / 知识库 / 教师视图）"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>课程系统</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setCourseSidebarOpen((prev) => !prev)}

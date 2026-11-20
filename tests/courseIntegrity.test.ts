@@ -226,20 +226,34 @@ test("courseCurriculum aligns 10 modules, 16 labs, 4 learner paths, and verified
   const labIds = new Set(COURSE_LABS.map((l) => l.id));
 
   const expectedSlideCounts: Record<string, number> = {
-    m1: 12,
-    m2: 13,
-    m3: 13,
-    m4: 15,
-    m5: 19,
-    m6: 20,
-    m7: 15,
-    m8: 4,
-    m9: 10,
-    m10: 7,
+    m1: 13,
+    m2: 14,
+    m3: 14,
+    m4: 16,
+    m5: 20,
+    m6: 21,
+    m7: 16,
+    m8: 5,
+    m9: 11,
+    m10: 8,
   };
 
   for (const mod of COURSE_MODULES) {
     assert.equal(mod.slideCount, expectedSlideCounts[mod.id], `${mod.id} slideCount mismatch`);
+    const moduleIndexPath = path.resolve(process.cwd(), `src/components/slides/Module${mod.order}/index.ts`);
+    assert.ok(fs.existsSync(moduleIndexPath), `Missing Module${mod.order}/index.ts`);
+    const indexSrc = fs.readFileSync(moduleIndexPath, "utf8");
+    const arrayMatch = indexSrc.match(/export const (?:Module\d+Slides|VibeCodingAestheticsSlides)\s*=\s*\[([\s\S]*?)\];/);
+    assert.ok(arrayMatch, `Missing slide array export in Module${mod.order}/index.ts`);
+    const slideEntries = arrayMatch[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    assert.equal(
+      slideEntries.length,
+      mod.slideCount,
+      `Module${mod.order}/index.ts exports ${slideEntries.length} slides, expected ${mod.slideCount}`
+    );
     assert.ok(mod.learningObjectives.length >= 2, `${mod.id} needs >=2 observable objectives`);
     assert.ok(mod.deliverables.length >= 1, `${mod.id} needs deliverables`);
     assert.ok(mod.boundaryNote.trim().length > 5, `${mod.id} needs boundaryNote`);
@@ -372,6 +386,211 @@ test("labPracticeEngine audits Plan prompts, .mdc rules, and computes DoD lab co
   assert.ok(handoff.includes("npx tsc --noEmit"));
 });
 
+test("MODULE_TEACHING_PACKAGES covers all 10 modules with flexible delivery, demo flaw-fix loop, rubric, and 3-tier homework", async () => {
+  const { MODULE_TEACHING_PACKAGES } = await import("../src/data/moduleTeachingPackages");
+  const { COURSE_MODULES } = await import("../src/data/courseCurriculum");
 
+  const vagueVerbRegex = /理解|认识|掌握/;
 
+  for (const mod of COURSE_MODULES) {
+    const pkg = MODULE_TEACHING_PACKAGES[mod.id];
+    assert.ok(pkg, `Missing teaching package for ${mod.id}`);
+    assert.equal(pkg.moduleCode, mod.code);
+    assert.ok(pkg.deliveryModes.length >= 5, `${mod.id} should define 5 flexible delivery modes`);
+    assert.ok(pkg.traditionalVsAi.rows.length >= 3, `${mod.id} needs >=3 Traditional vs AI rows`);
+    assert.ok(pkg.traditionalVsAi.nonDelegableCases.length >= 2);
+    assert.ok(pkg.humanAiSplit.humanMustDecide.length >= 2);
+    assert.ok(pkg.humanAiSplit.aiCanDraft.length >= 2);
+    assert.ok(pkg.instructorDemo.steps.length >= 3, `${mod.id} needs multi-step demo with flaw & fix`);
+    assert.ok(pkg.instructorDemo.noKeyOfflineFallback.trim().length > 10);
+    assert.ok(pkg.instructorDemo.acceptableAlternatives.length >= 1);
+    assert.ok(pkg.rubric.length >= 3, `${mod.id} needs >=3 rubric dimensions`);
+    assert.equal(pkg.homeworkTiers.length, 3, `${mod.id} needs 3-tier transfer homework`);
 
+    for (const obj of mod.learningObjectives) {
+      assert.equal(
+        vagueVerbRegex.test(obj),
+        false,
+        `${mod.id} objective uses non-observable verb: ${obj}`
+      );
+    }
+    for (const r of pkg.rubric) {
+      assert.equal(
+        vagueVerbRegex.test(r.passCriteria),
+        false,
+        `${mod.id} rubric uses non-observable verb: ${r.passCriteria}`
+      );
+    }
+  }
+
+  for (let mod = 1; mod <= 10; mod += 1) {
+    assert.equal(
+      vagueVerbRegex.test(MODULE_OBJECTIVES[mod].observableOutcome),
+      false,
+      `MODULE_OBJECTIVES[${mod}] should avoid non-observable verbs`
+    );
+  }
+  for (const [qid, rem] of Object.entries(QUIZ_REMEDIATION_MAP)) {
+    assert.equal(
+      vagueVerbRegex.test(rem.learningObjective),
+      false,
+      `QUIZ_REMEDIATION_MAP[${qid}] should avoid non-observable verbs`
+    );
+  }
+});
+
+test("TEAM_KNOWLEDGE_BASE covers all 10 modules, all 9 knowledge types, and points to real docs files", async () => {
+  const {
+    KB_GOVERNANCE_RULES,
+    KNOWLEDGE_CATEGORY_LABELS,
+    TEAM_KNOWLEDGE_BASE,
+  } = await import("../src/data/teamKnowledgeBase");
+
+  assert.ok(fs.existsSync(path.resolve(process.cwd(), KB_GOVERNANCE_RULES.repoRootPath)));
+
+  const coveredModules = new Set<string>();
+  const coveredCategories = new Set<string>();
+  const realisticSecretRegex = /(?:ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})/;
+
+  for (const entry of TEAM_KNOWLEDGE_BASE) {
+    assert.ok(entry.owner.trim().length > 0, `${entry.id} needs owner`);
+    assert.ok(entry.scope.trim().length > 0, `${entry.id} needs scope`);
+    assert.ok(entry.feedbackLoop.trim().length > 5, `${entry.id} needs feedbackLoop`);
+    assert.match(entry.updatedAt, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(
+      fs.existsSync(path.resolve(process.cwd(), entry.repoPath)),
+      `${entry.id} references missing repoPath '${entry.repoPath}'`
+    );
+    assert.equal(
+      realisticSecretRegex.test(entry.copyableSnippet),
+      false,
+      `${entry.id} copyableSnippet must not include realistic live credentials`
+    );
+
+    coveredCategories.add(entry.category);
+    entry.modules.forEach((m) => coveredModules.add(m));
+  }
+
+  for (const cat of Object.keys(KNOWLEDGE_CATEGORY_LABELS)) {
+    assert.ok(coveredCategories.has(cat), `TEAM_KNOWLEDGE_BASE missing category '${cat}'`);
+  }
+  for (let i = 1; i <= 10; i += 1) {
+    assert.ok(coveredModules.has(`M${i}`), `TEAM_KNOWLEDGE_BASE missing module M${i}`);
+  }
+});
+
+test("courseUnitsModel provides M1 10-unit exemplar, M2-M10 compatible adapter, and composable DeliveryPlans", async () => {
+  const {
+    COURSE_MODULE_RECORDS,
+    COURSE_UNIT_TYPE_LABELS,
+    getDeliveryPlanMinutes,
+    getModuleRecordById,
+    getUnitsForPlan,
+  } = await import("../src/data/courseUnitsModel");
+
+  assert.equal(COURSE_MODULE_RECORDS.length, 10);
+
+  const m1 = getModuleRecordById("m1");
+  assert.ok(m1);
+  assert.equal(m1.exemplarLevel, "complete-exemplar");
+  assert.equal(m1.units.length, 10);
+  assert.equal(m1.deliveryPlans.length, 4);
+
+  const m1Types = new Set(m1.units.map((u) => u.type));
+  for (const t of Object.keys(COURSE_UNIT_TYPE_LABELS)) {
+    assert.ok(m1Types.has(t as keyof typeof COURSE_UNIT_TYPE_LABELS), `M1 exemplar missing unit type '${t}'`);
+  }
+
+  const vagueVerbRegex = /理解|认识|掌握/;
+  const realisticSecretRegex = /(?:ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})/;
+
+  for (const mod of COURSE_MODULE_RECORDS) {
+    if (mod.id !== "m1") {
+      assert.equal(mod.exemplarLevel, "compatible-adapter");
+    }
+    assert.ok(mod.units.length >= 6, `${mod.id} should have >=6 units`);
+    assert.ok(mod.deliveryPlans.length >= 4, `${mod.id} should have 4 configurable plans`);
+
+    const unitIds = new Set(mod.units.map((u) => u.id));
+    for (const plan of mod.deliveryPlans) {
+      assert.ok(plan.unitIds.length >= 3, `${plan.id} needs >=3 unitIds`);
+      for (const uid of plan.unitIds) {
+        assert.ok(unitIds.has(uid), `${plan.id} references unknown unitId '${uid}'`);
+      }
+      const resolved = getUnitsForPlan(mod, plan.id);
+      assert.equal(resolved.length, plan.unitIds.length);
+      const mins = getDeliveryPlanMinutes(mod, plan);
+      assert.ok(mins > 0);
+    }
+
+    for (const unit of mod.units) {
+      assert.ok(unit.completionCriteria.length >= 3, `${unit.id} needs >=3 completionCriteria`);
+      assert.ok(unit.teacherMaterials.teachingTips.trim().length > 5);
+      assert.ok(unit.teacherMaterials.referenceAnswers.length >= 1);
+      assert.ok(unit.teacherMaterials.commonPitfalls.length >= 1);
+      assert.match(unit.updatedAt, /^\d{4}-\d{2}-\d{2}$/);
+      assert.equal(
+        vagueVerbRegex.test(unit.learningObjective),
+        false,
+        `${unit.id} learningObjective uses non-observable verb: ${unit.learningObjective}`
+      );
+      if (unit.learnerArtifact) {
+        assert.equal(
+          realisticSecretRegex.test(unit.learnerArtifact.templateContent),
+          false,
+          `${unit.id} artifact template must not include live secrets`
+        );
+      }
+    }
+  }
+});
+
+test("courseWorkspaceStore computes progress stats and exports clean Markdown offline", async () => {
+  const {
+    buildWorkspaceMarkdownExport,
+    createInitialWorkspaceState,
+    getCourseOverallStats,
+    getModuleCompletionStats,
+  } = await import("../src/data/courseWorkspaceStore");
+  const { getModuleRecordById } = await import("../src/data/courseUnitsModel");
+
+  const state = createInitialWorkspaceState();
+  assert.equal(state.viewMode, "learner");
+
+  const m1 = getModuleRecordById("m1")!;
+  state.selectedPlanByModule.m1 = "m1-plan-short";
+  const shortUnits = m1.deliveryPlans.find((p) => p.id === "m1-plan-short")!.unitIds;
+  state.completedUnitIds[shortUnits[0]] = true;
+  state.dodCheckedByUnit[shortUnits[0]] = [m1.units[0].completionCriteria[0]];
+  state.practiceNotes[shortUnits[0]] = {
+    artifactDraft: "Intent: 验证 Plan 模式边界\nDoD: npm test",
+    reflectionNote: "先锁文件白名单再让 AI 动手。",
+    selectedTransferTier: "A 个人即时",
+    updatedAt: "2026-11-19",
+  };
+  state.customKbEntries.push({
+    id: "custom-1",
+    title: "Plan 白名单模板",
+    moduleCode: "M1",
+    category: "starter-rule",
+    scope: "React SPA",
+    content: "Allowlist: src/components/course/**",
+    cautionNote: "不要带入无关目录",
+    updatedAt: "2026-11-19",
+  });
+
+  const m1Stats = getModuleCompletionStats(m1, state);
+  assert.equal(m1Stats.completedCount, 1);
+  assert.equal(m1Stats.totalCount, shortUnits.length);
+
+  const overall = getCourseOverallStats(state);
+  assert.equal(overall.completedUnits, 1);
+  assert.equal(overall.savedPracticeCount, 1);
+  assert.equal(overall.customKbCount, 1);
+
+  const md = buildWorkspaceMarkdownExport(state);
+  assert.ok(md.includes("AICodingCourse 学员学习产物与知识沉淀导出"));
+  assert.ok(md.includes("Intent: 验证 Plan 模式边界"));
+  assert.ok(md.includes("先锁文件白名单再让 AI 动手。"));
+  assert.ok(md.includes("Plan 白名单模板"));
+});

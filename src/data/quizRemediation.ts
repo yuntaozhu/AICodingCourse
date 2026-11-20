@@ -98,7 +98,7 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
     labLabel: "Lab 01 · Plan→Agent 沙盘",
   },
   "m1-q2": {
-    learningObjective: "理解代码图结构依赖与全量上下文缓存的价值",
+    learningObjective: "能说明代码图结构依赖与全量上下文缓存对跨文件定位的影响",
     reviewAction: "回顾 M1 上下文演进章节，或到 Lab 06 观察上下文压缩对比",
     moduleId: "m1",
     labId: "agent-harness",
@@ -120,7 +120,7 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
   },
   // Module 2
   "m2-q1": {
-    learningObjective: "掌握全量代码库索引前的降噪与目录排除原则",
+    learningObjective: "能配置全量代码库索引前的 .cursorignore 降噪与目录排除规则",
     reviewAction: "前往 Lab 02 检查 .cursorignore / globs 如何隔离无关噪音",
     moduleId: "m2",
     labId: "cursor-rules",
@@ -134,7 +134,7 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
     labLabel: "Lab 06 · Agent Harness",
   },
   "m2-q3": {
-    learningObjective: "理解跨文件污点数据流审计相比单点正则的差异",
+    learningObjective: "能对比跨文件污点数据流审计与单点正则检测的漏报差异",
     reviewAction: "到 Lab 04 用 Bugbot 审查台实测跨路由鉴权与数据流漏洞",
     moduleId: "m2",
     labId: "bugbot-review",
@@ -259,7 +259,7 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
   },
   // Module 8
   "m8-q1": {
-    learningObjective: "掌握原型工具导出的前端代码迁入全栈工程的安全加固步骤",
+    learningObjective: "能执行原型工具导出的前端代码迁入全栈工程的三步安全加固",
     reviewAction: "到 Lab 14 为迁移任务生成前后端代理隔离的 AGENTS.md",
     moduleId: "m8",
     labId: "prompt-crafting",
@@ -339,7 +339,7 @@ export function getQuestionRemediation(
   const mapped = QUIZ_REMEDIATION_MAP[questionId];
   if (mapped) return mapped;
   return {
-    learningObjective: "理解并验证本模块核心工程原则",
+    learningObjective: "能执行并验证本模块核心工程原则",
     reviewAction: `建议回到 Module ${moduleNumber} 首页重新梳理本节概念`,
     moduleId: `m${moduleNumber}`,
   };

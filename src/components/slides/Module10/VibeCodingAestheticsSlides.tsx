@@ -1,6 +1,8 @@
+import { useState } from "react";
 import Slide from "@/components/Slide";
 import AestheticEvaluationCard from "@/components/sandboxes/AestheticEvaluationCard";
 import UiInspirationSandbox from "@/components/sandboxes/UiInspirationSandbox";
+import ModuleLoopStudio from "@/components/slides/common/ModuleLoopStudio";
 import { ArrowUpRight } from "lucide-react";
 
 function jumpToLab08() {
@@ -445,5 +447,193 @@ export function AestheticsLabSlide() {
         <UiInspirationSandbox />
       </div>
     </Slide>
+  );
+}
+
+const TEARDOWN_DIMENSIONS = [
+  {
+    id: "layout",
+    dim: "布局 (Layout)",
+    vague: "页面现代大气一点",
+    checkableSpec: "桌面端 12 列栅格（左侧 5 列主叙事 + 右侧 7 列预览卡片），单屏无横向滚动条",
+  },
+  {
+    id: "hierarchy",
+    dim: "视觉层级 (Hierarchy)",
+    vague: "重点要突出",
+    checkableSpec: "每屏只留 1 个主 CTA（实心高亮）+ 1 个次按钮（描边），禁止每张卡片都加发光边框",
+  },
+  {
+    id: "spacing",
+    dim: "间距节奏 (Spacing)",
+    vague: "看起来不要太挤",
+    checkableSpec: "区块外边距统一 py-12/gap-6，卡片内边距 p-5，表格与指标卡严格对齐基线",
+  },
+  {
+    id: "typography",
+    dim: "排版尺度 (Typography)",
+    vague: "字体要有设计感",
+    checkableSpec: "主标题 text-4xl font-bold，数据指标强制 font-mono tabular-nums，正文保持 >=14px 高对比度",
+  },
+  {
+    id: "responsive",
+    dim: "响应式与异常态",
+    vague: "兼容一下手机",
+    checkableSpec: "375px 手机端自动转为单列 stack；按钮加 whitespace-nowrap；覆盖 Loading/Empty/Error 三态",
+  },
+];
+
+const VISUAL_SPEC_ARTIFACT = `# VISUAL_TEARDOWN_COMPONENT_SPEC.md — 视觉拆解表与 AI 可检查组件规格
+
+## 一、五维视觉拆解表（先拆解再写代码）
+| 拆解维度 | 设计意图（人话） | AI 可检验规格（写入 Prompt / .mdc） | 验收核查方式 |
+| :--- | :--- | :--- | :--- |
+| **布局 Layout** | 信息主次分明不拥挤 | 12 列栅格（5+7），单屏无横向溢出 | 1280px 视口 \`scrollWidth <= innerWidth\` |
+| **层级 Hierarchy** | 一眼看清主动作 | 全屏仅 1 个高对比主 CTA；禁用全卡片霓虹脉冲 | 人工目测首屏唯一视觉重心 |
+| **间距 Spacing** | 呼吸感一致 | 统一 \`gap-5 / p-5\`，避免逐卡手写魔数间距 | 审查 Tailwind 类名一致性 |
+| **排版 Typography** | 数字对齐、阅读清晰 | 指标加 \`tabular-nums\`，按钮加 \`whitespace-nowrap\` | 切换动态数字无抖动、按钮不折行 |
+| **响应式 Responsive** | 桌面手机同样稳 | \`grid-cols-1 md:grid-cols-12\`，补齐空态/错态 | 375×812 模拟视口截屏零遮挡 |
+
+## 二、前后迭代提示词对比模板
+\`\`\`text
+[第 1 轮先搭骨架] 按以上五维规格生成组件，仅用黑白灰与 1 个强调色占位，确认结构与 375px 布局无误。
+[第 2 轮加细节与校验] 对照组件源码补齐 Loading/Empty/Error 三态，禁止装饰性 animate-pulse，跑通 npm run build。
+\`\`\``;
+
+export function VisualTeardownSpecSlide() {
+  const [viewMode, setViewMode] = useState<"before" | "after">("after");
+  const [checkedDims, setCheckedDims] = useState<string[]>(["layout", "responsive"]);
+
+  const toggleDim = (id: string) => {
+    setCheckedDims((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  return (
+    <ModuleLoopStudio
+      moduleCode="M10"
+      eyebrow="VISUAL TEARDOWN & SPEC · 视觉拆解、可执行规格与前后迭代"
+      title="视觉拆解表 ➔ AI 可检查组件规格 ➔ 前后迭代实战"
+      notes="通过布局、层级、间距、排版与响应式五维拆解训练，学会把模糊设计意图转化为 AI 可逐条验收的组件规格与前后迭代对比。"
+      objective="能从参考界面拆出布局/层级/间距/排版/响应式 5 维客观规格，并通过先结构后细节的两轮迭代摆脱“AI 模板味”。"
+      boundary="审美参考站仅用于拆解结构规律与参数；严禁照搬他人受版权保护的文案、品牌资产与图片，也不在一开始就让 AI 一代出复杂动效。"
+      positiveCase={{
+        title: "先拆 5 维规格再分两轮迭代",
+        scenario: "把「要一个清爽的产品定价与指标区」拆解成可执行规格，经两轮迭代交付。",
+        steps: [
+          "第 1 轮（结构与响应式）：先锁定 12 列栅格、375px 单列降维与主次按钮对比度，跑出无溢出的干净骨架。",
+          "第 2 轮（排版与状态）：注入 tabular-nums 数据对齐、whitespace-nowrap 防折行与 Empty/Error 降级态。",
+          "对照五维 DoD 验收：桌面 1280px 与手机 375px 截屏确认零重叠、无多余发光边框。",
+        ],
+        snippetLabel: "AI 可检查的组件规格约束",
+        snippet: `- Layout: grid-cols-1 md:grid-cols-12, zero horizontal overflow at 375px
+- Hierarchy: single primary CTA; no decorative animate-pulse
+- Type & States: tabular-nums for metrics; include Loading/Empty/Error`,
+        verdict: "结构一次稳固，局部精修只需 1 轮，彻底告别五轮审美抽卡。",
+      }}
+      failureCase={{
+        title: "模糊形容词“一代图”式提示词",
+        scenario: "直接对 AI 说：「帮我做一个高级暗黑科技感、很有未来感的首页」。",
+        steps: [
+          "AI 触发默认高饱和蓝紫渐变 + 每张卡片发光边框 + 无意义闪烁脉冲圆点（典型 AI 模板味）。",
+          "按钮文字在窄屏折成两行，动态数字跳动导致整列像素抖动。",
+          "只要求“好看”，没有写空态/错误态与断点要求，交付后发现手机端卡片横向撑爆屏幕。",
+        ],
+        snippetLabel: "高返工率的模糊 Prompt",
+        snippet: `"做一个酷炫高级、很有科技感、带丝滑动画的数据产品首页，越惊艳越好。"`,
+        verdict: "缺乏可检验的布局/间距/排版约束，模型只能用刻板视觉 clichés 填充空白。",
+      }}
+      practiceTitle="课堂拆解练习：切换对比前后效果，并勾选将 5 项设计维度转为 AI 可检规格（至少选 3 项）"
+      practicePassedCount={checkedDims.length >= 3 ? 3 : checkedDims.length}
+      practiceTotalCount={3}
+      dodItems={[
+        {
+          id: "m10-dod-1",
+          label: "已把模糊设计形容词转化为布局/层级/间距/排版/响应式可执行规格",
+          verifyHint: "至少覆盖 3 个维度的客观类名或断点约束",
+        },
+        {
+          id: "m10-dod-2",
+          label: "已完成桌面 1280px 与手机 375px 无溢出与三态检查",
+          verifyHint: "确认无脉冲圆点、无按钮折行、数字加 tabular-nums",
+        },
+        {
+          id: "m10-dod-3",
+          label: "已导出「视觉拆解表 + AI 可检查组件规格模板」",
+          verifyHint: "切换到「03 带走产物 & 复盘」一键复制",
+        },
+      ]}
+      artifactTitle="视觉拆解表与 AI 可检查组件规格模板"
+      artifactFilename="VISUAL_TEARDOWN_COMPONENT_SPEC.md"
+      artifactContent={VISUAL_SPEC_ARTIFACT}
+      reflectionQuestion="下次你在参考网站看到一个特别舒服的卡片或导航栏时，除了“真好看”，你会逼自己记下哪 3 个具体参数再喂给 Cursor？"
+      reflectionHint="强制记录这 3 项：1) 栅格与宽度占比（例如 12 列里的 5+7）；2) 字号层级差与行高间距（例如标题与正文至少差 2 档、卡片内边距统一 20px）；3) 窄屏（375px）和展开态的收口形态。"
+      renderPractice={() => (
+        <div className="space-y-2.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-mono text-gemini-cyan">
+              点击勾选拆解维度，切换对比前后输入差异：
+            </span>
+            <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/10">
+              <button
+                type="button"
+                onClick={() => setViewMode("before")}
+                className={`px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer whitespace-nowrap ${
+                  viewMode === "before"
+                    ? "bg-rose-500 text-white font-semibold"
+                    : "text-slate-300"
+                }`}
+              >
+                改造前 · 模糊词
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("after")}
+                className={`px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer whitespace-nowrap ${
+                  viewMode === "after"
+                    ? "bg-emerald-500 text-slate-950 font-semibold"
+                    : "text-slate-300"
+                }`}
+              >
+                改造后 · AI 可检规格
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {TEARDOWN_DIMENSIONS.map((item) => {
+              const selected = checkedDims.includes(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => toggleDim(item.id)}
+                  className={`w-full text-left p-2.5 rounded-xl border transition-colors cursor-pointer grid grid-cols-12 gap-2 items-center ${
+                    selected
+                      ? "bg-emerald-500/10 border-emerald-400/40"
+                      : "bg-white/[0.03] border-white/10 hover:border-white/25"
+                  }`}
+                >
+                  <div className="col-span-4 font-mono text-[11px] text-white flex items-center gap-1.5">
+                    <span className={selected ? "text-emerald-300" : "text-slate-400"}>
+                      {selected ? "[✓]" : "[ ]"}
+                    </span>
+                    <span>{item.dim}</span>
+                  </div>
+                  <div className="col-span-8 text-[11px] leading-snug">
+                    {viewMode === "before" ? (
+                      <span className="text-rose-200">模糊写法：“{item.vague}”</span>
+                    ) : (
+                      <span className="text-emerald-200">{item.checkableSpec}</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    />
   );
 }

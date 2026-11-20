@@ -5,6 +5,7 @@ import {
   PartialComponentsSlide,
   ImplementationLibsSlide,
   AestheticsEvaluationSlide,
+  VisualTeardownSpecSlide,
   AestheticsLabSlide,
 } from "./VibeCodingAestheticsSlides";
 
@@ -14,6 +15,7 @@ export const VibeCodingAestheticsSlides = [
   PartialComponentsSlide,
   ImplementationLibsSlide,
   AestheticsEvaluationSlide,
+  VisualTeardownSpecSlide,
   AestheticsLabSlide,
   Module10Quiz,
 ];
@@ -26,5 +28,6 @@ export {
   PartialComponentsSlide,
   ImplementationLibsSlide,
   AestheticsEvaluationSlide,
+  VisualTeardownSpecSlide,
   AestheticsLabSlide,
 };

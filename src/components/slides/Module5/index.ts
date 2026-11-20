@@ -10,6 +10,7 @@ import P73 from "./P73";
 import P74 from "./P74";
 import P74b from "./P74b";
 import P74c from "./P74c";
+import P74d from "./P74d";
 import P75 from "./P75";
 import P76 from "./P76";
 import P77 from "./P77";
@@ -19,5 +20,5 @@ import P80 from "./P80";
 import { Module5Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module5Slides = [
-  P66, P67, P67b, P68, P69, P70, P71, P72, P73, P74, P74b, P74c, P75, P76, P77, P78, P79, P80, Module5Quiz
+  P66, P67, P67b, P68, P69, P70, P71, P72, P73, P74, P74b, P74c, P74d, P75, P76, P77, P78, P79, P80, Module5Quiz
 ];

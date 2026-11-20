@@ -28,6 +28,8 @@ import {
   loadAllLabDodProgress,
   loadLabArtifacts,
 } from "@/data/labPracticeEngine";
+import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
+import { getKnowledgeEntriesForModule } from "@/data/teamKnowledgeBase";
 
 interface CourseNavSidebarProps {
   isOpen: boolean;
@@ -126,6 +128,12 @@ export default function CourseNavSidebar({
   const handleOpenModuleResources = (moduleCode: ModuleShortCode) => {
     window.dispatchEvent(
       new CustomEvent("course:open-resources", { detail: { moduleCode } })
+    );
+  };
+
+  const handleOpenModuleTeamKb = (moduleCode: ModuleShortCode) => {
+    window.dispatchEvent(
+      new CustomEvent("course:open-team-kb", { detail: { moduleCode } })
     );
   };
 
@@ -386,6 +394,8 @@ export default function CourseNavSidebar({
               const moduleLabs = meta
                 ? COURSE_LABS.filter((lab) => meta.labIds.includes(lab.id))
                 : [];
+              const teachingPkg = meta ? getModuleTeachingPackage(meta.id) : undefined;
+              const teamKbCount = meta ? getKnowledgeEntriesForModule(meta.code).length : 0;
 
               return (
                 <div key={mod.id}>
@@ -545,6 +555,18 @@ export default function CourseNavSidebar({
                           边界与安全：{meta.boundaryNote}
                         </div>
 
+                        {teachingPkg && (
+                          <div className="pt-1 border-t border-white/10 space-y-1">
+                            <div className="text-slate-400 font-medium">灵活授课模式与迁移</div>
+                            <div className="text-[10px] font-mono text-slate-300 leading-relaxed">
+                              {teachingPkg.deliveryModes.map((dm) => `${dm.label}`).join(" · ")}
+                            </div>
+                            <div className="text-[10px] text-slate-400 leading-relaxed">
+                              裁剪建议：{teachingPkg.trimAndMergeNote}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           {moduleLabs.map((lab) => {
                             const labDone = completedLabIds.includes(lab.id);
@@ -567,6 +589,14 @@ export default function CourseNavSidebar({
                               </button>
                             );
                           })}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenModuleTeamKb(meta.code)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gemini-purple/15 hover:bg-gemini-purple/30 border border-gemini-purple/35 text-purple-200 hover:text-white font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            <BookOpen className="w-3 h-3" />
+                            <span>团队知识库 ({teamKbCount})</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleOpenModuleResources(meta.code)}
