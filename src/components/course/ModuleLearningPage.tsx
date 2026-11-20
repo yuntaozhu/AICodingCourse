@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Copy,
+  Download,
   Eye,
   EyeOff,
   FileCode2,
@@ -36,6 +37,7 @@ import {
   type CourseUnit,
 } from "@/data/courseUnitsModel";
 import {
+  buildInstructorLessonPlanMarkdown,
   getModuleCompletionStats,
   QUIZ_ANSWERS_STORAGE_KEY,
   type CourseWorkspaceState,
@@ -66,6 +68,7 @@ interface ModuleLearningPageProps {
   onToggleViewMode: () => void;
   onOpenKnowledgeBase: (moduleCode?: string) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string; slideOffset?: number }) => void;
+  onScrollTop?: () => void;
 }
 
 function loadQuizAnswers(moduleOrder: number): Record<string, number> {
@@ -87,6 +90,7 @@ function saveQuizAnswers(moduleOrder: number, answers: Record<string, number>) {
     const parsed = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {};
     parsed[String(moduleOrder)] = answers;
     window.localStorage.setItem(QUIZ_ANSWERS_STORAGE_KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new CustomEvent("course:quiz-progress-updated"));
   } catch {
     // Ignore storage errors
   }
@@ -108,6 +112,7 @@ export default function ModuleLearningPage({
   onToggleViewMode,
   onOpenKnowledgeBase,
   onSwitchToReveal,
+  onScrollTop,
 }: ModuleLearningPageProps) {
   const activePlanId =
     workspaceState.selectedPlanByModule[moduleRecord.id] || moduleRecord.deliveryPlans[0]?.id;
@@ -187,6 +192,9 @@ export default function ModuleLearningPage({
           activeUnit.knowledgeEntryIds.includes(kb.id) || kb.modules.includes(moduleRecord.code)
       )
     : [];
+  const moduleCustomKbs = workspaceState.customKbEntries.filter(
+    (entry) => entry.moduleCode === moduleRecord.code
+  );
 
   const moduleQuiz = MODULE_QUIZZES[moduleRecord.order];
   const quizSummary = moduleQuiz ? getQuizReviewSummary(moduleQuiz, quizAnswers) : null;
@@ -208,6 +216,28 @@ export default function ModuleLearningPage({
     }
   };
 
+  const handleExportInstructorPlan = () => {
+    const md = buildInstructorLessonPlanMarkdown(moduleRecord, activePlan?.id);
+    try {
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${moduleRecord.code}-${activePlan?.shortLabel || "备课讲义"}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      void navigator.clipboard?.writeText(md);
+    }
+  };
+
+  const selectUnitAndScroll = (unitId: string) => {
+    setSelectedUnitId(unitId);
+    onScrollTop?.();
+  };
+
   const handleSelectPlan = (planId: string) => {
     setShowAllModuleUnits(false);
     onSelectPlan(moduleRecord.id, planId);
@@ -223,7 +253,7 @@ export default function ModuleLearningPage({
       onToggleUnitComplete(activeUnit.id);
     }
     if (nextUnit) {
-      setSelectedUnitId(nextUnit.id);
+      selectUnitAndScroll(nextUnit.id);
     }
   };
 
@@ -336,6 +366,18 @@ export default function ModuleLearningPage({
                 </>
               )}
             </button>
+
+            {isInstructorView && (
+              <button
+                type="button"
+                onClick={handleExportInstructorPlan}
+                className="px-3 py-1.5 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                title="按当前选定的授课方案导出本模块教师备课讲义（含教学提示、示范与参考答案）"
+              >
+                <Download className="w-3.5 h-3.5 text-gemini-purple" />
+                <span>导出备课讲义 (.md)</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -459,7 +501,7 @@ export default function ModuleLearningPage({
                 <button
                   key={unit.id}
                   type="button"
-                  onClick={() => setSelectedUnitId(unit.id)}
+                  onClick={() => selectUnitAndScroll(unit.id)}
                   className={`w-full text-left p-2.5 rounded-xl border transition-colors cursor-pointer flex items-start gap-2.5 ${
                     isSelected
                       ? "bg-gemini-cyan/12 border-gemini-cyan text-white"
@@ -577,6 +619,58 @@ export default function ModuleLearningPage({
                         className="p-3 rounded-xl bg-white/[0.025] border border-white/10 text-xs sm:text-sm text-slate-200 leading-relaxed"
                       >
                         {block}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Structured Traditional vs AI Comparison Matrix */}
+              {activeUnit.type === "ai-vs-trad" && teachingPkg && (
+                <div className="p-4 rounded-xl bg-[#070b14] border border-gemini-cyan/30 space-y-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-gemini-cyan font-semibold">
+                      结构化工程对照：传统编程 vs AI Coding 协作
+                    </span>
+                    <span className="text-[11px] text-amber-300">
+                      瓶颈转移：{teachingPkg.traditionalVsAi.bottleneckShift}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/15 text-[11px] font-mono text-slate-400">
+                          <th className="py-2 pr-3 font-medium">比较维度</th>
+                          <th className="py-2 px-3 font-medium">传统编程做法</th>
+                          <th className="py-2 pl-3 font-medium text-gemini-cyan">
+                            AI Coding 协作做法
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10">
+                        {teachingPkg.traditionalVsAi.rows.map((row, idx) => (
+                          <tr key={idx} className="align-top">
+                            <td className="py-2.5 pr-3 font-semibold text-white whitespace-nowrap">
+                              {row.dimension}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-300 leading-relaxed">
+                              {row.traditionalWay}
+                            </td>
+                            <td className="py-2.5 pl-3 text-slate-200 leading-relaxed">
+                              {row.aiCodingWay}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-rose-500/[0.06] border border-rose-400/25 space-y-1">
+                    <div className="font-mono text-[11px] text-rose-300 font-semibold">
+                      不可委托给 AI 拍板的边界场景：
+                    </div>
+                    {teachingPkg.traditionalVsAi.nonDelegableCases.map((c, idx) => (
+                      <div key={idx} className="text-slate-200 leading-relaxed">
+                        · {c}
                       </div>
                     ))}
                   </div>
@@ -710,6 +804,29 @@ export default function ModuleLearningPage({
                       ))}
                     </div>
                   </div>
+
+                  {activeUnit.type === "collab-practice" && teachingPkg && (
+                    <div className="p-3.5 rounded-xl bg-[#070b14] border border-gemini-purple/30 space-y-2 text-xs">
+                      <div className="font-mono text-purple-200 font-semibold">
+                        多维验收 Rubric（不以生成代码行数衡量）
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {teachingPkg.rubric.map((r, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-lg bg-white/[0.03] border border-white/10 space-y-1"
+                          >
+                            <div className="font-semibold text-white">{r.dimension}</div>
+                            <div className="text-emerald-300 leading-relaxed">
+                              合格：{r.passCriteria}
+                            </div>
+                            <div className="text-slate-400 text-[11px]">证据：{r.evidence}</div>
+                            <div className="text-rose-300 text-[11px]">红线：{r.redFlag}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1030,11 +1147,27 @@ export default function ModuleLearningPage({
                     <FileCode2 className="w-3.5 h-3.5" />
                     <span>学员产物草稿与复盘笔记（自动保存在本地浏览器）</span>
                   </div>
-                  {unitPractice?.updatedAt && (
-                    <span className="text-[11px] font-mono text-slate-500">
-                      上次记录：{unitPractice.updatedAt}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {unitPractice?.updatedAt && (
+                      <span className="text-[11px] font-mono text-emerald-300/90">
+                        已本地保存 · {unitPractice.updatedAt}
+                      </span>
+                    )}
+                    {(unitPractice?.artifactDraft || unitPractice?.reflectionNote) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSavePracticeNote(activeUnit.id, {
+                            artifactDraft: "",
+                            reflectionNote: "",
+                          })
+                        }
+                        className="px-2 py-0.5 rounded bg-white/5 hover:bg-rose-500/20 border border-white/10 text-[10px] font-mono text-slate-300 hover:text-rose-200 cursor-pointer"
+                      >
+                        清空本单元草稿
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {(activeUnit.type === "collab-practice" ||
@@ -1085,7 +1218,9 @@ export default function ModuleLearningPage({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-mono text-purple-200 inline-flex items-center gap-1.5">
                     <BookMarked className="w-3.5 h-3.5 text-gemini-purple" />
-                    <span>知识库关联条目与沉淀 ({relatedKbEntries.length})</span>
+                    <span>
+                      知识库关联条目与沉淀 ({relatedKbEntries.length + moduleCustomKbs.length})
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -1102,14 +1237,78 @@ export default function ModuleLearningPage({
                   {relatedKbEntries.slice(0, 4).map((kb) => (
                     <div
                       key={kb.id}
-                      className="p-2.5 rounded-lg bg-black/40 border border-white/10 text-xs space-y-1"
+                      className="p-3 rounded-lg bg-black/40 border border-white/10 text-xs space-y-1.5 flex flex-col justify-between"
                     >
-                      <div className="font-semibold text-white leading-snug">{kb.title}</div>
-                      <div className="text-[10px] font-mono text-slate-400">
-                        {KNOWLEDGE_CATEGORY_LABELS[kb.category]} ·{" "}
-                        {KNOWLEDGE_STATUS_LABELS[kb.validationStatus]} · {kb.version}
+                      <div className="space-y-1">
+                        <div className="font-semibold text-white leading-snug">{kb.title}</div>
+                        <div className="text-[10px] font-mono text-slate-400">
+                          {KNOWLEDGE_CATEGORY_LABELS[kb.category]} ·{" "}
+                          {KNOWLEDGE_STATUS_LABELS[kb.validationStatus]} · {kb.version}
+                        </div>
+                        <div className="text-[11px] text-slate-300 line-clamp-2">{kb.summary}</div>
+                        <div className="text-[10px] text-slate-400">
+                          适用：{kb.scope}
+                        </div>
+                        <div className="text-[10px] text-amber-300/90 line-clamp-1">
+                          注意：{kb.antiPatternOrWarning}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-300 line-clamp-2">{kb.summary}</div>
+                      <div className="flex items-center justify-end gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => void handleCopy(`kb-${kb.id}`, kb.copyableSnippet)}
+                          className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px] font-mono text-white inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedId === `kb-${kb.id}` ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>已复制</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-gemini-cyan" />
+                              <span>复制模板</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {moduleCustomKbs.map((ckb) => (
+                    <div
+                      key={ckb.id}
+                      className="p-3 rounded-lg bg-gemini-cyan/[0.06] border border-gemini-cyan/30 text-xs space-y-1 flex flex-col justify-between"
+                    >
+                      <div className="space-y-1">
+                        <div className="font-semibold text-white leading-snug">{ckb.title}</div>
+                        <div className="text-[10px] font-mono text-gemini-cyan">
+                          个人/团队沉淀 · {KNOWLEDGE_CATEGORY_LABELS[ckb.category]} · {ckb.updatedAt}
+                        </div>
+                        <div className="text-[11px] text-slate-300">适用：{ckb.scope}</div>
+                        <pre className="p-2 rounded bg-black/45 font-mono text-[10px] text-slate-200 whitespace-pre-wrap line-clamp-3">
+                          {ckb.content}
+                        </pre>
+                      </div>
+                      <div className="flex items-center justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => void handleCopy(`ckb-${ckb.id}`, ckb.content)}
+                          className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px] font-mono text-white inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedId === `ckb-${ckb.id}` ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>已复制</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-gemini-cyan" />
+                              <span>复制内容</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1255,7 +1454,7 @@ export default function ModuleLearningPage({
                 <button
                   type="button"
                   disabled={!prevUnit}
-                  onClick={() => prevUnit && setSelectedUnitId(prevUnit.id)}
+                  onClick={() => prevUnit && selectUnitAndScroll(prevUnit.id)}
                   className={`px-3.5 py-2 rounded-xl border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap ${
                     prevUnit
                       ? "bg-white/5 border-white/15 text-slate-200 hover:bg-white/10 cursor-pointer"

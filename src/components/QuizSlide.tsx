@@ -55,6 +55,7 @@ function saveStoredModuleAnswers(moduleNumber: number, moduleAnswers: Record<str
       parsed[String(moduleNumber)] = moduleAnswers;
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new CustomEvent("course:quiz-progress-updated"));
   } catch {
     // Ignore storage quota or serialization errors
   }

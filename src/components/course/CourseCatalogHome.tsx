@@ -4,12 +4,15 @@ import {
   BookMarked,
   CheckCircle2,
   Compass,
+  Download,
   FileCode2,
   GraduationCap,
   Layers,
   Play,
   Presentation as PresentationIcon,
 } from "lucide-react";
+import { buildFullCourseInstructorHandbookMarkdown } from "@/data/courseWorkspaceStore";
+import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import {
   COURSE_LABS,
@@ -31,6 +34,7 @@ import { TEAM_KNOWLEDGE_BASE } from "@/data/teamKnowledgeBase";
 interface CourseCatalogHomeProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
+  quizAnswersByModule: Record<string, Record<string, number>>;
   onOpenModule: (moduleId: string, unitId?: string, planId?: string) => void;
   onApplyPlanPresetAll: (preset: "double" | "short" | "workshop" | "self") => void;
   onOpenKnowledgeBase: (moduleCode?: string) => void;
@@ -40,6 +44,7 @@ interface CourseCatalogHomeProps {
 export default function CourseCatalogHome({
   workspaceState,
   completedLabIds,
+  quizAnswersByModule,
   onOpenModule,
   onApplyPlanPresetAll,
   onOpenKnowledgeBase,
@@ -321,6 +326,32 @@ export default function CourseCatalogHome({
                 </button>
               );
             })}
+            {workspaceState.viewMode === "instructor" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const md = buildFullCourseInstructorHandbookMarkdown(workspaceState);
+                  try {
+                    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `AICodingCourse-全课教师备课手册-${new Date().toISOString().slice(0, 10)}.md`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    void navigator.clipboard?.writeText(md);
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
+                title="按当前各模块已选授课方案导出全课 10 模块备课手册 (.md)"
+              >
+                <Download className="w-3.5 h-3.5 text-gemini-purple" />
+                <span>导出全课备课手册 (.md)</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -335,6 +366,9 @@ export default function CourseCatalogHome({
             const cleanTitle = mod.title.replace(/^Module \d+:\s*/i, "");
             const modLabsDone = mod.labIds.filter((lid) => completedLabIds.includes(lid)).length;
             const teachingPkg = getModuleTeachingPackage(mod.id);
+            const modQuiz = MODULE_QUIZZES[mod.order];
+            const modQuizAnswers = quizAnswersByModule[String(mod.order)] || {};
+            const modQuizSummary = modQuiz ? getQuizReviewSummary(modQuiz, modQuizAnswers) : null;
 
             return (
               <article
@@ -415,7 +449,10 @@ export default function CourseCatalogHome({
                       {stats.totalCount} 单元
                     </span>
                     <span className="text-slate-400">
-                      沙盘 {modLabsDone}/{mod.labIds.length} · 资源 {mod.resourceIds.length}
+                      沙盘 {modLabsDone}/{mod.labIds.length}
+                      {modQuiz && modQuizSummary
+                        ? ` · 测验 ${modQuizSummary.correctCount}/${modQuiz.questions.length}`
+                        : ""}
                     </span>
                   </div>
 

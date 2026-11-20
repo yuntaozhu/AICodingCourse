@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookMarked,
   Check,
@@ -16,6 +16,7 @@ import { COURSE_MODULE_RECORDS, getModuleRecordById } from "@/data/courseUnitsMo
 import {
   buildWorkspaceMarkdownExport,
   clearAllCourseLearningData,
+  loadAllQuizAnswers,
   loadWorkspaceState,
   saveWorkspaceState,
   type CourseWorkspaceState,
@@ -51,16 +52,31 @@ export default function CourseSystemApp({
   const [completedLabIds, setCompletedLabIds] = useState<string[]>(() =>
     getCompletedLabIds(loadAllLabDodProgress())
   );
+  const [quizAnswersByModule, setQuizAnswersByModule] = useState<
+    Record<string, Record<string, number>>
+  >(() => loadAllQuizAnswers());
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportedFeedback, setExportedFeedback] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollWorkspaceTop = useCallback(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
     const syncLabs = () => setCompletedLabIds(getCompletedLabIds(loadAllLabDodProgress()));
+    const syncQuizzes = () => setQuizAnswersByModule(loadAllQuizAnswers());
+    const handleStorage = () => {
+      syncLabs();
+      syncQuizzes();
+    };
     window.addEventListener("course:lab-progress-updated", syncLabs);
-    window.addEventListener("storage", syncLabs);
+    window.addEventListener("course:quiz-progress-updated", syncQuizzes);
+    window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener("course:lab-progress-updated", syncLabs);
-      window.removeEventListener("storage", syncLabs);
+      window.removeEventListener("course:quiz-progress-updated", syncQuizzes);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
@@ -82,13 +98,13 @@ export default function CourseSystemApp({
       }));
     }
     setSubView("module");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWorkspaceTop();
   };
 
   const handleOpenKnowledgeBase = (moduleCode?: string) => {
     setKbModuleFilter(moduleCode || "ALL");
     setSubView("knowledge");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWorkspaceTop();
   };
 
   const handleSelectPlan = (moduleId: string, planId: string) => {
@@ -207,7 +223,7 @@ export default function CourseSystemApp({
   };
 
   const handleExportMarkdown = async () => {
-    const md = buildWorkspaceMarkdownExport(workspaceState);
+    const md = buildWorkspaceMarkdownExport(workspaceState, quizAnswersByModule);
     try {
       const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -234,14 +250,21 @@ export default function CourseSystemApp({
   const handleConfirmClearAll = () => {
     const fresh = clearAllCourseLearningData();
     setWorkspaceState(fresh);
+    setQuizAnswersByModule({});
+    setActiveModuleId("m1");
+    setActiveUnitId(undefined);
     setConfirmClear(false);
     setSubView("catalog");
+    scrollWorkspaceTop();
   };
 
   const activeModuleRecord = getModuleRecordById(activeModuleId);
 
   return (
-    <div className="h-screen w-screen overflow-y-auto bg-[#020205] text-slate-200 custom-scrollbar">
+    <div
+      ref={scrollContainerRef}
+      className="h-screen w-screen overflow-y-auto bg-[#020205] text-slate-200 custom-scrollbar"
+    >
       {/* Sticky Course System Top Navigation */}
       <header className="sticky top-0 z-30 bg-[#070a12]/95 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
@@ -386,6 +409,7 @@ export default function CourseSystemApp({
           <CourseCatalogHome
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
+            quizAnswersByModule={quizAnswersByModule}
             onOpenModule={handleOpenModule}
             onApplyPlanPresetAll={handleApplyPlanPresetAll}
             onOpenKnowledgeBase={handleOpenKnowledgeBase}
@@ -411,6 +435,7 @@ export default function CourseSystemApp({
             onToggleViewMode={handleToggleViewMode}
             onOpenKnowledgeBase={handleOpenKnowledgeBase}
             onSwitchToReveal={onSwitchToReveal}
+            onScrollTop={scrollWorkspaceTop}
           />
         )}
 

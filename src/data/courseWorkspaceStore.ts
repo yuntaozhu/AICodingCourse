@@ -10,9 +10,12 @@ import {
 } from "./labPracticeEngine";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
+  KNOWLEDGE_STATUS_LABELS,
   type KnowledgeCategory,
   type KnowledgeModuleCode,
+  type TeamKnowledgeEntry,
 } from "./teamKnowledgeBase";
+import { getQuizReviewSummary, MODULE_QUIZZES } from "./moduleQuizzes";
 
 export type CourseViewMode = "learner" | "instructor";
 
@@ -102,6 +105,20 @@ export function loadWorkspaceState(): CourseWorkspaceState {
   }
 }
 
+export function loadAllQuizAnswers(): Record<string, Record<string, number>> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(QUIZ_ANSWERS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, Record<string, number>>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 export function saveWorkspaceState(state: CourseWorkspaceState): void {
   if (typeof window === "undefined") return;
   try {
@@ -181,7 +198,10 @@ export function getCourseOverallStats(state: CourseWorkspaceState): {
   };
 }
 
-export function buildWorkspaceMarkdownExport(state: CourseWorkspaceState): string {
+export function buildWorkspaceMarkdownExport(
+  state: CourseWorkspaceState,
+  quizAnswersByModule: Record<string, Record<string, number>> = loadAllQuizAnswers()
+): string {
   const overall = getCourseOverallStats(state);
   const dateStr = new Date().toISOString().slice(0, 10);
 
@@ -205,26 +225,32 @@ export function buildWorkspaceMarkdownExport(state: CourseWorkspaceState): strin
     for (const unit of mod.units) {
       const note = state.practiceNotes[unit.id];
       const dodChecked = state.dodCheckedByUnit[unit.id] || [];
-      if (
-        note &&
-        (note.artifactDraft.trim().length > 0 || note.reflectionNote.trim().length > 0)
-      ) {
+      const hasNoteText = Boolean(
+        note && (note.artifactDraft.trim().length > 0 || note.reflectionNote.trim().length > 0)
+      );
+      const hasTransferTier = Boolean(note?.selectedTransferTier);
+      const hasDodProgress = dodChecked.length > 0;
+
+      if (hasNoteText || hasTransferTier || hasDodProgress) {
         hasPractice = true;
         lines.push(`### ${mod.code} · ${unit.title}`);
         lines.push(
           `- 完成状态：${state.completedUnitIds[unit.id] ? "已完成" : "进行中"} | 完成标准勾选：${dodChecked.length}/${unit.completionCriteria.length}`
         );
-        if (note.selectedTransferTier) {
+        if (note?.selectedTransferTier) {
           lines.push(`- 选定课后迁移档位：${note.selectedTransferTier}`);
         }
-        if (note.artifactDraft.trim()) {
+        if (dodChecked.length > 0) {
+          lines.push(`- 已勾选验收项：${dodChecked.join("；")}`);
+        }
+        if (note?.artifactDraft.trim()) {
           lines.push(``);
           lines.push(`#### 学员产物草稿`);
           lines.push("```markdown");
           lines.push(note.artifactDraft.trim());
           lines.push("```");
         }
-        if (note.reflectionNote.trim()) {
+        if (note?.reflectionNote.trim()) {
           lines.push(``);
           lines.push(`#### 复盘与问题记录`);
           lines.push(note.reflectionNote.trim());
@@ -263,5 +289,200 @@ export function buildWorkspaceMarkdownExport(state: CourseWorkspaceState): strin
     }
   }
 
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## 三、各模块巩固测验成绩汇总`);
+  lines.push(``);
+
+  let hasQuiz = false;
+  for (const mod of COURSE_MODULE_RECORDS) {
+    const quiz = MODULE_QUIZZES[mod.order];
+    const answers = quizAnswersByModule[String(mod.order)] || {};
+    if (quiz && Object.keys(answers).length > 0) {
+      hasQuiz = true;
+      const summary = getQuizReviewSummary(quiz, answers);
+      lines.push(
+        `- ${mod.code} (${quiz.moduleTitle})：已答 ${summary.answeredCount}/${quiz.questions.length} 题，正确 ${summary.correctCount} 题（正确率 ${summary.accuracyPct}%）`
+      );
+    }
+  }
+
+  if (!hasQuiz) {
+    lines.push(`> 暂无已保存的模块测验作答记录。`);
+  }
+  lines.push(``);
+
   return lines.join("\n");
 }
+
+export function buildInstructorLessonPlanMarkdown(
+  moduleRecord: CourseModuleRecord,
+  planId?: string
+): string {
+  const plan =
+    moduleRecord.deliveryPlans.find((p) => p.id === planId) || moduleRecord.deliveryPlans[0];
+  const units = getUnitsForPlan(moduleRecord, plan?.id);
+  const totalMinutes = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
+
+  const lines: string[] = [
+    `# ${moduleRecord.code} 教师备课讲义 · ${moduleRecord.title}`,
+    ``,
+    `- 所选授课方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"}`,
+    `- 适用对象：${plan?.targetAudience || moduleRecord.audience.join(" / ")}`,
+    `- 预计授课总时长：约 ${totalMinutes} 分钟（共 ${units.length} 个教学单元）`,
+    `- 先修要求：${moduleRecord.prerequisites.join("；")}`,
+    `- 边界提示：${moduleRecord.boundaryNote}`,
+    ``,
+    `## 学习目标`,
+    ...moduleRecord.learningObjectives.map((obj, idx) => `${idx + 1}. ${obj}`),
+    ``,
+    `---`,
+    ``,
+    `## 分单元备课指南与参考答案`,
+    ``,
+  ];
+
+  units.forEach((unit, idx) => {
+    lines.push(`### ${String(idx + 1).padStart(2, "0")}. ${unit.title}（约 ${unit.estimatedMinutes} 分钟）`);
+    lines.push(`- 单元目标：${unit.learningObjective}`);
+    lines.push(`- 组织提示：${unit.teacherMaterials.teachingTips}`);
+    lines.push(`- 时间裁剪建议：${unit.teacherMaterials.timeTrimNote}`);
+
+    if (unit.demoSteps && unit.demoSteps.length > 0) {
+      lines.push(`- 演示步骤：`);
+      for (const st of unit.demoSteps) {
+        lines.push(`  - **${st.phase}**：${st.action} ｜ 人类把关：${st.humanControl}`);
+      }
+    }
+
+    if (unit.teacherMaterials.referenceAnswers.length > 0) {
+      lines.push(`- 参考答案与可接受解法：`);
+      for (const ans of unit.teacherMaterials.referenceAnswers) {
+        lines.push(`  - ${ans}`);
+      }
+    }
+
+    if (unit.teacherMaterials.commonPitfalls.length > 0) {
+      lines.push(`- 课堂翻车预警：`);
+      for (const pit of unit.teacherMaterials.commonPitfalls) {
+        lines.push(`  - ${pit}`);
+      }
+    }
+
+    lines.push(``);
+  });
+
+  return lines.join("\n");
+}
+
+export function buildFullCourseInstructorHandbookMarkdown(
+  state: CourseWorkspaceState
+): string {
+  let totalCourseMinutes = 0;
+  let totalCourseUnits = 0;
+
+  const moduleSections: string[] = [];
+
+  for (const mod of COURSE_MODULE_RECORDS) {
+    const planId = state.selectedPlanByModule[mod.id];
+    const plan =
+      mod.deliveryPlans.find((p) => p.id === planId) || mod.deliveryPlans[0];
+    const units = getUnitsForPlan(mod, plan?.id);
+    const mins = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
+    totalCourseMinutes += mins;
+    totalCourseUnits += units.length;
+
+    moduleSections.push(
+      [
+        `## ${mod.code} · ${mod.title}`,
+        `- 方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"} ｜ 单元数：${units.length} ｜ 预计：${mins} 分钟`,
+        `- 先修：${mod.prerequisites.join("；")}`,
+        `- 边界：${mod.boundaryNote}`,
+        ``,
+        ...units.map(
+          (u, idx) =>
+            `${idx + 1}. **${u.title}** (${u.estimatedMinutes}m) — 组织提示：${u.teacherMaterials.teachingTips} ｜ 裁剪：${u.teacherMaterials.timeTrimNote}`
+        ),
+        ``,
+      ].join("\n")
+    );
+  }
+
+  return [
+    `# AICodingCourse 全课 10 模块教师备课总手册`,
+    ``,
+    `- 生成日期：${new Date().toISOString().slice(0, 10)}`,
+    `- 覆盖模块：${COURSE_MODULE_RECORDS.length} 个模块 ｜ 合计单元：${totalCourseUnits} 个 ｜ 总预计课时：约 ${totalCourseMinutes} 分钟`,
+    ``,
+    `---`,
+    ``,
+    ...moduleSections,
+  ].join("\n");
+}
+
+export function buildKnowledgeBaseMarkdownExport(options: {
+  builtInEntries: TeamKnowledgeEntry[];
+  customEntries: CustomKnowledgeDraft[];
+  filterSummary?: string;
+}): string {
+  const { builtInEntries, customEntries, filterSummary } = options;
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const lines: string[] = [
+    `# AICodingCourse 工程知识库资产导出`,
+    ``,
+    `- 导出日期：${dateStr}`,
+    `- 筛选条件：${filterSummary || "全部条目"}`,
+    `- 仓库内置条目：${builtInEntries.length} 条 ｜ 个人/团队自建草稿：${customEntries.length} 条`,
+    ``,
+    `---`,
+    ``,
+    `## 一、个人/团队自建知识草稿`,
+    ``,
+  ];
+
+  if (customEntries.length === 0) {
+    lines.push(`> 当前筛选条件下无自建知识草稿。`);
+    lines.push(``);
+  } else {
+    for (const item of customEntries) {
+      lines.push(
+        `### [${item.moduleCode}] ${item.title}（${KNOWLEDGE_CATEGORY_LABELS[item.category]}）`
+      );
+      lines.push(`- 适用范围：${item.scope} ｜ 更新时间：${item.updatedAt}`);
+      if (item.cautionNote.trim()) {
+        lines.push(`- 注意事项：${item.cautionNote.trim()}`);
+      }
+      lines.push("```markdown");
+      lines.push(item.content.trim());
+      lines.push("```");
+      lines.push(``);
+    }
+  }
+
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## 二、课程内置团队工程知识条目`);
+  lines.push(``);
+
+  if (builtInEntries.length === 0) {
+    lines.push(`> 当前筛选条件下无内置知识条目。`);
+    lines.push(``);
+  } else {
+    for (const entry of builtInEntries) {
+      lines.push(
+        `### [${entry.modules.join("/")}] ${entry.title}（${KNOWLEDGE_CATEGORY_LABELS[entry.category]} · ${KNOWLEDGE_STATUS_LABELS[entry.validationStatus]}）`
+      );
+      lines.push(`- 适用范围：${entry.scope}`);
+      lines.push(`- 来源与维护：${entry.source} · ${entry.owner} · 版本 ${entry.version} · 更新 ${entry.updatedAt}`);
+      lines.push(`- 警示与边界：${entry.antiPatternOrWarning}`);
+      lines.push("```markdown");
+      lines.push(entry.copyableSnippet.trim());
+      lines.push("```");
+      lines.push(``);
+    }
+  }
+
+  return lines.join("\n");
+}
+

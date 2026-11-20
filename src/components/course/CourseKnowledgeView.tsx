@@ -6,11 +6,15 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Download,
   FlaskConical,
   Plus,
   Search,
 } from "lucide-react";
-import type { CustomKnowledgeDraft } from "@/data/courseWorkspaceStore";
+import {
+  buildKnowledgeBaseMarkdownExport,
+  type CustomKnowledgeDraft,
+} from "@/data/courseWorkspaceStore";
 import {
   KB_GOVERNANCE_RULES,
   KNOWLEDGE_CATEGORY_LABELS,
@@ -129,14 +133,51 @@ export default function CourseKnowledgeView({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAddForm((prev) => !prev)}
-          className="px-4 py-2.5 rounded-xl bg-gemini-purple text-white text-xs sm:text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{showAddForm ? "收起新增表单" : "新增我的知识沉淀"}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              const summaryParts = [
+                moduleFilter === "ALL" ? "全部模块" : `模块 ${moduleFilter}`,
+                categoryFilter === "ALL" ? "全部类别" : KNOWLEDGE_CATEGORY_LABELS[categoryFilter],
+                statusFilter === "ALL" ? "全部核验态" : KNOWLEDGE_STATUS_LABELS[statusFilter],
+                searchQuery.trim() ? `关键词 "${searchQuery.trim()}"` : "",
+              ].filter(Boolean);
+              const md = buildKnowledgeBaseMarkdownExport({
+                builtInEntries: filteredBuiltIn,
+                customEntries: filteredCustom,
+                filterSummary: summaryParts.join(" · "),
+              });
+              try {
+                const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `AICodingCourse-知识库资产-${new Date().toISOString().slice(0, 10)}.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              } catch {
+                void navigator.clipboard?.writeText(md);
+              }
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-slate-200 text-xs sm:text-sm font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+            title="将当前筛选出的团队与自建知识条目导出为 Markdown"
+          >
+            <Download className="w-4 h-4 text-gemini-cyan" />
+            <span>导出筛选知识 (.md)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddForm((prev) => !prev)}
+            className="px-4 py-2.5 rounded-xl bg-gemini-purple text-white text-xs sm:text-sm font-semibold hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{showAddForm ? "收起新增表单" : "新增我的知识沉淀"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Add Learner KB Draft Form */}
@@ -459,6 +500,27 @@ export default function CourseKnowledgeView({
           );
         })}
       </section>
+
+      {filteredBuiltIn.length === 0 && filteredCustom.length === 0 && (
+        <div className="p-8 rounded-2xl bg-[#0b0f19] border border-white/10 text-center space-y-3">
+          <div className="text-sm font-semibold text-white">当前筛选条件下暂无匹配的知识条目</div>
+          <p className="text-xs text-slate-400">
+            可尝试清除搜索关键词，或将模块、分类与核验状态恢复为“全部”。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setModuleFilter("ALL");
+              setCategoryFilter("ALL");
+              setStatusFilter("ALL");
+              setSearchQuery("");
+            }}
+            className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer"
+          >
+            重置全部筛选条件
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -621,9 +621,66 @@ test("courseWorkspaceStore computes progress stats and exports clean Markdown of
   assert.equal(overall.savedPracticeCount, 1);
   assert.equal(overall.customKbCount, 1);
 
-  const md = buildWorkspaceMarkdownExport(state);
+  const transferUnitId = shortUnits[shortUnits.length - 1];
+  if (transferUnitId && transferUnitId !== shortUnits[0]) {
+    state.dodCheckedByUnit[transferUnitId] = ["确认任务客观验收方法"];
+    state.practiceNotes[transferUnitId] = {
+      artifactDraft: "",
+      reflectionNote: "",
+      selectedTransferTier: "B 模块实战",
+      updatedAt: "2026-11-19",
+    };
+  }
+
+  const md = buildWorkspaceMarkdownExport(state, {
+    "1": {
+      "m1-q1": 1,
+      "m1-q2": 0,
+      "m1-q3": 2,
+      "m1-q4": 1,
+    },
+  });
   assert.ok(md.includes("AICodingCourse 学员学习产物与知识沉淀导出"));
   assert.ok(md.includes("Intent: 验证 Plan 模式边界"));
   assert.ok(md.includes("先锁文件白名单再让 AI 动手。"));
   assert.ok(md.includes("Plan 白名单模板"));
+  assert.ok(md.includes("确认任务客观验收方法"));
+  assert.ok(md.includes("B 模块实战"));
+  assert.ok(md.includes("各模块巩固测验成绩汇总"));
+  assert.ok(md.includes("M1"));
+
+  const { buildInstructorLessonPlanMarkdown } = await import("../src/data/courseWorkspaceStore");
+  const m1PrepShort = buildInstructorLessonPlanMarkdown(m1, "m1-plan-short");
+  assert.ok(m1PrepShort.includes("短讲精要"));
+  assert.ok(m1PrepShort.includes("分单元备课指南与参考答案"));
+  assert.ok(m1PrepShort.includes("参考答案与可接受解法"));
+
+  const m4 = getModuleRecordById("m4")!;
+  const m4Prep = buildInstructorLessonPlanMarkdown(m4, "m4-plan-workshop");
+  assert.ok(m4Prep.includes("M4 教师备课讲义"));
+  assert.ok(m4Prep.includes("工作坊实战"));
+
+  const {
+    buildFullCourseInstructorHandbookMarkdown,
+    buildKnowledgeBaseMarkdownExport,
+  } = await import("../src/data/courseWorkspaceStore");
+  const { TEAM_KNOWLEDGE_BASE } = await import("../src/data/teamKnowledgeBase");
+
+  const fullHandbook = buildFullCourseInstructorHandbookMarkdown(state);
+  assert.ok(fullHandbook.includes("AICodingCourse 全课 10 模块教师备课总手册"));
+  assert.ok(fullHandbook.includes("短讲精要"));
+  for (let i = 1; i <= 10; i += 1) {
+    assert.ok(fullHandbook.includes(`## M${i} ·`), `Handbook missing M${i}`);
+  }
+
+  const kbMd = buildKnowledgeBaseMarkdownExport({
+    builtInEntries: TEAM_KNOWLEDGE_BASE.slice(0, 2),
+    customEntries: state.customKbEntries,
+    filterSummary: "测试筛选 M1",
+  });
+  assert.ok(kbMd.includes("AICodingCourse 工程知识库资产导出"));
+  assert.ok(kbMd.includes("Plan 白名单模板"));
+  assert.ok(kbMd.includes(TEAM_KNOWLEDGE_BASE[0].title));
+  assert.ok(kbMd.includes("测试筛选 M1"));
 });
+
