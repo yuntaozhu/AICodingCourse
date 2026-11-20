@@ -5,10 +5,12 @@ import {
   CheckCircle2,
   Compass,
   FileCode2,
+  GraduationCap,
   Layers,
   Play,
   Presentation as PresentationIcon,
 } from "lucide-react";
+import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import {
   COURSE_LABS,
   LEARNER_PATHS,
@@ -30,6 +32,7 @@ interface CourseCatalogHomeProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
   onOpenModule: (moduleId: string, unitId?: string, planId?: string) => void;
+  onApplyPlanPresetAll: (preset: "double" | "short" | "workshop" | "self") => void;
   onOpenKnowledgeBase: (moduleCode?: string) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string }) => void;
 }
@@ -38,6 +41,7 @@ export default function CourseCatalogHome({
   workspaceState,
   completedLabIds,
   onOpenModule,
+  onApplyPlanPresetAll,
   onOpenKnowledgeBase,
   onSwitchToReveal,
 }: CourseCatalogHomeProps) {
@@ -272,11 +276,52 @@ export default function CourseCatalogHome({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <Layers className="w-4 h-4 text-gemini-purple" />
-            <span>课程模块目录（M1 完整结构样板 · M2–M10 兼容适配）</span>
+            <span>课程模块目录（全 10 模块均配备 10 类教学闭环单元）</span>
           </div>
           <span className="text-xs font-mono text-slate-400">
             每个模块均支持短讲 / 工作坊 / 双课时 / 自主学习方案动态切换
           </span>
+        </div>
+
+        {/* Batch Delivery Rhythm Preset Bar */}
+        <div className="p-3 rounded-xl bg-[#0b0f19] border border-white/10 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-mono text-slate-300">
+            全局授课/学习方案一键预设：
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { id: "double", label: "双课时完整版" },
+                { id: "short", label: "短讲精要" },
+                { id: "workshop", label: "工作坊实战" },
+                { id: "self", label: "自主学习" },
+              ] as const
+            ).map((preset) => {
+              const allMatch = COURSE_MODULE_RECORDS.every((m) => {
+                const chosen =
+                  workspaceState.selectedPlanByModule[m.id] || m.deliveryPlans[0]?.id;
+                return chosen?.endsWith(`-plan-${preset.id}`);
+              });
+              const totalMinutes = COURSE_MODULE_RECORDS.reduce((sum, m) => {
+                const plan = m.deliveryPlans.find((p) => p.id.endsWith(`-plan-${preset.id}`));
+                return sum + (plan ? getDeliveryPlanMinutes(m, plan) : 0);
+              }, 0);
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onApplyPlanPresetAll(preset.id)}
+                  className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                    allMatch
+                      ? "bg-gemini-cyan/20 border-gemini-cyan text-white font-semibold"
+                      : "bg-white/5 border-white/10 text-slate-300 hover:border-white/25 hover:text-white"
+                  }`}
+                >
+                  {preset.label} · 约 {totalMinutes}m
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,6 +334,7 @@ export default function CourseCatalogHome({
             const stats = getModuleCompletionStats(mod, workspaceState, activePlan?.id);
             const cleanTitle = mod.title.replace(/^Module \d+:\s*/i, "");
             const modLabsDone = mod.labIds.filter((lid) => completedLabIds.includes(lid)).length;
+            const teachingPkg = getModuleTeachingPackage(mod.id);
 
             return (
               <article
@@ -307,8 +353,8 @@ export default function CourseCatalogHome({
                     <span className="text-gemini-cyan font-semibold">
                       {mod.code} ·{" "}
                       {mod.exemplarLevel === "complete-exemplar"
-                        ? "MVP 完整单元样板"
-                        : "兼容课程模块"}
+                        ? "专项精修样板"
+                        : "全闭环教学包映射"}
                     </span>
                     <span className="text-slate-400">
                       {mod.units.length} 单元 ·{" "}
@@ -346,6 +392,19 @@ export default function CourseCatalogHome({
                   <div className="text-[11px] text-slate-400 font-mono">
                     可选授课方案：{mod.deliveryPlans.map((p) => p.shortLabel).join(" / ")}
                   </div>
+
+                  {/* Instructor Prep Quick Strip (Strictly hidden in Learner View) */}
+                  {workspaceState.viewMode === "instructor" && teachingPkg && (
+                    <div className="p-2.5 rounded-xl bg-gemini-purple/10 border border-gemini-purple/35 text-[11px] space-y-1">
+                      <div className="font-mono text-purple-200 inline-flex items-center gap-1 font-semibold">
+                        <GraduationCap className="w-3.5 h-3.5 text-gemini-purple" />
+                        <span>教师备课速览 · 核心问题：{teachingPkg.coreQuestion}</span>
+                      </div>
+                      <div className="text-slate-300 leading-relaxed">
+                        时间裁剪建议：{teachingPkg.trimAndMergeNote}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress + Actions */}

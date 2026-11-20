@@ -504,12 +504,35 @@ test("courseUnitsModel provides M1 10-unit exemplar, M2-M10 compatible adapter, 
   const vagueVerbRegex = /理解|认识|掌握/;
   const realisticSecretRegex = /(?:ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})/;
 
+  const coreRequiredTypes = [
+    "concept",
+    "ai-vs-trad",
+    "instructor-demo",
+    "failure-case",
+    "collab-practice",
+    "discussion",
+    "quiz",
+    "knowledge-base",
+    "transfer-task",
+  ] as const;
+
   for (const mod of COURSE_MODULE_RECORDS) {
     if (mod.id !== "m1") {
       assert.equal(mod.exemplarLevel, "compatible-adapter");
     }
-    assert.ok(mod.units.length >= 6, `${mod.id} should have >=6 units`);
+    assert.ok(mod.units.length >= 9, `${mod.id} should have >=9 units`);
     assert.ok(mod.deliveryPlans.length >= 4, `${mod.id} should have 4 configurable plans`);
+
+    const modTypes = new Set(mod.units.map((u) => u.type));
+    for (const requiredType of coreRequiredTypes) {
+      assert.ok(modTypes.has(requiredType), `${mod.id} missing unit type '${requiredType}'`);
+    }
+    const sandboxCount = mod.units.filter((u) => u.type === "sandbox").length;
+    assert.equal(
+      sandboxCount,
+      mod.labIds.length,
+      `${mod.id} sandbox units (${sandboxCount}) must match mod.labIds (${mod.labIds.length})`
+    );
 
     const unitIds = new Set(mod.units.map((u) => u.id));
     for (const plan of mod.deliveryPlans) {
@@ -543,6 +566,16 @@ test("courseUnitsModel provides M1 10-unit exemplar, M2-M10 compatible adapter, 
       }
     }
   }
+
+  const artifactFilenames = COURSE_MODULE_RECORDS.flatMap((m) =>
+    m.units.filter((u) => u.learnerArtifact).map((u) => u.learnerArtifact!.filename)
+  );
+  assert.equal(artifactFilenames.length, 10, "Each of M1-M10 should expose a starter artifact");
+  assert.equal(
+    new Set(artifactFilenames).size,
+    10,
+    "All 10 modules should have distinct starter artifact filenames"
+  );
 });
 
 test("courseWorkspaceStore computes progress stats and exports clean Markdown offline", async () => {

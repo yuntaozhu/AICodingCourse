@@ -8,6 +8,7 @@ import {
   Copy,
   FlaskConical,
   Plus,
+  Search,
 } from "lucide-react";
 import type { CustomKnowledgeDraft } from "@/data/courseWorkspaceStore";
 import {
@@ -38,15 +39,22 @@ export default function CourseKnowledgeView({
   const [moduleFilter, setModuleFilter] = useState<string>(initialModuleFilter || "ALL");
   const [categoryFilter, setCategoryFilter] = useState<KnowledgeCategory | "ALL">("ALL");
   const [statusFilter, setStatusFilter] = useState<KnowledgeValidationStatus | "ALL">("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
-  const [newModuleCode, setNewModuleCode] = useState<KnowledgeModuleCode>("M1");
+  const [newModuleCode, setNewModuleCode] = useState<KnowledgeModuleCode>(
+    initialModuleFilter !== "ALL" && /^M([1-9]|10)$/.test(initialModuleFilter)
+      ? (initialModuleFilter as KnowledgeModuleCode)
+      : "M1"
+  );
   const [newCategory, setNewCategory] = useState<KnowledgeCategory>("template");
   const [newScope, setNewScope] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newCaution, setNewCaution] = useState("");
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const filteredBuiltIn = useMemo(() => {
     return TEAM_KNOWLEDGE_BASE.filter((item) => {
@@ -55,17 +63,26 @@ export default function CourseKnowledgeView({
       }
       if (categoryFilter !== "ALL" && item.category !== categoryFilter) return false;
       if (statusFilter !== "ALL" && item.validationStatus !== statusFilter) return false;
+      if (normalizedQuery) {
+        const haystack =
+          `${item.title} ${item.summary} ${item.scope} ${item.copyableSnippet} ${item.owner}`.toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [moduleFilter, categoryFilter, statusFilter]);
+  }, [moduleFilter, categoryFilter, statusFilter, normalizedQuery]);
 
   const filteredCustom = useMemo(() => {
     return customEntries.filter((item) => {
       if (moduleFilter !== "ALL" && item.moduleCode !== moduleFilter) return false;
       if (categoryFilter !== "ALL" && item.category !== categoryFilter) return false;
+      if (normalizedQuery) {
+        const haystack = `${item.title} ${item.scope} ${item.content} ${item.cautionNote}`.toLowerCase();
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [customEntries, moduleFilter, categoryFilter]);
+  }, [customEntries, moduleFilter, categoryFilter, normalizedQuery]);
 
   const handleCopyText = async (id: string, text: string) => {
     try {
@@ -202,6 +219,18 @@ export default function CourseKnowledgeView({
 
       {/* Filter Toolbar */}
       <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-white/10 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索标题、适用范围、规则正文..."
+            aria-label="搜索知识库条目"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/15 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-gemini-cyan"
+          />
+        </div>
+
         <select
           value={moduleFilter}
           onChange={(e) => setModuleFilter(e.target.value)}

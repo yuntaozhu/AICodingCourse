@@ -623,6 +623,113 @@ const M1_DELIVERY_PLANS: DeliveryPlan[] = [
   },
 ];
 
+const MODULE_STARTER_ARTIFACTS: Record<string, UnitLearnerArtifactSpec> = {
+  m2: {
+    title: "M2 上下文白名单与 .cursorignore 边界卡",
+    filename: "CONTEXT_SCOPE_CARD.md",
+    templateContent: `## 本次任务挂载范围（Context Allowlist）
+- 核心入口文件: @src/features/checkout/service.ts @src/features/checkout/types.ts
+- 显式排除路径（.cursorignore）: dist/ node_modules/ legacy-v1/ *.log
+
+## 噪音过滤检查
+- [ ] 已关闭无关历史标签页与废弃草稿文件
+- [ ] 修改前已通过「只读架构测绘 Prompt」核对真实函数签名
+- [ ] 跨文件改动不超过 5 个核心模块；超出则拆成子任务`,
+  },
+  m3: {
+    title: "M3 独立产品垂直切片与接口契约卡",
+    filename: "PRODUCT_SLICE_SPEC.md",
+    templateContent: `## 垂直切片范围（只保留 1 个可端到端跑通闭环）
+- 用户流程: 表单提交 -> Zod 服务端校验 -> 本地/服务端持久化 -> 错误提示回显
+- 严禁前端直连: 任何真实数据库管理员密钥或第三方支付 Secret 严禁放入 VITE_*
+
+## 接口异常契约
+- 400 Bad Request: 字段校验失败返回结构化 fieldErrors
+- 401/403: 未认证或越权操作拒绝写库
+- 验证命令: npx tsc --noEmit && curl 异常与正常状态码`,
+  },
+  m4: {
+    title: "M4 作用域规则与最小特权 MCP 配置骨架",
+    filename: "20-api-and-mcp-guardrails.mdc",
+    templateContent: `---
+description: 约束服务端路由校验与 MCP 只读最小特权访问
+globs: ["src/server/**/*.ts", ".cursor/mcp.json"]
+alwaysApply: false
+---
+- 所有外部输入必须经过 Schema 校验，严禁将 req.body 直接写入存储
+- .cursor/mcp.json 严禁出现明文 Token，统一使用 \${env:VAR_NAME} 引用
+- 涉及写操作工具默认开启人工确认闸门，不配置生产库删除权限`,
+  },
+  m5: {
+    title: "M5 防假绿 DoD 验证门禁清单",
+    filename: "DOD_VERIFICATION_GATE.md",
+    templateContent: `## 防 Reward Hacking 审查
+- [ ] 严禁通过 skip 测试、删断言或放宽 any 类型绕过报错
+- [ ] 至少包含 1 个边界错误输入用例（空值 / 非法格式 / 越权状态）
+- [ ] 自愈循环最多尝试 3 轮：若仍失败立即暂停并核查根因
+
+## 退出前必跑客观命令
+1. npx tsc --noEmit
+2. npm run lint
+3. npm test`,
+  },
+  m6: {
+    title: "M6 异步 Agent 分支隔离与 Bugbot 审查卡",
+    filename: "BUGBOT_REVIEW_CHECKLIST.md",
+    templateContent: `## 异步 Agent 派发前隔离检查
+- 任务分支: feat/<isolated-slice>（严禁直接在 main 分支运行异步修改）
+- 权限收窄: 禁止自动推送或修改部署密钥与生产配置
+
+## 人工 Diff & Bugbot 二次确认
+- [ ] 运行 git diff --stat 检查改动文件数与意外改写
+- [ ] 逐条核对 Bugbot 安全/逻辑告警并排除误报
+- [ ] 验证构建与测试通过后再发起合并`,
+  },
+  m7: {
+    title: "M7 独立开发者 ROI 复利与债务止损卡",
+    filename: "ROI_DECISION_MATRIX.md",
+    templateContent: `## 本周投入-收益评估
+- 重复踩坑问题: （例：AI 反复改坏日期时区转换）
+- 复利沉淀动作: 写入 .cursor/rules/15-date-tz.mdc，后续 0 重复提醒
+
+## 上线前止损红线（不可跨过）
+- [ ] 未写端到端冒烟验证的支付/鉴权改动禁止上线
+- [ ] 大型重构超过 2 轮无收敛立即回滚拆分，不继续堆砌修复补丁`,
+  },
+  m8: {
+    title: "M8 AI Studio 原型迁移与 Agent Harness 检查单",
+    filename: "HARNESS_MIGRATION_RUNBOOK.md",
+    templateContent: `## 原型迁入工程仓库 4 步闭环
+1. 环境与依赖对齐: 核对 package.json 与 .env.example（密钥仅放服务端）
+2. 上下文压缩（ACC）: 长对话仅保留阶段契约摘要，丢弃冗余试错日志
+3. 替换模拟桩: 明确标出本地 Mock 与真实外部 API 的边界差异
+4. 验收命令: npm run lint && npx tsc --noEmit && npm run build`,
+  },
+  m9: {
+    title: "M9 全栈三层架构决策记录 (ADR) 与排错卡",
+    filename: "ARCH_BOUNDARY_ADR.md",
+    templateContent: `## 架构决策记录（ADR）
+- 问题场景: （例：前端高频交互状态 vs 服务端权威账本边界划分）
+- 选型结论: 前端负责交互展示与乐观反馈；金额/权限判定严格留在服务端
+- 放弃方案与代价: 放弃纯前端直写规则，减少后期越权返工
+
+## 高频报错解码入口
+- 跨域 CORS / 401 / 500 -> 先看 Network 状态码与服务端 stderr，再定位路由与环境变量`,
+  },
+  m10: {
+    title: "M10 高信噪比 UI 视觉参考拆解与组件契约",
+    filename: "UI_VISUAL_TEARDOWN.md",
+    templateContent: `## 视觉结构拆解（禁止纯形容词提示）
+- 布局骨架: （例：顶部固定操作栏 + 左侧 4 列导航 + 右侧 8 列主内容区）
+- 色彩与对比: 深色底板 #0b0f19 + 细边框 white/10 + 主强调色仅用于关键 CTA
+- 反模式红线: 禁止无交互功能的静态彩色胶囊标签堆积；避免过度磨砂弹窗
+
+## 响应式与键盘验收
+- [ ] 移动端 < 640px 无横向溢出
+- [ ] 表单输入与模态框支持键盘导航且不与全局快捷键冲突`,
+  },
+};
+
 function buildCompatibleUnitsForModule(
   mod: CourseModule,
   pkg: ModuleTeachingPackage
@@ -631,6 +738,9 @@ function buildCompatibleUnitsForModule(
   const kbIds = modKbEntries.map((k) => k.id);
   const modLabs = COURSE_LABS.filter((l) => mod.labIds.includes(l.id));
   const quiz = MODULE_QUIZZES[mod.order];
+  const quizSlideOffset = Math.max(0, mod.slideCount - 1);
+  const demoSlideOffset = Math.min(2, quizSlideOffset);
+  const practiceSlideOffset = Math.min(Math.max(1, Math.floor(mod.slideCount / 2)), quizSlideOffset);
 
   const conceptUnit: CourseUnit = {
     id: `${mod.id}-u1-concept`,
@@ -701,28 +811,21 @@ function buildCompatibleUnitsForModule(
   const demoUnit: CourseUnit = {
     id: `${mod.id}-u3-demo`,
     moduleId: mod.id,
-    title: "03 教师演示与失败案例剖析（暴露缺陷 → 纠偏验证）",
+    title: "03 教师演示：暴露缺陷 → 加约束 → 命令验真",
     type: "instructor-demo",
-    learningObjective: `能看懂 ${mod.code} 演示中的典型 AI 缺陷与“看起来对但实际错”陷阱，并学会纠偏提问。`,
+    learningObjective: `能观察并复述 ${mod.code} 演示中从首轮缺陷暴露到补齐约束并验真的完整控制流。`,
     summary: pkg.instructorDemo.targetOutcome,
     contentBlocks: [
       `课前环境准备：${pkg.instructorDemo.prepAndEnv}`,
-      `隐蔽失败陷阱：${pkg.failureModesDeepDive.looksRightButWrong}`,
-      `工具/上下文失效：${pkg.failureModesDeepDive.contextOrToolFailure}`,
+      `无密钥离线替代：${pkg.instructorDemo.noKeyOfflineFallback}`,
     ],
     demoSteps: pkg.instructorDemo.steps,
-    failureAnalysis: {
-      mistakeScenario: pkg.failureModesDeepDive.classicError,
-      rootCause: pkg.failureModesDeepDive.looksRightButWrong,
-      analysisQuestions: pkg.failureModesDeepDive.triageQuestions,
-      fixGuidance: pkg.failureModesDeepDive.remediationRule,
-    },
     relatedResourceIds: mod.resourceIds.slice(0, 2),
     estimatedMinutes: 12,
     completionCriteria: [
       "能指认演示首轮中暴露出的 AI 关键缺陷或风险行为",
       "能复述人工加约束后如何通过客观证据完成验证",
-      "能用 2 个排错诊断问题反问并纠偏 AI 输出",
+      "能说出除默认示范外的 1 种可接受替代工程方案",
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
@@ -736,12 +839,65 @@ function buildCompatibleUnitsForModule(
     },
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
+    revealJump: { slideOffset: demoSlideOffset, label: `查看 Reveal ${mod.code} 示范页` },
+  };
+
+  const failureUnit: CourseUnit = {
+    id: `${mod.id}-u4-failure`,
+    moduleId: mod.id,
+    title: "04 常见错误与失败案例剖析",
+    type: "failure-case",
+    learningObjective: `能辨识 ${mod.code} 中“看起来对但实际错”的高频陷阱与工具失效根因，并写出纠偏规则。`,
+    summary: pkg.failureModesDeepDive.classicError,
+    contentBlocks: [
+      `典型翻车模式：${pkg.failureModesDeepDive.classicError}`,
+      `隐蔽失效特征：${pkg.failureModesDeepDive.looksRightButWrong}`,
+      `工具/上下文故障源：${pkg.failureModesDeepDive.contextOrToolFailure}`,
+    ],
+    failureAnalysis: {
+      mistakeScenario: pkg.failureModesDeepDive.classicError,
+      rootCause: `${pkg.failureModesDeepDive.looksRightButWrong}（工具/上下文因素：${pkg.failureModesDeepDive.contextOrToolFailure}）`,
+      analysisQuestions: pkg.failureModesDeepDive.triageQuestions,
+      fixGuidance: pkg.failureModesDeepDive.remediationRule,
+    },
+    relatedResourceIds: mod.resourceIds.slice(0, 2),
+    estimatedMinutes: 8,
+    completionCriteria: [
+      "能指出本模块最常见的“表面通过但实质存在隐患”的反模式特征",
+      "能独立回答至少 2 个排错诊断问题后再对照参考根因",
+      "能写出 1 条可直接防复发的规则约束或检查门禁",
+    ],
+    knowledgeEntryIds: kbIds,
+    knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
+    teacherMaterials: {
+      teachingTips: "请先让学员在学员视图下独立思考排查问题，再揭晓深层根因与纠偏做法。",
+      referenceAnswers: [
+        `深层根因：${pkg.failureModesDeepDive.looksRightButWrong}`,
+        `防复发纠偏规范：${pkg.failureModesDeepDive.remediationRule}`,
+      ],
+      commonPitfalls: [pkg.failureModesDeepDive.contextOrToolFailure],
+      timeTrimNote: "短讲模式重点展示“看起来对但实际错”的反例对比即可（约 5 分钟）。",
+    },
+    verificationStatus: mod.status,
+    updatedAt: mod.lastReviewedAt,
+  };
+
+  const starterArtifact = MODULE_STARTER_ARTIFACTS[mod.id] || {
+    title: `${mod.code} 标准交付与复盘记录`,
+    filename: `${mod.code}_PRACTICE_DELIVERABLE.md`,
+    templateContent: `# ${mod.title} 练习产物与 Rubric 自检\n\n## 交付物清单\n${mod.deliverables
+      .map((d) => `- ${d}`)
+      .join("\n")}\n\n## Rubric 自查\n${pkg.rubric
+      .map((r) => `- [ ] ${r.dimension}：${r.passCriteria}（证据：${r.evidence}）`)
+      .join("\n")}\n\n## 人工确认边界\n${pkg.exerciseVariants.nonDelegableCheckpoints
+      .map((c) => `- [ ] ${c}`)
+      .join("\n")}`,
   };
 
   const practiceUnit: CourseUnit = {
-    id: `${mod.id}-u4-practice`,
+    id: `${mod.id}-u5-practice`,
     moduleId: mod.id,
-    title: "04 人机协同练习与多维 Rubric 检验",
+    title: "05 人机协同练习与多维 Rubric 检验",
     type: "collab-practice",
     learningObjective: `能按 ${mod.code} 分层练习要求完成人机协作输出，并通过全部 Rubric 与人工审查点检验。`,
     summary: `课堂最小版：${pkg.exerciseVariants.minimalClassroom}`,
@@ -763,19 +919,9 @@ function buildCompatibleUnitsForModule(
       humanResponsibilities: pkg.exerciseVariants.nonDelegableCheckpoints,
       aiResponsibilities: pkg.humanAiSplit.aiCanDraft,
     },
-    learnerArtifact: {
-      title: `${mod.code} 标准交付与复盘记录`,
-      filename: `${mod.code}_PRACTICE_DELIVERABLE.md`,
-      templateContent: `# ${mod.title} 练习产物与 Rubric 自检\n\n## 交付物清单\n${mod.deliverables
-        .map((d) => `- ${d}`)
-        .join("\n")}\n\n## Rubric 自查\n${pkg.rubric
-        .map((r) => `- [ ] ${r.dimension}：${r.passCriteria}（证据：${r.evidence}）`)
-        .join("\n")}\n\n## 人工确认边界\n${pkg.exerciseVariants.nonDelegableCheckpoints
-        .map((c) => `- [ ] ${c}`)
-        .join("\n")}`,
-    },
+    learnerArtifact: starterArtifact,
     relatedResourceIds: mod.resourceIds,
-    estimatedMinutes: 14,
+    estimatedMinutes: 15,
     completionCriteria: pkg.rubric.map((r) => `${r.dimension}：${r.passCriteria}`),
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "将练习产出的规则或清单保留到团队知识库。",
@@ -787,12 +933,13 @@ function buildCompatibleUnitsForModule(
     },
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
+    revealJump: { slideOffset: practiceSlideOffset, label: `打开 Reveal ${mod.code} 实战页` },
   };
 
   const sandboxUnits: CourseUnit[] = modLabs.map((lab, idx) => ({
-    id: `${mod.id}-u5-sandbox-${lab.id}`,
+    id: `${mod.id}-u6-sandbox-${lab.id}`,
     moduleId: mod.id,
-    title: `0${5 + idx} 交互沙盘：Lab ${lab.code} ${lab.title}`,
+    title: `${String(6 + idx).padStart(2, "0")} 交互沙盘：Lab ${lab.code} ${lab.title}`,
     type: "sandbox",
     learningObjective: `能在 Lab ${lab.code} 沙盘内完成实操演练并全部通过其 DoD 验收标准。`,
     summary: lab.goal,
@@ -824,73 +971,194 @@ function buildCompatibleUnitsForModule(
     revealJump: { labId: lab.id, label: `启动 Reveal Lab ${lab.code}` },
   }));
 
-  const quizUnit: CourseUnit = {
-    id: `${mod.id}-u6-quiz`,
+  const nextNumBase = 6 + sandboxUnits.length;
+
+  const discussionUnit: CourseUnit = {
+    id: `${mod.id}-u7-discussion`,
     moduleId: mod.id,
-    title: `巩固测验与知识沉淀（${quiz ? quiz.questions.length : 3} 题 + 知识库）`,
-    type: "quiz",
-    learningObjective: `能完成 ${mod.code} 核心测验题并关联团队知识库及课后三档迁移任务。`,
-    summary: "支持在本工作台直接作答测验、浏览本模块真实知识条目并挑选一档课后真实迁移任务。",
+    title: `${String(nextNumBase).padStart(2, "0")} 讨论与复盘：人机协作裁决点与团队摩擦`,
+    type: "discussion",
+    learningObjective: `能结合自身项目场景说明 ${mod.code} 中人类裁决边界的取舍依据，避免教条套用。`,
+    summary: pkg.humanAiSplit.collaborativeLoop,
     contentBlocks: [
-      `本模块团队知识库关联条目共 ${modKbEntries.length} 条。`,
-      ...pkg.homeworkTiers.map((hw) => `【${hw.label}】${hw.title} — ${hw.goal}`),
+      `• 研讨焦点 A（不可委派红线）：${pkg.traditionalVsAi.nonDelegableCases.join("；")}`,
+      `• 研讨焦点 B（人类核查点）：${pkg.exerciseVariants.nonDelegableCheckpoints.join("；")}`,
+      `• 研讨焦点 C（常见阻塞追问）：${pkg.instructorDemo.stuckStudentPrompts[0] || pkg.coreQuestion}`,
     ],
-    relatedResourceIds: mod.resourceIds,
-    estimatedMinutes: 10,
-    afterClassNote: pkg.homeworkTiers.map((h) => `${h.label}：${h.deliverable}`).join(" ｜ "),
+    relatedResourceIds: mod.resourceIds.slice(0, 2),
+    estimatedMinutes: 6,
     completionCriteria: [
-      "完成模块核心测验并查看错题解析与补救指向",
-      "查阅至少 1 条关联的团队知识库条目与注意事项",
-      "选定并记录 1 档课后迁移任务及人工审查卡点",
+      "写下 1 条结合自身仓库真实情况的裁决取舍笔记",
+      "指出 1 处本模块做法在团队落地时最容易出现的教条主义误区",
+      "明确 1 项需在下周代码审查中强化的个人/团队核对动作",
     ],
     knowledgeEntryIds: kbIds,
-    knowledgeSedimentNote: "支持将学后微调建议直接保存为本地知识条目草稿。",
+    knowledgeSedimentNote: "研讨达成的团队准入共识建议记录为团队决策档案（ADR）。",
     teacherMaterials: {
-      teachingTips: "提示学员特别留意知识库内标注「待验证假设」和「已废弃实践」的条目边界。",
-      referenceAnswers: pkg.homeworkTiers.map((h) => `${h.label} 人工把关：${h.humanReviewGate}`),
-      commonPitfalls: ["忽略知识库条目的适用范围与版本号差异直接盲搬。"],
-      timeTrimNote: "测验可转为课后自主验收。",
+      teachingTips: "鼓励不同岗位学员（前端/后端/PM/负责人）就风险承担点交换真实视角。",
+      referenceAnswers: pkg.traditionalVsAi.nonDelegableCases,
+      commonPitfalls: ["只谈工具表面快捷，忽略真实项目中的权限、成本或回归责任边界。"],
+      timeTrimNote: "自主学习或紧凑短讲可略过现场圆桌，保留复盘笔记即可。",
     },
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };
 
-  const units = [conceptUnit, compareUnit, demoUnit, practiceUnit, ...sandboxUnits, quizUnit];
+  const quizUnit: CourseUnit = {
+    id: `${mod.id}-u8-quiz`,
+    moduleId: mod.id,
+    title: `${String(nextNumBase + 1).padStart(2, "0")} 巩固测验（${quiz ? quiz.questions.length : 3} 题即时诊断）`,
+    type: "quiz",
+    learningObjective: `能独立完成 ${mod.code} 核心诊断测验，并针对错题定位相应沙盘或知识点加固。`,
+    summary: "支持在本工作台直接作答测验并即时查看解析与补救建议，作答记录与 Reveal 幻灯片测验双向同步。",
+    contentBlocks: [
+      `• 本测验包含 ${quiz ? quiz.questions.length : 3} 道聚焦工程边界与异常排查的选择题。`,
+      "• 作答记录保存在当前浏览器 localStorage，不依赖任何云端服务。",
+    ],
+    relatedResourceIds: mod.resourceIds.slice(0, 2),
+    estimatedMinutes: 6,
+    completionCriteria: [
+      `完成全部 ${quiz ? quiz.questions.length : 3} 道核心自测题并阅读解析`,
+      "针对存在疑问或答错题目查阅对应补救行动与沙盘入口",
+      "确保核心概念与红线判断准确无误",
+    ],
+    knowledgeEntryIds: kbIds,
+    knowledgeSedimentNote: "建议把易混淆选项背后的判定依据补入个人笔记。",
+    teacherMaterials: {
+      teachingTips: "建议在学员全部提交后再集中串讲易错题，避免先念答案剧透。",
+      referenceAnswers: (quiz?.questions || []).map(
+        (q, i) => `Q${i + 1} (${q.topic})：${q.options[q.correctIndex]}`
+      ),
+      commonPitfalls: ["仅凭直觉选最长选项，未核查安全红线与校验依据。"],
+      timeTrimNote: "工作坊模式可将测验移至课后自主通关。",
+    },
+    verificationStatus: mod.status,
+    updatedAt: mod.lastReviewedAt,
+    revealJump: { slideOffset: quizSlideOffset, label: `跳转 Reveal ${mod.code} Quiz` },
+  };
+
+  const kbUnit: CourseUnit = {
+    id: `${mod.id}-u9-kb`,
+    moduleId: mod.id,
+    title: `${String(nextNumBase + 2).padStart(2, "0")} 团队知识库沉淀与资产复用`,
+    type: "knowledge-base",
+    learningObjective: `能检索并审阅 ${mod.code} 关联知识库条目边界，并沉淀至少 1 条适配自身项目的可复用规则或清单。`,
+    summary: `本模块内置 ${modKbEntries.length} 条工程知识库资产，支持直接新增个人/团队草稿并随成果导出 Markdown。`,
+    contentBlocks: [
+      `• 本模块关联内置条目（${modKbEntries.length} 条）：${modKbEntries.map((k) => `《${k.title}》`).join("、") || "通用工程规范"}。`,
+      "• 务必核对每条知识的适用范围（Scope）、验证态（已验证 / 待验证假设 / 已废弃实践）与前置警示，避免跨场景盲搬。",
+    ],
+    relatedResourceIds: mod.resourceIds,
+    estimatedMinutes: 6,
+    completionCriteria: [
+      "查看本模块关联团队知识库条目的适用范围与警示条款",
+      "利用本单元快速表单或知识库中心保存至少 1 条可复用规则/检查清单",
+      "验证导出的 Markdown 内容可直接贴入目标项目仓库中复用",
+    ],
+    knowledgeEntryIds: kbIds,
+    knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
+    teacherMaterials: {
+      teachingTips: "提醒学员重点关注标注“待验证假设”和“已废弃实践”的条目，理解规则会随模型迭代而过期。",
+      referenceAnswers: modKbEntries.map((k) => `《${k.title}》适用范围：${k.scope}`),
+      commonPitfalls: ["整段照搬示例目录或忽略版本变更直接写死进全局规则。"],
+      timeTrimNote: "即便在短讲中也保留 3 分钟，确保学员带走至少 1 条结构化模板。",
+    },
+    verificationStatus: mod.status,
+    updatedAt: mod.lastReviewedAt,
+  };
+
+  const transferUnit: CourseUnit = {
+    id: `${mod.id}-u10-transfer`,
+    moduleId: mod.id,
+    title: `${String(nextNumBase + 3).padStart(2, "0")} 课后三档迁移任务（按时间与角色选做）`,
+    type: "transfer-task",
+    learningObjective: `能选定 1 档与当前时间匹配的 ${mod.code} 课后真实迁移任务，明确交付物与人工审查卡点。`,
+    summary: "从 30 分钟单点微改到多日团队规范落地，均附带无外网 API 离线替代方案与不可跳过的人类卡点。",
+    contentBlocks: pkg.homeworkTiers.map(
+      (hw) => `【${hw.label}】${hw.title} — 输入限制：${hw.inputsAndLimits} ｜ 离线替代：${hw.offlineFallback}`
+    ),
+    relatedResourceIds: mod.resourceIds.slice(0, 2),
+    estimatedMinutes: 8,
+    afterClassNote: pkg.homeworkTiers.map((h) => `${h.label}：${h.deliverable}`).join(" ｜ "),
+    completionCriteria: [
+      "根据自身角色与可用时间选定 1 档课后迁移任务并保存",
+      "确认提交物所需的客观验证命令与离线替代方案",
+      "明确任务完成后必须由人工亲自签核的审查卡点",
+    ],
+    knowledgeEntryIds: kbIds,
+    knowledgeSedimentNote: "完成课后迁移后，将实际踩坑与新规则反向更新进团队知识库。",
+    teacherMaterials: {
+      teachingTips: "鼓励零基础或时间紧张学员优先选 A 档 30 分钟快速验证任务，确保形成首次闭环。",
+      referenceAnswers: pkg.homeworkTiers.map((h) => `${h.label} 人工把关：${h.humanReviewGate}`),
+      commonPitfalls: ["直接选择跨团队大改任务但未预留评审窗口，导致中途放弃。"],
+      timeTrimNote: "结课用 3–5 分钟布置并让学员当场选定档位。",
+    },
+    verificationStatus: mod.status,
+    updatedAt: mod.lastReviewedAt,
+  };
+
+  const units = [
+    conceptUnit,
+    compareUnit,
+    demoUnit,
+    failureUnit,
+    practiceUnit,
+    ...sandboxUnits,
+    discussionUnit,
+    quizUnit,
+    kbUnit,
+    transferUnit,
+  ];
 
   const sandboxIds = sandboxUnits.map((u) => u.id);
 
   const deliveryPlans: DeliveryPlan[] = [
     {
       id: `${mod.id}-plan-double`,
-      name: "双课时完整闭环",
-      shortLabel: "双课时完整",
-      targetAudience: "完整授课与分组实操",
-      description: "涵盖概念对比、翻车演示、人机练习、沙盘与测验沉淀的全流程。",
+      name: "双课时完整闭环（推荐课堂全程）",
+      shortLabel: "双课时完整版",
+      targetAudience: "完整授课、训练营标准双课时教学",
+      description: "依序经历概念边界 → 传统对比 → 讲师演示 → 失败剖析 → 协同练习与沙盘 → 研讨测验 → 沉淀与迁移。",
       unitIds: units.map((u) => u.id),
     },
     {
       id: `${mod.id}-plan-short`,
-      name: "短讲精要",
+      name: "短讲精要（午间分享 / 快速导入）",
       shortLabel: "短讲精要",
-      targetAudience: "团队分享或紧凑课堂",
-      description: "重点聚焦概念边界、传统对比与讲师演示纠偏环节，搭配知识库巩固。",
-      unitIds: [conceptUnit.id, compareUnit.id, demoUnit.id, quizUnit.id],
+      targetAudience: "团队 30–40 分钟理念对齐与核心控制流导入",
+      description: "聚焦概念边界、人机对照、翻车演示、隐蔽失败剖析与知识库带走。",
+      unitIds: [conceptUnit.id, compareUnit.id, demoUnit.id, failureUnit.id, kbUnit.id],
     },
     {
       id: `${mod.id}-plan-workshop`,
-      name: "工作坊实操",
-      shortLabel: "工作坊",
-      targetAudience: "现场动手演练与互评",
-      description: "快速切入人机协同练习与沙盘实操，最后完成知识库沉淀。",
-      unitIds: [conceptUnit.id, practiceUnit.id, ...sandboxIds, quizUnit.id],
+      name: "实战工作坊（动手演练与互评）",
+      shortLabel: "工作坊实战",
+      targetAudience: "以现场练习、沙盘审计与裁决互评为主的实操专场",
+      description: "快速交代边界后直接进入协同练习、交互沙盘、团队研讨与知识资产沉淀。",
+      unitIds: [
+        conceptUnit.id,
+        practiceUnit.id,
+        ...sandboxIds,
+        discussionUnit.id,
+        kbUnit.id,
+      ],
     },
     {
       id: `${mod.id}-plan-self`,
-      name: "自主学习路径",
+      name: "自主学习路径（个人通关版）",
       shortLabel: "自主学习",
-      targetAudience: "线上个人学习与测验通关",
-      description: "按概念、对比、练习、沙盘与测验迁移顺序自主推进。",
-      unitIds: [conceptUnit.id, compareUnit.id, practiceUnit.id, ...sandboxIds, quizUnit.id],
+      targetAudience: "线上个人学习、沙盘自测与课后迁移落地",
+      description: "保留核心原理、对比、反例辨析、实操沙盘、自测检验、知识沉淀与迁移任务。",
+      unitIds: [
+        conceptUnit.id,
+        compareUnit.id,
+        failureUnit.id,
+        practiceUnit.id,
+        ...sandboxIds,
+        quizUnit.id,
+        kbUnit.id,
+        transferUnit.id,
+      ],
     },
   ];
 

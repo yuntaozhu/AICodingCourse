@@ -12,7 +12,7 @@ import {
 import CourseCatalogHome from "@/components/course/CourseCatalogHome";
 import CourseKnowledgeView from "@/components/course/CourseKnowledgeView";
 import ModuleLearningPage from "@/components/course/ModuleLearningPage";
-import { getModuleRecordById } from "@/data/courseUnitsModel";
+import { COURSE_MODULE_RECORDS, getModuleRecordById } from "@/data/courseUnitsModel";
 import {
   buildWorkspaceMarkdownExport,
   clearAllCourseLearningData,
@@ -96,6 +96,24 @@ export default function CourseSystemApp({
       ...prev,
       selectedPlanByModule: { ...prev.selectedPlanByModule, [moduleId]: planId },
     }));
+  };
+
+  const handleApplyPlanPresetAll = (preset: "double" | "short" | "workshop" | "self") => {
+    updateState((prev) => {
+      const nextPlans = { ...prev.selectedPlanByModule };
+      for (const mod of COURSE_MODULE_RECORDS) {
+        const target =
+          mod.deliveryPlans.find((p) => p.id.endsWith(`-plan-${preset}`)) ||
+          mod.deliveryPlans[0];
+        if (target) {
+          nextPlans[mod.id] = target.id;
+        }
+      }
+      return {
+        ...prev,
+        selectedPlanByModule: nextPlans,
+      };
+    });
   };
 
   const handleVisitUnit = useCallback((moduleId: string, unitId: string, planId: string) => {
@@ -369,6 +387,7 @@ export default function CourseSystemApp({
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
             onOpenModule={handleOpenModule}
+            onApplyPlanPresetAll={handleApplyPlanPresetAll}
             onOpenKnowledgeBase={handleOpenKnowledgeBase}
             onSwitchToReveal={onSwitchToReveal}
           />
@@ -382,6 +401,7 @@ export default function CourseSystemApp({
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
             onBackToCatalog={() => setSubView("catalog")}
+            onOpenModule={(modId) => handleOpenModule(modId)}
             onSelectPlan={handleSelectPlan}
             onVisitUnit={handleVisitUnit}
             onToggleUnitComplete={handleToggleUnitComplete}
@@ -396,6 +416,7 @@ export default function CourseSystemApp({
 
         {subView === "knowledge" && (
           <CourseKnowledgeView
+            key={kbModuleFilter}
             initialModuleFilter={kbModuleFilter}
             customEntries={workspaceState.customKbEntries}
             onAddCustomEntry={handleAddCustomKb}

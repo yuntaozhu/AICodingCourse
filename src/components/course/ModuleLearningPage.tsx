@@ -17,12 +17,17 @@ import {
   Layers,
   Play,
   Presentation as PresentationIcon,
+  RotateCcw,
 } from "lucide-react";
 import { COURSE_LABS } from "@/data/courseCurriculum";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
-import { getQuestionRemediation } from "@/data/quizRemediation";
 import {
+  buildRetryWrongAnswersState,
+  getQuestionRemediation,
+} from "@/data/quizRemediation";
+import {
+  COURSE_MODULE_RECORDS,
   COURSE_UNIT_TYPE_LABELS,
   getDeliveryPlanMinutes,
   getResourcesByIds,
@@ -51,6 +56,7 @@ interface ModuleLearningPageProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
   onBackToCatalog: () => void;
+  onOpenModule: (moduleId: string) => void;
   onSelectPlan: (moduleId: string, planId: string) => void;
   onVisitUnit: (moduleId: string, unitId: string, planId: string) => void;
   onToggleUnitComplete: (unitId: string) => void;
@@ -92,6 +98,7 @@ export default function ModuleLearningPage({
   workspaceState,
   completedLabIds,
   onBackToCatalog,
+  onOpenModule,
   onSelectPlan,
   onVisitUnit,
   onToggleUnitComplete,
@@ -184,6 +191,13 @@ export default function ModuleLearningPage({
   const moduleQuiz = MODULE_QUIZZES[moduleRecord.order];
   const quizSummary = moduleQuiz ? getQuizReviewSummary(moduleQuiz, quizAnswers) : null;
 
+  const moduleIdx = COURSE_MODULE_RECORDS.findIndex((m) => m.id === moduleRecord.id);
+  const prevModule = moduleIdx > 0 ? COURSE_MODULE_RECORDS[moduleIdx - 1] : null;
+  const nextModule =
+    moduleIdx >= 0 && moduleIdx < COURSE_MODULE_RECORDS.length - 1
+      ? COURSE_MODULE_RECORDS[moduleIdx + 1]
+      : null;
+
   const handleCopy = async (id: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -217,6 +231,18 @@ export default function ModuleLearningPage({
     const next = { ...quizAnswers, [questionId]: optionIdx };
     setQuizAnswers(next);
     saveQuizAnswers(moduleRecord.order, next);
+  };
+
+  const handleRetryWrongQuiz = () => {
+    if (!moduleQuiz) return;
+    const retryState = buildRetryWrongAnswersState(moduleQuiz.questions, quizAnswers);
+    setQuizAnswers(retryState.keptAnswers);
+    saveQuizAnswers(moduleRecord.order, retryState.keptAnswers);
+  };
+
+  const handleResetQuiz = () => {
+    setQuizAnswers({});
+    saveQuizAnswers(moduleRecord.order, {});
   };
 
   const handleSubmitQuickKb = (e: React.FormEvent) => {
@@ -254,8 +280,8 @@ export default function ModuleLearningPage({
             <span className="font-mono text-slate-400">
               {moduleRecord.code} ·{" "}
               {moduleRecord.exemplarLevel === "complete-exemplar"
-                ? "完整样板模块"
-                : "兼容适配模块"}{" "}
+                ? "专项精修样板"
+                : "全闭环教学包映射"}{" "}
               · 更新 {moduleRecord.updatedAt} ·{" "}
               <span
                 className={
@@ -265,6 +291,26 @@ export default function ModuleLearningPage({
                 {moduleRecord.status === "needs-review" ? "部分待复核" : "已核验"}
               </span>
             </span>
+            <div className="flex items-center gap-1">
+              {prevModule && (
+                <button
+                  type="button"
+                  onClick={() => onOpenModule(prevModule.id)}
+                  className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-slate-300 cursor-pointer"
+                >
+                  ← {prevModule.code}
+                </button>
+              )}
+              {nextModule && (
+                <button
+                  type="button"
+                  onClick={() => onOpenModule(nextModule.id)}
+                  className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-slate-300 cursor-pointer"
+                >
+                  {nextModule.code} →
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -769,9 +815,30 @@ export default function ModuleLearningPage({
                       {moduleQuiz.moduleTitle} · 在线自测
                     </div>
                     {quizSummary && (
-                      <div className="text-xs font-mono text-gemini-cyan tabular-nums">
-                        已答 {quizSummary.answeredCount}/{moduleQuiz.questions.length} · 正确{" "}
-                        {quizSummary.correctCount} ({quizSummary.accuracyPct}%)
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-mono text-gemini-cyan tabular-nums">
+                          已答 {quizSummary.answeredCount}/{moduleQuiz.questions.length} · 正确{" "}
+                          {quizSummary.correctCount} ({quizSummary.accuracyPct}%)
+                        </span>
+                        {quizSummary.missedQuestions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleRetryWrongQuiz}
+                            className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-[11px] font-mono text-amber-200 cursor-pointer"
+                          >
+                            只重做错题 ({quizSummary.missedQuestions.length})
+                          </button>
+                        )}
+                        {quizSummary.answeredCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleResetQuiz}
+                            className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-slate-300 cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>清空重测</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1199,20 +1266,33 @@ export default function ModuleLearningPage({
                   <span>{prevUnit ? `上一单元：${prevUnit.title}` : "已到首个单元"}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleCompleteAndNext}
-                  className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <span>
-                    {nextUnit
-                      ? "标记本单元完成并继续下一单元"
-                      : unitCompleted
-                      ? "已完成本方案全部单元"
-                      : "标记完成本单元"}
-                  </span>
-                  {nextUnit && <ArrowRight className="w-3.5 h-3.5" />}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCompleteAndNext}
+                    className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>
+                      {nextUnit
+                        ? "标记本单元完成并继续下一单元"
+                        : unitCompleted
+                        ? "已完成本方案全部单元"
+                        : "标记完成本单元"}
+                    </span>
+                    {nextUnit && <ArrowRight className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {!nextUnit && nextModule && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenModule(nextModule.id)}
+                      className="px-3.5 py-2 rounded-xl bg-gemini-purple text-white font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <span>进入下一模块 ({nextModule.code})</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </section>
