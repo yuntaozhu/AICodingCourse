@@ -1,6 +1,6 @@
 {
   "name": "AI Coding 研发范式革命：未来软件架构与开发的确定性演进路径",
-  "description": "面向独立开发者与产品经理的 Cursor AI Coding 确定性研发 Web 交互式课件。",
+  "description": "面向独立开发者、产品经理、研发团队与高校学员的 AI Coding 确定性研发官网、交互式课程工作台、双轨实战与小班带教平台。",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

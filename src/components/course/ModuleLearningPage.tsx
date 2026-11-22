@@ -63,11 +63,25 @@ import {
 } from "@/data/teamKnowledgeBase";
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 
+import {
+  fetchAuthorizedModuleDetail,
+  fetchSanitizedQuiz,
+  submitQuizAnswers,
+  submitSkillDiagnostic,
+  type QuizGradeResponse,
+  type SanitizedQuizQuestion,
+} from "@/lib/apiClient";
+
 interface ModuleLearningPageProps {
   moduleRecord: CourseModuleRecord;
   initialUnitId?: string;
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
+  hasPaidAccess?: boolean;
+  isInstructorAuthorized?: boolean;
+  isSignedIn?: boolean;
+  onOpenBilling?: () => void;
+  onRefreshCloudState?: () => void;
   onBackToCatalog: () => void;
   onOpenModule: (moduleId: string) => void;
   onSelectPlan: (moduleId: string, planId: string) => void;
@@ -122,6 +136,11 @@ export default function ModuleLearningPage({
   initialUnitId,
   workspaceState,
   completedLabIds,
+  hasPaidAccess = false,
+  isInstructorAuthorized = false,
+  isSignedIn = false,
+  onOpenBilling,
+  onRefreshCloudState,
   onBackToCatalog,
   onOpenModule,
   onSelectPlan,
@@ -136,6 +155,34 @@ export default function ModuleLearningPage({
   onSwitchToReveal,
   onScrollTop,
 }: ModuleLearningPageProps) {
+  const isFreeTrial = moduleRecord.id === "m1";
+  const isModuleUnlocked = isFreeTrial || hasPaidAccess;
+  const [serverModuleAllowed, setServerModuleAllowed] = useState<boolean>(isModuleUnlocked);
+  const [serverInstructorAllowed, setServerInstructorAllowed] = useState<boolean>(
+    isInstructorAuthorized
+  );
+
+  useEffect(() => {
+    setServerModuleAllowed(isModuleUnlocked);
+    setServerInstructorAllowed(isInstructorAuthorized);
+    let active = true;
+    fetchAuthorizedModuleDetail(moduleRecord.id)
+      .then((res) => {
+        if (!active) return;
+        setServerModuleAllowed(true);
+        setServerInstructorAllowed(Boolean(res.instructorAuthorized));
+      })
+      .catch(() => {
+        if (!active) return;
+        if (!isFreeTrial && !hasPaidAccess) {
+          setServerModuleAllowed(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [moduleRecord.id, hasPaidAccess, isInstructorAuthorized, isFreeTrial, isModuleUnlocked]);
+
   const activePlanId =
     workspaceState.selectedPlanByModule[moduleRecord.id] || moduleRecord.deliveryPlans[0]?.id;
   const activePlan =
@@ -168,10 +215,31 @@ export default function ModuleLearningPage({
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Quiz state synced with localStorage
+  // Quiz state synced with localStorage and server sanitized questions + grading
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>(() =>
     loadQuizAnswers(moduleRecord.id, moduleRecord.order)
   );
+  const [sanitizedQuestions, setSanitizedQuestions] = useState<SanitizedQuizQuestion[] | null>(
+    null
+  );
+  const [serverQuizGrade, setServerQuizGrade] = useState<QuizGradeResponse | null>(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isModuleUnlocked) return;
+    let active = true;
+    fetchSanitizedQuiz(moduleRecord.id)
+      .then((res) => {
+        if (active) setSanitizedQuestions(res.quiz.questions);
+      })
+      .catch(() => {
+        if (active) setSanitizedQuestions(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [moduleRecord.id, isModuleUnlocked]);
 
   // Skill verification interactive state
   const [activeDiagSkillId, setActiveDiagSkillId] = useState<SkillId | null>(null);
@@ -198,10 +266,10 @@ export default function ModuleLearningPage({
   const activePlanResolvedId = activePlan?.id;
 
   useEffect(() => {
-    if (activeUnitId && activePlanResolvedId) {
+    if (activeUnitId && activePlanResolvedId && serverModuleAllowed) {
       onVisitUnit(moduleRecord.id, activeUnitId, activePlanResolvedId);
     }
-  }, [moduleRecord.id, activeUnitId, activePlanResolvedId, onVisitUnit]);
+  }, [moduleRecord.id, activeUnitId, activePlanResolvedId, onVisitUnit, serverModuleAllowed]);
 
   const activeIndex = visibleUnits.findIndex((u) => u.id === activeUnit?.id);
   const prevUnit = activeIndex > 0 ? visibleUnits[activeIndex - 1] : null;
@@ -210,7 +278,10 @@ export default function ModuleLearningPage({
       ? visibleUnits[activeIndex + 1]
       : null;
 
-  const isInstructorView = workspaceState.viewMode === "instructor";
+  const isInstructorView =
+    isInstructorAuthorized &&
+    serverInstructorAllowed &&
+    workspaceState.viewMode === "instructor";
   const stats = getModuleCompletionStats(
     moduleRecord,
     workspaceState,
@@ -336,22 +407,41 @@ export default function ModuleLearningPage({
   const handleSelectQuizOption = (questionId: string, optionIdx: number) => {
     const next = { ...quizAnswers, [questionId]: optionIdx };
     setQuizAnswers(next);
+    setQuizError(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, next);
+  };
+
+  const handleServerQuizSubmit = async () => {
+    if (!moduleQuiz) return;
+    setQuizSubmitting(true);
+    setQuizError(null);
+    try {
+      const result = await submitQuizAnswers(moduleRecord.id, quizAnswers);
+      setServerQuizGrade(result);
+      onRefreshCloudState?.();
+    } catch (err) {
+      setQuizError(err instanceof Error ? err.message : "提交判分失败，请确认已登录。");
+    } finally {
+      setQuizSubmitting(false);
+    }
   };
 
   const handleRetryWrongQuiz = () => {
     if (!moduleQuiz) return;
     const retryState = buildRetryWrongAnswersState(moduleQuiz.questions, quizAnswers);
     setQuizAnswers(retryState.keptAnswers);
+    setServerQuizGrade(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, retryState.keptAnswers);
   };
 
   const handleResetQuiz = () => {
     setQuizAnswers({});
+    setServerQuizGrade(null);
+    setQuizError(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, {});
   };
 
-  const handleSubmitSkillDiagnostic = (skillId: SkillId) => {
+  const handleSubmitSkillDiagnostic = async (skillId: SkillId) => {
     const sk = getSkillById(skillId);
     if (!sk) return;
     const ans = diagAnswersBySkill[skillId] || {};
@@ -363,6 +453,41 @@ export default function ModuleLearningPage({
       }));
       return;
     }
+
+    if (isSignedIn) {
+      try {
+        const res = await submitSkillDiagnostic(skillId, ans);
+        if (!res.passed) {
+          const passedCount = res.results.filter((r) => r.isCorrect).length;
+          setDiagFeedbackBySkill((prev) => ({
+            ...prev,
+            [skillId]: `服务端诊断得分 ${passedCount}/${res.results.length}，须全部答对才可通过；请重选后再提交。`,
+          }));
+          return;
+        }
+        onVerifySkill({
+          skillId,
+          method: "diagnostic-check",
+          evidenceSummary:
+            res.grant?.evidenceSummary || `通过服务端 ${res.results.length}/${res.results.length} 能力诊断测评`,
+          verifiedAt: new Date().toISOString().slice(0, 10),
+        });
+        setDiagFeedbackBySkill((prev) => ({
+          ...prev,
+          [skillId]: "服务端诊断通过，已授予 SkillGrant 并同步云端档案！",
+        }));
+        onRefreshCloudState?.();
+        setActiveDiagSkillId(null);
+        return;
+      } catch (err) {
+        setDiagFeedbackBySkill((prev) => ({
+          ...prev,
+          [skillId]: err instanceof Error ? err.message : "服务端诊断提交失败。",
+        }));
+        return;
+      }
+    }
+
     const correctCount = sk.diagnosticQuestions.filter((q) => ans[q.id] === q.correctIndex).length;
     if (correctCount < sk.diagnosticQuestions.length) {
       setDiagFeedbackBySkill((prev) => ({
@@ -374,12 +499,12 @@ export default function ModuleLearningPage({
     onVerifySkill({
       skillId,
       method: "diagnostic-check",
-      evidenceSummary: `通过 ${correctCount}/${sk.diagnosticQuestions.length} 能力诊断测评`,
+      evidenceSummary: `通过 ${correctCount}/${sk.diagnosticQuestions.length} 能力诊断测评（本地体验）`,
       verifiedAt: new Date().toISOString().slice(0, 10),
     });
     setDiagFeedbackBySkill((prev) => ({
       ...prev,
-      [skillId]: "能力诊断通过，已登记到本地技能档案！",
+      [skillId]: "能力诊断通过，已暂存到本地（登录后可进行服务端认证同步）。",
     }));
     setActiveDiagSkillId(null);
   };
@@ -401,7 +526,9 @@ export default function ModuleLearningPage({
     });
     setDiagFeedbackBySkill((prev) => ({
       ...prev,
-      [skillId]: "Starter 可核验证据已登记，已解锁关联高阶技能门禁！",
+      [skillId]: isSignedIn
+        ? "已记录本地草稿；如需正式服务端认证，请在「班级与作业」提交后由老师审校授予 SkillGrant。"
+        : "Starter 证据草稿已暂存本地。",
     }));
   };
 
@@ -422,6 +549,62 @@ export default function ModuleLearningPage({
     setKbSavedNotice(true);
     window.setTimeout(() => setKbSavedNotice(false), 2200);
   };
+
+  if (!serverModuleAllowed && !isFreeTrial) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+        <button
+          type="button"
+          onClick={onBackToCatalog}
+          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>返回课程目录</span>
+        </button>
+
+        <div className="p-6 sm:p-8 rounded-2xl border border-gemini-purple/45 bg-[#0b0f19] space-y-5">
+          <div className="space-y-2">
+            <div className="text-xs font-mono text-amber-300">
+              ENTITLEMENT REQUIRED · {moduleRecord.code} 付费课程模块
+            </div>
+            <h1 className="text-2xl font-bold text-white">{moduleRecord.title}</h1>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              M1 模块为开放免费试学样板；M2–M13-Eng 完整教学单元、交互沙盘、服务端测验与云端同步需登录账号并具备有效订阅或班级权益。
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-2 text-xs">
+            <div className="font-semibold text-white">本模块核心学习目标（公开大纲）：</div>
+            <ul className="space-y-1.5 text-slate-300">
+              {moduleRecord.learningObjectives.map((obj, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{obj}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenBilling?.()}
+              className="px-5 py-2.5 rounded-xl bg-gemini-purple text-white font-semibold text-xs hover:opacity-90 cursor-pointer"
+            >
+              登录 / 订阅或兑换激活码解锁
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenModule("m1")}
+              className="px-4 py-2.5 rounded-xl border border-gemini-cyan/40 bg-gemini-cyan/10 text-gemini-cyan font-semibold text-xs hover:bg-gemini-cyan/20 cursor-pointer"
+            >
+              前往 M1 免费试学 →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
@@ -474,28 +657,30 @@ export default function ModuleLearningPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onToggleViewMode}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-                isInstructorView
-                  ? "bg-gemini-purple text-white border-gemini-purple"
-                  : "bg-white/5 text-slate-200 border-white/15 hover:bg-white/10"
-              }`}
-              title="切换学员视图与教师备课/参考答案视图"
-            >
-              {isInstructorView ? (
-                <>
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>当前：教师视图（已展示备课与参考答案）</span>
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                  <span>当前：学员视图（参考答案默认隐藏）</span>
-                </>
-              )}
-            </button>
+            {isInstructorAuthorized && serverInstructorAllowed && (
+              <button
+                type="button"
+                onClick={onToggleViewMode}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                  isInstructorView
+                    ? "bg-gemini-purple text-white border-gemini-purple"
+                    : "bg-white/5 text-slate-200 border-white/15 hover:bg-white/10"
+                }`}
+                title="切换学员视图与教师备课/参考答案视图"
+              >
+                {isInstructorView ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>当前：教师视图（已展示备课与参考答案）</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                    <span>当前：学员视图（参考答案默认隐藏）</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {isInstructorView && (
               <button
@@ -1262,47 +1447,76 @@ export default function ModuleLearningPage({
                 </div>
               )}
 
-              {/* Inline Quiz Runner (synced with localStorage & Reveal QuizSlide) */}
+              {/* Inline Quiz Runner (Server-sanitized & server-graded when signed in) */}
               {activeUnit.type === "quiz" && moduleQuiz && (
                 <div className="p-4 rounded-xl bg-[#070b14] border border-white/15 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-bold text-white">
-                      {moduleQuiz.moduleTitle} · 在线自测
+                      {moduleQuiz.moduleTitle} · {isSignedIn ? "服务端权威测验" : "M1 免费试学在线自测"}
                     </div>
-                    {quizSummary && (
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isSignedIn && serverQuizGrade ? (
+                        <span className="text-xs font-mono text-emerald-300 tabular-nums">
+                          服务端判分：{serverQuizGrade.correctCount}/{serverQuizGrade.totalCount} (
+                          {serverQuizGrade.scorePct}%) ·{" "}
+                          {serverQuizGrade.passed ? "通过" : "建议巩固错题"}
+                        </span>
+                      ) : !isSignedIn && quizSummary ? (
                         <span className="text-xs font-mono text-gemini-cyan tabular-nums">
                           已答 {quizSummary.answeredCount}/{moduleQuiz.questions.length} · 正确{" "}
                           {quizSummary.correctCount} ({quizSummary.accuracyPct}%)
                         </span>
-                        {quizSummary.missedQuestions.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleRetryWrongQuiz}
-                            className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-[11px] font-mono text-amber-200 cursor-pointer"
-                          >
-                            只重做错题 ({quizSummary.missedQuestions.length})
-                          </button>
-                        )}
-                        {quizSummary.answeredCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleResetQuiz}
-                            className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-slate-300 cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>清空重测</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      ) : null}
+
+                      {!isSignedIn && quizSummary && quizSummary.missedQuestions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleRetryWrongQuiz}
+                          className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-[11px] font-mono text-amber-200 cursor-pointer"
+                        >
+                          只重做错题 ({quizSummary.missedQuestions.length})
+                        </button>
+                      )}
+                      {Object.keys(quizAnswers).length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleResetQuiz}
+                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-slate-300 cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>清空重测</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3">
-                    {moduleQuiz.questions.map((q, qIdx) => {
+                    {(sanitizedQuestions ??
+                      moduleQuiz.questions.map((mq) => ({
+                        id: mq.id,
+                        topic: mq.topic,
+                        question: mq.question,
+                        options: mq.options,
+                        reviewTarget: mq.reviewTarget,
+                      }))
+                    ).map((q, qIdx) => {
                       const picked = quizAnswers[q.id];
                       const answered = typeof picked === "number";
-                      const isCorrect = picked === q.correctIndex;
+                      const serverQ = serverQuizGrade?.questionResults.find(
+                        (r) => r.questionId === q.id
+                      );
+                      const fallbackFullQ = !isSignedIn
+                        ? moduleQuiz.questions.find((mq) => mq.id === q.id)
+                        : undefined;
+                      const showGraded = isSignedIn ? Boolean(serverQ) : answered;
+                      const correctIdx = serverQ
+                        ? serverQ.correctIndex
+                        : fallbackFullQ?.correctIndex;
+                      const isCorrect = serverQ
+                        ? serverQ.isCorrect
+                        : typeof correctIdx === "number" && picked === correctIdx;
+                      const explanation =
+                        serverQ?.explanation ?? fallbackFullQ?.explanation ?? "";
                       const rem = getQuestionRemediation(q.id, moduleRecord.id);
 
                       return (
@@ -1320,10 +1534,12 @@ export default function ModuleLearningPage({
                           <div className="grid grid-cols-1 gap-1.5">
                             {q.options.map((opt, oIdx) => {
                               const selected = picked === oIdx;
-                              const isRightOpt = oIdx === q.correctIndex;
-                              let cls =
-                                "bg-white/[0.02] border-white/10 text-slate-300 hover:border-white/25";
-                              if (answered) {
+                              const isRightOpt =
+                                showGraded && typeof correctIdx === "number" && oIdx === correctIdx;
+                              let cls = selected
+                                ? "bg-gemini-cyan/15 border-gemini-cyan text-white"
+                                : "bg-white/[0.02] border-white/10 text-slate-300 hover:border-white/25";
+                              if (showGraded) {
                                 if (isRightOpt) {
                                   cls = "bg-emerald-500/15 border-emerald-400/50 text-emerald-200";
                                 } else if (selected && !isRightOpt) {
@@ -1346,7 +1562,7 @@ export default function ModuleLearningPage({
                             })}
                           </div>
 
-                          {answered && (
+                          {showGraded && (
                             <div
                               className={`p-2.5 rounded-lg border text-[11px] space-y-1 ${
                                 isCorrect
@@ -1358,11 +1574,13 @@ export default function ModuleLearningPage({
                                 <span className="font-semibold">
                                   {isCorrect ? "回答正确：" : "思路纠正："}
                                 </span>
-                                {q.explanation}
+                                {explanation}
                               </div>
                               {!isCorrect && (
                                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-slate-200">
-                                  <span>补救建议：{rem.reviewAction}</span>
+                                  <span>
+                                    补救建议：{serverQ?.remediationAction ?? rem.reviewAction}
+                                  </span>
                                   {rem.labId && (
                                     <button
                                       type="button"
@@ -1385,6 +1603,29 @@ export default function ModuleLearningPage({
                       );
                     })}
                   </div>
+
+                  {isSignedIn && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+                      <div className="text-[11px] text-slate-400">
+                        {serverQuizGrade && serverQuizGrade.weakTopics.length > 0
+                          ? `薄弱知识点：${serverQuizGrade.weakTopics.join("、")}`
+                          : "作答完成后提交至服务端判分并写入云端档案。"}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={
+                          quizSubmitting ||
+                          Object.keys(quizAnswers).length < moduleQuiz.questions.length
+                        }
+                        onClick={() => void handleServerQuizSubmit()}
+                        className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs cursor-pointer disabled:opacity-50"
+                      >
+                        {quizSubmitting ? "正在判分..." : "提交测验由服务端判分"}
+                      </button>
+                    </div>
+                  )}
+
+                  {quizError && <div className="text-xs text-rose-300">{quizError}</div>}
                 </div>
               )}
 
@@ -1763,7 +2004,7 @@ export default function ModuleLearningPage({
                 </div>
               )}
 
-              {/* Teacher Materials Panel: STRICTLY GATED behind Teacher View! */}
+              {/* Teacher Materials Panel: STRICTLY GATED behind Instructor Authorization + Teacher View! */}
               {isInstructorView ? (
                 <div className="p-4 rounded-xl bg-gemini-purple/[0.09] border border-gemini-purple/45 space-y-2.5 text-xs">
                   <div className="flex items-center justify-between gap-2">
@@ -1796,7 +2037,7 @@ export default function ModuleLearningPage({
                     ))}
                   </div>
                 </div>
-              ) : (
+              ) : isInstructorAuthorized ? (
                 <div className="px-3.5 py-2.5 rounded-xl bg-white/[0.02] border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                   <span>
                     当前处于「学员视图」：讲师备课话术、卡住提示与参考答案默认隐藏，避免课堂直接剧透。
@@ -1809,7 +2050,7 @@ export default function ModuleLearningPage({
                     切换为教师视图 →
                   </button>
                 </div>
-              )}
+              ) : null}
 
               {/* Unit Footer Navigation */}
               <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">

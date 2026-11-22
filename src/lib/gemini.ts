@@ -1,4 +1,12 @@
+import { getAuthHeaders } from "@/lib/authTokenStore";
 import { recordAiApiCall } from "@/lib/performanceTelemetry";
+
+function generateRequestId(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export interface BugbotFinding {
   id: string;
@@ -23,10 +31,12 @@ export async function reviewCode(
 ): Promise<{ feedback: string; model: string }> {
   const startedAt = performance.now();
   try {
+    const headers = await getAuthHeaders({ "Content-Type": "application/json" });
     const response = await fetch("/api/review", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
+        requestId: generateRequestId("review"),
         code,
         rules: options.rules,
         customRule: options.customRule,
@@ -205,10 +215,14 @@ export async function synthesizeCourseFromBooks(payload: {
 }): Promise<{ content: string; model: string }> {
   const startedAt = performance.now();
   try {
+    const headers = await getAuthHeaders({ "Content-Type": "application/json" });
     const response = await fetch("/api/kb/synthesize", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify({
+        ...payload,
+        requestId: generateRequestId("kb"),
+      }),
     });
 
     const data = (await response.json().catch(() => ({}))) as {
@@ -318,10 +332,14 @@ export async function craftCursorConfig(
 ): Promise<{ content: string; model: string }> {
   const startedAt = performance.now();
   try {
+    const headers = await getAuthHeaders({ "Content-Type": "application/json" });
     const response = await fetch("/api/craft-rules", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify({
+        ...payload,
+        requestId: generateRequestId("rules"),
+      }),
     });
 
     const data = (await response.json().catch(() => ({}))) as {

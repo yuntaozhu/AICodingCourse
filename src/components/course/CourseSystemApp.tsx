@@ -2,13 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookMarked,
   Check,
+  CloudUpload,
+  CreditCard,
   Download,
   Eye,
   EyeOff,
+  Globe,
   Home,
+  LogIn,
+  LogOut,
   Presentation as PresentationIcon,
   Search,
+  ShieldAlert,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import CourseCatalogHome from "@/components/course/CourseCatalogHome";
@@ -16,6 +23,10 @@ import CourseKnowledgeView, {
   type KnowledgeSectionFilter,
 } from "@/components/course/CourseKnowledgeView";
 import ModuleLearningPage from "@/components/course/ModuleLearningPage";
+import AdminConsole from "@/components/lms/AdminConsole";
+import CohortLearnerPanel from "@/components/lms/CohortLearnerPanel";
+import InstructorCockpit from "@/components/lms/InstructorCockpit";
+import { useAuth } from "@/context/AuthContext";
 import {
   SEARCH_KIND_LABELS,
   searchCourseWorkspace,
@@ -35,23 +46,46 @@ import {
 } from "@/data/courseWorkspaceStore";
 import { getCompletedLabIds, loadAllLabDodProgress } from "@/data/labPracticeEngine";
 import type { KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
+import {
+  deleteCustomKbEntry,
+  fetchWorkspaceCloudState,
+  importLegacyWorkspace,
+  saveCustomKbEntry,
+  saveWorkspaceUnitProgress,
+} from "@/lib/apiClient";
 
-type CourseSubView = "catalog" | "module" | "knowledge";
+export type CourseSubView =
+  | "catalog"
+  | "module"
+  | "knowledge"
+  | "cohort"
+  | "instructor"
+  | "admin";
 
 interface CourseSystemAppProps {
   initialModuleId?: string;
+  initialSubView?: CourseSubView;
+  onGoOfficialHome?: () => void;
+  onOpenBilling?: () => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string; slideOffset?: number }) => void;
 }
 
 export default function CourseSystemApp({
   initialModuleId,
+  initialSubView,
+  onGoOfficialHome,
+  onOpenBilling,
   onSwitchToReveal,
 }: CourseSystemAppProps) {
+  const { session, loading: authLoading, signInWithGoogle, signOutUser, refreshSession } = useAuth();
+  const isInstructorAuthorized = Boolean(session?.isAdmin || session?.isInstructorOrTa);
+  const hasPaidAccess = Boolean(session?.hasPaidAccess);
+
   const [workspaceState, setWorkspaceState] = useState<CourseWorkspaceState>(() =>
     loadWorkspaceState()
   );
   const [subView, setSubView] = useState<CourseSubView>(
-    initialModuleId ? "module" : "catalog"
+    initialSubView || (initialModuleId ? "module" : "catalog")
   );
   const [activeModuleId, setActiveModuleId] = useState<string>(
     initialModuleId || workspaceState.lastVisited?.moduleId || "m1"
@@ -78,6 +112,10 @@ export default function CourseSystemApp({
   >(() => loadAllQuizAnswers());
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportedFeedback, setExportedFeedback] = useState(false);
+  const [legacyImportPrompt, setLegacyImportPrompt] = useState(false);
+  const [legacyImporting, setLegacyImporting] = useState(false);
+  const [cloudNotice, setCloudNotice] = useState<string | null>(null);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -86,14 +124,79 @@ export default function CourseSystemApp({
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  const syncFromCloud = useCallback(async () => {
+    if (!session) return;
+    try {
+      const cloud = await fetchWorkspaceCloudState();
+      const localDraft = loadWorkspaceState();
+      const hasLocalDraft =
+        Object.keys(localDraft.completedUnitIds).length > 0 ||
+        Object.keys(localDraft.practiceNotes).length > 0 ||
+        localDraft.customKbEntries.length > 0;
+      const cloudEmpty =
+        Object.keys(cloud.completedUnitIds).length === 0 &&
+        Object.keys(cloud.practiceNotes).length === 0 &&
+        cloud.customKbEntries.length === 0;
+      if (hasLocalDraft && cloudEmpty) {
+        setLegacyImportPrompt(true);
+      }
+
+      setWorkspaceState((prev) => ({
+        ...prev,
+        completedUnitIds: cloud.completedUnitIds,
+        dodCheckedByUnit: cloud.dodCheckedByUnit,
+        selectedPlanByModule: {
+          ...prev.selectedPlanByModule,
+          ...cloud.selectedPlanByModule,
+        },
+        practiceNotes: cloud.practiceNotes,
+        customKbEntries: cloud.customKbEntries as CustomKnowledgeDraft[],
+        verifiedSkills: cloud.verifiedSkills as Record<string, SkillVerificationRecord>,
+        viewMode: isInstructorAuthorized ? prev.viewMode : "learner",
+      }));
+
+      const nextQuizAns: Record<string, Record<string, number>> = {};
+      for (const [modId, att] of Object.entries(cloud.latestQuizByModule)) {
+        nextQuizAns[modId] = att.answers;
+      }
+      setQuizAnswersByModule((prev) => ({ ...prev, ...nextQuizAns }));
+    } catch {
+      // Keep graceful state if cloud fetch transiently fails
+    }
+  }, [session, isInstructorAuthorized]);
+
+  useEffect(() => {
+    if (session) {
+      void syncFromCloud();
+    } else {
+      setWorkspaceState((prev) =>
+        prev.viewMode === "instructor" ? { ...prev, viewMode: "learner" } : prev
+      );
+    }
+  }, [session, syncFromCloud]);
+
+  useEffect(() => {
+    if (initialModuleId) {
+      setActiveModuleId(initialModuleId);
+      setSubView("module");
+    }
+  }, [initialModuleId]);
+
+  useEffect(() => {
+    if (initialSubView) {
+      setSubView(initialSubView);
+    }
+  }, [initialSubView]);
+
   const searchResponse = useMemo(
     () =>
       searchCourseWorkspace(globalQuery, {
         customKbEntries: workspaceState.customKbEntries,
-        includeInstructorMaterials: workspaceState.viewMode === "instructor",
+        includeInstructorMaterials:
+          isInstructorAuthorized && workspaceState.viewMode === "instructor",
         limit: 16,
       }),
-    [globalQuery, workspaceState.customKbEntries, workspaceState.viewMode]
+    [globalQuery, workspaceState.customKbEntries, workspaceState.viewMode, isInstructorAuthorized]
   );
 
   useEffect(() => {
@@ -252,52 +355,90 @@ export default function CourseSystemApp({
     });
   }, []);
 
+  const resolveUnitContext = (unitId: string) => {
+    for (const mod of COURSE_MODULE_RECORDS) {
+      if (mod.units.some((u) => u.id === unitId)) {
+        const planId =
+          workspaceState.selectedPlanByModule[mod.id] || mod.deliveryPlans[0]?.id || `${mod.id}-plan-double`;
+        return { moduleId: mod.id, planId };
+      }
+    }
+    return { moduleId: activeModuleId, planId: `${activeModuleId}-plan-double` };
+  };
+
   const handleToggleUnitComplete = (unitId: string) => {
+    const nextCompleted = !workspaceState.completedUnitIds[unitId];
     updateState((prev) => ({
       ...prev,
       completedUnitIds: {
         ...prev.completedUnitIds,
-        [unitId]: !prev.completedUnitIds[unitId],
+        [unitId]: nextCompleted,
       },
     }));
+    if (session) {
+      const ctx = resolveUnitContext(unitId);
+      void saveWorkspaceUnitProgress({
+        moduleId: ctx.moduleId,
+        unitId,
+        planId: ctx.planId,
+        completed: nextCompleted,
+      });
+    }
   };
 
   const handleToggleCriterion = (unitId: string, criterionText: string) => {
-    updateState((prev) => {
-      const current = prev.dodCheckedByUnit[unitId] || [];
-      const nextList = current.includes(criterionText)
-        ? current.filter((item) => item !== criterionText)
-        : [...current, criterionText];
-      return {
-        ...prev,
-        dodCheckedByUnit: {
-          ...prev.dodCheckedByUnit,
-          [unitId]: nextList,
-        },
-      };
-    });
+    const current = workspaceState.dodCheckedByUnit[unitId] || [];
+    const nextList = current.includes(criterionText)
+      ? current.filter((item) => item !== criterionText)
+      : [...current, criterionText];
+    updateState((prev) => ({
+      ...prev,
+      dodCheckedByUnit: {
+        ...prev.dodCheckedByUnit,
+        [unitId]: nextList,
+      },
+    }));
+    if (session) {
+      const ctx = resolveUnitContext(unitId);
+      void saveWorkspaceUnitProgress({
+        moduleId: ctx.moduleId,
+        unitId,
+        planId: ctx.planId,
+        dodChecked: nextList,
+      });
+    }
   };
 
   const handleSavePracticeNote = (unitId: string, partial: Partial<PracticeNoteRecord>) => {
     const today = new Date().toISOString().slice(0, 10);
-    updateState((prev) => {
-      const existing = prev.practiceNotes[unitId] || {
-        artifactDraft: "",
-        reflectionNote: "",
-        updatedAt: today,
-      };
-      return {
-        ...prev,
-        practiceNotes: {
-          ...prev.practiceNotes,
-          [unitId]: {
-            ...existing,
-            ...partial,
-            updatedAt: today,
-          },
-        },
-      };
-    });
+    const existing = workspaceState.practiceNotes[unitId] || {
+      artifactDraft: "",
+      reflectionNote: "",
+      updatedAt: today,
+    };
+    const merged = {
+      ...existing,
+      ...partial,
+      updatedAt: today,
+    };
+    updateState((prev) => ({
+      ...prev,
+      practiceNotes: {
+        ...prev.practiceNotes,
+        [unitId]: merged,
+      },
+    }));
+    if (session) {
+      const ctx = resolveUnitContext(unitId);
+      void saveWorkspaceUnitProgress({
+        moduleId: ctx.moduleId,
+        unitId,
+        planId: ctx.planId,
+        artifactDraft: merged.artifactDraft,
+        reflectionNote: merged.reflectionNote,
+        selectedTransferTier: merged.selectedTransferTier ?? null,
+      });
+    }
   };
 
   const handleAddCustomKb = (entry: Omit<CustomKnowledgeDraft, "id" | "updatedAt">) => {
@@ -307,6 +448,17 @@ export default function CourseSystemApp({
       ...prev,
       customKbEntries: [{ ...entry, id, updatedAt: today }, ...prev.customKbEntries],
     }));
+    if (session) {
+      void saveCustomKbEntry({
+        clientEntryId: id,
+        title: entry.title,
+        moduleCode: entry.moduleCode,
+        category: entry.category,
+        scope: entry.scope,
+        content: entry.content,
+        cautionNote: entry.cautionNote,
+      });
+    }
   };
 
   const handleDeleteCustomKb = (id: string) => {
@@ -314,13 +466,39 @@ export default function CourseSystemApp({
       ...prev,
       customKbEntries: prev.customKbEntries.filter((item) => item.id !== id),
     }));
+    if (session) {
+      void deleteCustomKbEntry(id);
+    }
   };
 
   const handleToggleViewMode = () => {
+    if (!isInstructorAuthorized) return;
     updateState((prev) => ({
       ...prev,
       viewMode: prev.viewMode === "learner" ? "instructor" : "learner",
     }));
+  };
+
+  const handleImportLegacyDrafts = async () => {
+    const localDraft = loadWorkspaceState();
+    setLegacyImporting(true);
+    try {
+      const res = await importLegacyWorkspace({
+        completedUnitIds: localDraft.completedUnitIds,
+        dodCheckedByUnit: localDraft.dodCheckedByUnit,
+        practiceNotes: localDraft.practiceNotes,
+        customKbEntries: localDraft.customKbEntries,
+      });
+      setLegacyImportPrompt(false);
+      setCloudNotice(
+        `已导入 ${res.importedUnits} 条单元进度/草稿与 ${res.importedKb} 条个人知识到云端（草稿导入不直接授予技能认证）。`
+      );
+      await syncFromCloud();
+    } catch (err) {
+      setCloudNotice(err instanceof Error ? err.message : "导入历史草稿失败。");
+    } finally {
+      setLegacyImporting(false);
+    }
   };
 
   const handleVerifySkill = (record: SkillVerificationRecord) => {
@@ -380,6 +558,18 @@ export default function CourseSystemApp({
       <header className="sticky top-0 z-30 bg-[#070a12]/95 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
+            {onGoOfficialHome && (
+              <button
+                type="button"
+                onClick={onGoOfficialHome}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+                title="返回 AI Coding 确定性研发学院官网首页"
+              >
+                <Globe className="w-3.5 h-3.5 text-gemini-cyan" />
+                <span className="hidden sm:inline">官网</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setSubView("catalog")}
@@ -419,8 +609,50 @@ export default function CourseSystemApp({
               }`}
             >
               <BookMarked className="w-3.5 h-3.5" />
-              <span>知识库中心</span>
+              <span>知识库</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setSubView("cohort")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                subView === "cohort"
+                  ? "bg-emerald-400 text-slate-950 font-semibold"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>班级与作业</span>
+            </button>
+
+            {isInstructorAuthorized && (
+              <button
+                type="button"
+                onClick={() => setSubView("instructor")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                  subView === "instructor"
+                    ? "bg-gemini-purple text-white font-semibold"
+                    : "text-purple-200 hover:bg-gemini-purple/20"
+                }`}
+              >
+                <span>教师批改台</span>
+              </button>
+            )}
+
+            {session?.isAdmin && (
+              <button
+                type="button"
+                onClick={() => setSubView("admin")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                  subView === "admin"
+                    ? "bg-amber-400 text-slate-950 font-semibold"
+                    : "text-amber-200 hover:bg-amber-500/20"
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>教务后台</span>
+              </button>
+            )}
 
             {/* Global Search Bar beside Navigation Tabs */}
             <div ref={searchBoxRef} className="relative ml-0 sm:ml-1.5 w-full sm:w-64 lg:w-72">
@@ -572,27 +804,29 @@ export default function CourseSystemApp({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleToggleViewMode}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
-                workspaceState.viewMode === "instructor"
-                  ? "bg-gemini-purple/25 border-gemini-purple text-purple-100"
-                  : "bg-white/5 border-white/15 text-slate-300 hover:text-white"
-              }`}
-            >
-              {workspaceState.viewMode === "instructor" ? (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-gemini-purple" />
-                  <span>教师视图</span>
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                  <span>学员视图</span>
-                </>
-              )}
-            </button>
+            {isInstructorAuthorized && (
+              <button
+                type="button"
+                onClick={handleToggleViewMode}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                  workspaceState.viewMode === "instructor"
+                    ? "bg-gemini-purple/25 border-gemini-purple text-purple-100"
+                    : "bg-white/5 border-white/15 text-slate-300 hover:text-white"
+                }`}
+              >
+                {workspaceState.viewMode === "instructor" ? (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-gemini-purple" />
+                    <span>教师视图</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                    <span>学员视图</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               type="button"
@@ -612,7 +846,7 @@ export default function CourseSystemApp({
               ) : (
                 <>
                   <Download className="w-3.5 h-3.5 text-gemini-cyan" />
-                  <span>导出成果 (.md)</span>
+                  <span className="hidden xl:inline">导出成果 (.md)</span>
                 </>
               )}
             </button>
@@ -624,11 +858,11 @@ export default function CourseSystemApp({
                 className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-rose-500/15 border border-white/15 hover:border-rose-400/40 text-xs text-slate-300 hover:text-rose-200 cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>清除本地数据</span>
+                <span className="hidden xl:inline">清除本地草稿</span>
               </button>
             ) : (
               <div className="flex items-center gap-1 bg-rose-500/15 border border-rose-400/40 rounded-lg px-2 py-1 text-xs">
-                <span className="text-rose-200">确认清空进度与笔记？</span>
+                <span className="text-rose-200">确认清空本地缓存？</span>
                 <button
                   type="button"
                   onClick={handleConfirmClearAll}
@@ -653,14 +887,83 @@ export default function CourseSystemApp({
                   moduleId: subView === "module" ? activeModuleId : undefined,
                 })
               }
-              className="px-3 py-1.5 rounded-lg bg-gemini-cyan/15 hover:bg-gemini-cyan/25 border border-gemini-cyan/40 text-xs font-semibold text-gemini-cyan cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg bg-gemini-cyan/15 hover:bg-gemini-cyan/25 border border-gemini-cyan/40 text-xs font-semibold text-gemini-cyan cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <PresentationIcon className="w-3.5 h-3.5" />
-              <span>幻灯片模式 (Reveal)</span>
+              <span>幻灯片模式</span>
             </button>
+
+            {session ? (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenBilling?.()}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 inline-flex items-center gap-1.5 cursor-pointer"
+                  title={session.user.email}
+                >
+                  <CreditCard className="w-3.5 h-3.5 text-gemini-cyan" />
+                  <span className="font-mono text-[11px]">
+                    {hasPaidAccess ? "已开通权益" : "订阅 / 兑换"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void signOutUser()}
+                  aria-label="退出登录"
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={() => void signInWithGoogle()}
+                className="px-3 py-1.5 rounded-lg bg-gemini-purple text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>登录解锁</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Cloud Sync / Legacy LocalStorage Draft Migration Banner */}
+      {(legacyImportPrompt || cloudNotice) && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3">
+          <div className="p-3 rounded-xl border border-gemini-cyan/35 bg-gemini-cyan/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <span className="text-slate-100">
+              {cloudNotice ||
+                "检测到您登录前在浏览器本地保存了练习笔记与单元进度，是否作为历史草稿导入当前云端账号？（导入草稿不自动授予测验成绩或技能认证）"}
+            </span>
+            <div className="flex items-center gap-2">
+              {legacyImportPrompt && (
+                <button
+                  type="button"
+                  disabled={legacyImporting}
+                  onClick={() => void handleImportLegacyDrafts()}
+                  className="px-3 py-1 rounded-lg bg-gemini-cyan text-slate-950 font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  <span>{legacyImporting ? "导入中..." : "一键导入云端"}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setLegacyImportPrompt(false);
+                  setCloudNotice(null);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/10 text-slate-200 cursor-pointer"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sub-view Router */}
       <main className="pb-12">
@@ -669,6 +972,9 @@ export default function CourseSystemApp({
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
             quizAnswersByModule={quizAnswersByModule}
+            hasPaidAccess={hasPaidAccess}
+            isInstructorAuthorized={isInstructorAuthorized}
+            onOpenBilling={onOpenBilling}
             onOpenModule={handleOpenModule}
             onApplyPlanPresetAll={handleApplyPlanPresetAll}
             onOpenKnowledgeBase={(modCode, track) =>
@@ -685,6 +991,14 @@ export default function CourseSystemApp({
             initialUnitId={activeUnitId}
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
+            hasPaidAccess={hasPaidAccess}
+            isInstructorAuthorized={isInstructorAuthorized}
+            isSignedIn={Boolean(session)}
+            onOpenBilling={onOpenBilling}
+            onRefreshCloudState={() => {
+              void syncFromCloud();
+              void refreshSession();
+            }}
             onBackToCatalog={() => setSubView("catalog")}
             onOpenModule={(modId) => handleOpenModule(modId)}
             onSelectPlan={handleSelectPlan}
@@ -718,6 +1032,17 @@ export default function CourseSystemApp({
             onOpenRuntimeLab={(labId) => onSwitchToReveal({ labId })}
           />
         )}
+
+        {subView === "cohort" && (
+          <CohortLearnerPanel
+            onOpenBilling={() => onOpenBilling?.()}
+            onJumpToModule={(modId) => handleOpenModule(modId)}
+          />
+        )}
+
+        {subView === "instructor" && <InstructorCockpit />}
+
+        {subView === "admin" && <AdminConsole />}
       </main>
     </div>
   );

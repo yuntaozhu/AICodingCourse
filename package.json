@@ -14,17 +14,24 @@
   "dependencies": {
     "@google/genai": "^3.3.0",
     "@types/d3": "^7.4.3",
+    "@types/pg": "^8.23.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.2",
     "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
+    "firebase": "^13.4.0",
+    "firebase-admin": "^14.5.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
     "reveal.js": "^6.0.0",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

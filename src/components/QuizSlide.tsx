@@ -75,7 +75,15 @@ function saveStoredModuleAnswers(
   }
 }
 
+import { useAuth } from "@/context/AuthContext";
+import { submitQuizAnswers } from "@/lib/apiClient";
+
 export default function QuizSlide({ quiz }: QuizSlideProps) {
+  const { session, signInWithGoogle } = useAuth();
+  const isFreeTrial = quiz.moduleId === "m1";
+  const hasPaidAccess = Boolean(session?.hasPaidAccess);
+  const canTakeQuiz = isFreeTrial || hasPaidAccess;
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>(() =>
     loadStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber)
@@ -117,16 +125,52 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
 
   const handleSelectOption = (optionIndex: number, e?: MouseEvent) => {
     e?.stopPropagation();
-    if (isAnswered) return;
+    if (!canTakeQuiz || isAnswered) return;
     setAnswers((prev) => {
       const next = {
         ...prev,
         [currentQuestion.id]: optionIndex,
       };
       saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, next);
+      if (session && Object.keys(next).length === totalCount) {
+        void submitQuizAnswers(quiz.moduleId, next).catch(() => {});
+      }
       return next;
     });
   };
+
+  if (!canTakeQuiz) {
+    return (
+      <Slide
+        backgroundColor={quiz.backgroundColor ?? "#020205"}
+        notes={`${formatModuleCodeFromId(quiz.moduleId)} 测验需要登录并开通课程权益后解锁。`}
+      >
+        <div className="max-w-3xl mx-auto h-full flex flex-col justify-center items-center text-center space-y-5">
+          <div className="text-xs font-mono uppercase tracking-[0.2em] text-amber-300">
+            ENTITLEMENT REQUIRED · {formatModuleCodeFromId(quiz.moduleId)}
+          </div>
+          <h3 className="text-3xl font-bold text-white">{quiz.moduleTitle} · 模块验收测验</h3>
+          <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
+            M1 模块测验开放免费体验；M2–M13-Eng 完整题库与服务端判分记录需登录账号并开通自助学习卡或小班权益后作答。
+          </p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!session) {
+                void signInWithGoogle();
+              } else {
+                window.dispatchEvent(new CustomEvent("app:open-billing"));
+              }
+            }}
+            className="px-5 py-2.5 rounded-xl bg-gemini-purple text-white text-sm font-semibold cursor-pointer"
+          >
+            {session ? "开通权益或兑换激活码" : "登录账号解锁测验"}
+          </button>
+        </div>
+      </Slide>
+    );
+  }
 
   const handlePrev = (e: MouseEvent) => {
     e.stopPropagation();

@@ -40,6 +40,9 @@ interface CourseCatalogHomeProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
   quizAnswersByModule: Record<string, Record<string, number>>;
+  hasPaidAccess?: boolean;
+  isInstructorAuthorized?: boolean;
+  onOpenBilling?: () => void;
   onOpenModule: (moduleId: string, unitId?: string, planId?: string) => void;
   onApplyPlanPresetAll: (preset: "double" | "short" | "workshop" | "self") => void;
   onOpenKnowledgeBase: (moduleCode?: string, track?: KnowledgeBaseTrack) => void;
@@ -50,6 +53,9 @@ export default function CourseCatalogHome({
   workspaceState,
   completedLabIds,
   quizAnswersByModule,
+  hasPaidAccess = false,
+  isInstructorAuthorized = false,
+  onOpenBilling,
   onOpenModule,
   onApplyPlanPresetAll,
   onOpenKnowledgeBase,
@@ -57,6 +63,7 @@ export default function CourseCatalogHome({
 }: CourseCatalogHomeProps) {
   const [selectedPathId, setSelectedPathId] = useState<LearnerPersonaId | "all">("all");
   const [selectedTrackId, setSelectedTrackId] = useState<TrackId | "all">("all");
+  const canShowInstructor = isInstructorAuthorized && workspaceState.viewMode === "instructor";
 
   const overall = getCourseOverallStats(workspaceState);
   const overallPercent =
@@ -213,7 +220,9 @@ export default function CourseCatalogHome({
             </dl>
           </div>
           <div className="text-[11px] font-mono text-slate-400 leading-relaxed">
-            所有学习进度、DoD 勾选、练习复盘与自建知识条目均存储在当前浏览器本地（无账号/无数据库要求，无 API Key 亦可完整学习）。
+            {hasPaidAccess
+              ? "已开通云端账号同步：学习进度、测验记录与技能档案自动持久化到云端数据库。"
+              : "未登录/免费体验状态下支持 M1 完整试学；登录并开通会员或小班权益后自动解锁 M2–M13-Eng 及云端同步。"}
           </div>
         </div>
       </section>
@@ -492,7 +501,7 @@ export default function CourseCatalogHome({
                 </button>
               );
             })}
-            {workspaceState.viewMode === "instructor" && (
+            {canShowInstructor && (
               <button
                 type="button"
                 onClick={() => {
@@ -606,8 +615,8 @@ export default function CourseCatalogHome({
                     可选授课方案：{mod.deliveryPlans.map((p) => p.shortLabel).join(" / ")}
                   </div>
 
-                  {/* Instructor Prep Quick Strip (Strictly hidden in Learner View) */}
-                  {workspaceState.viewMode === "instructor" && teachingPkg && (
+                  {/* Instructor Prep Quick Strip (Strictly hidden unless authorized instructor/admin) */}
+                  {canShowInstructor && teachingPkg && (
                     <div className="p-2.5 rounded-xl bg-gemini-purple/10 border border-gemini-purple/35 text-[11px] space-y-1">
                       <div className="font-mono text-purple-200 inline-flex items-center gap-1 font-semibold">
                         <GraduationCap className="w-3.5 h-3.5 text-gemini-purple" />
@@ -628,24 +637,39 @@ export default function CourseCatalogHome({
                       {stats.totalCount} 单元
                     </span>
                     <span className="text-slate-400">
-                      {mod.labIds.length > 0
-                        ? `沙盘 ${modLabsDone}/${mod.labIds.length}`
-                        : "无外挂沙盘（蓝图练习单）"}
-                      {modQuiz && modQuizSummary
+                      {mod.id !== "m1" && !hasPaidAccess ? (
+                        <span className="text-amber-300">会员/班级权益解锁</span>
+                      ) : mod.labIds.length > 0 ? (
+                        `沙盘 ${modLabsDone}/${mod.labIds.length}`
+                      ) : (
+                        "无外挂沙盘（蓝图练习单）"
+                      )}
+                      {modQuiz && modQuizSummary && (mod.id === "m1" || hasPaidAccess)
                         ? ` · 测验 ${modQuizSummary.correctCount}/${modQuiz.questions.length}`
                         : ""}
                     </span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onOpenModule(mod.id, undefined, activePlan?.id)}
-                      className="flex-1 min-w-[140px] px-3 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
-                    >
-                      <span>进入学习单元</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {mod.id === "m1" || hasPaidAccess ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenModule(mod.id, undefined, activePlan?.id)}
+                        className="flex-1 min-w-[140px] px-3 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                      >
+                        <span>{mod.id === "m1" && !hasPaidAccess ? "免费试学本模块" : "进入学习单元"}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => (onOpenBilling ? onOpenBilling() : onOpenModule(mod.id))}
+                        className="flex-1 min-w-[140px] px-3 py-2 rounded-xl bg-gemini-purple/25 border border-gemini-purple/50 text-purple-100 font-semibold text-xs hover:bg-gemini-purple/35 transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                      >
+                        <span>开通权益 / 兑换解锁</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() =>

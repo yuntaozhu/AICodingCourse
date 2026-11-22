@@ -1,6 +1,8 @@
-import { useState } from "react";
-import CourseSystemApp from "@/components/course/CourseSystemApp";
+import { useEffect, useState } from "react";
+import CourseSystemApp, { type CourseSubView } from "@/components/course/CourseSystemApp";
+import BillingModal from "@/components/lms/BillingModal";
 import Presentation, { type LabJumpItem, type ModuleNavItem } from "@/components/Presentation";
+import OfficialHomePage from "@/components/website/OfficialHomePage";
 import { Module1Slides } from "@/components/slides/Module1";
 import { Module2Slides } from "@/components/slides/Module2";
 import { Module3Slides } from "@/components/slides/Module3";
@@ -39,20 +41,47 @@ import AgentLoopSlide from "@/components/slides/Module12/AgentLoopSlide";
 import GovEvalSlide from "@/components/slides/Module13Gov/GovEvalSlide";
 import { AI_BOOKS_KNOWLEDGE_BASE } from "@/data/aiBooksKnowledgeBase";
 
-type AppViewMode = "workspace" | "slides";
+type AppViewMode = "website" | "workspace" | "slides";
+
+function detectInitialView(): AppViewMode {
+  if (typeof window === "undefined") return "website";
+  if (window.location.hash.startsWith("#/")) {
+    return "slides";
+  }
+  if (window.location.pathname.startsWith("/app")) {
+    return "workspace";
+  }
+  return "website";
+}
 
 function App() {
-  const [appMode, setAppMode] = useState<AppViewMode>(() => {
-    if (typeof window !== "undefined" && window.location.hash.startsWith("#/")) {
-      return "slides";
-    }
-    return "workspace";
-  });
+  const [appMode, setAppMode] = useState<AppViewMode>(detectInitialView);
   const [workspaceModuleId, setWorkspaceModuleId] = useState<string | undefined>(undefined);
+  const [workspaceSubView, setWorkspaceSubView] = useState<CourseSubView | undefined>(undefined);
+  const [billingOpen, setBillingOpen] = useState(false);
   const [pendingRevealTarget, setPendingRevealTarget] = useState<{
     h: number;
     v?: number;
   } | null>(null);
+
+  useEffect(() => {
+    const handleOpenBilling = () => setBillingOpen(true);
+    const handlePopState = () => {
+      if (window.location.hash.startsWith("#/")) {
+        setAppMode("slides");
+      } else if (window.location.pathname.startsWith("/app")) {
+        setAppMode("workspace");
+      } else {
+        setAppMode("website");
+      }
+    };
+    window.addEventListener("app:open-billing", handleOpenBilling);
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("app:open-billing", handleOpenBilling);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   const moduleGroups = [
     { id: "m1", label: "M1 Cursor范式", title: "Module 1: Cursor AI Coding 研发范式革命", slides: Module1Slides },
@@ -135,12 +164,22 @@ function App() {
     setAppMode("slides");
   };
 
-  const handleOpenCourseSystem = (moduleId?: string) => {
+  const handleOpenCourseSystem = (moduleId?: string, subView?: CourseSubView) => {
     setWorkspaceModuleId(moduleId);
-    if (typeof window !== "undefined" && window.location.hash.startsWith("#/")) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setWorkspaceSubView(subView);
+    if (typeof window !== "undefined") {
+      if (window.location.hash.startsWith("#/") || window.location.pathname !== "/app") {
+        window.history.pushState(null, "", "/app");
+      }
     }
     setAppMode("workspace");
+  };
+
+  const handleGoOfficialHome = () => {
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.history.pushState(null, "", "/");
+    }
+    setAppMode("website");
   };
 
   return (
@@ -151,23 +190,44 @@ function App() {
           : "min-h-screen w-screen bg-[#020205]"
       }
     >
-      {appMode === "workspace" ? (
+      {appMode === "website" && (
+        <OfficialHomePage
+          onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
+          onOpenBilling={() => setBillingOpen(true)}
+          onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}
+          onOpenInstructorCockpit={() => handleOpenCourseSystem(undefined, "instructor")}
+          onOpenAdminConsole={() => handleOpenCourseSystem(undefined, "admin")}
+        />
+      )}
+
+      {appMode === "workspace" && (
         <CourseSystemApp
           initialModuleId={workspaceModuleId}
+          initialSubView={workspaceSubView}
+          onGoOfficialHome={handleGoOfficialHome}
+          onOpenBilling={() => setBillingOpen(true)}
           onSwitchToReveal={handleSwitchToReveal}
         />
-      ) : (
+      )}
+
+      {appMode === "slides" && (
         <Presentation
           modules={modules}
           labs={labs}
           initialJumpTarget={pendingRevealTarget}
-          onOpenCourseSystem={handleOpenCourseSystem}
+          onOpenCourseSystem={(modId) => handleOpenCourseSystem(modId)}
         >
           {allSlides.map((SlideComponent, index) => (
             <SlideComponent key={index} />
           ))}
         </Presentation>
       )}
+
+      <BillingModal
+        open={billingOpen}
+        onClose={() => setBillingOpen(false)}
+      />
     </main>
   );
 }
