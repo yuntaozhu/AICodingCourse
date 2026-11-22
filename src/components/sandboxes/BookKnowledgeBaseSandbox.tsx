@@ -11,6 +11,7 @@ import {
   type BookCategory,
   type KnowledgeBookItem,
 } from "@/data/aiBooksKnowledgeBase";
+import type { KnowledgeModuleCode } from "@/data/teamKnowledgeBase";
 import {
   buildOfflineCourseSynthesis,
   synthesizeCourseFromBooks,
@@ -20,7 +21,7 @@ import { CopySnippetButton } from "./SandboxFrame";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
 type RightPanelTab = "inspect" | "synthesize";
-type ModuleFilter = "ALL" | "M1" | "M2" | "M3" | "M4" | "M5" | "M6" | "M7" | "M8" | "M9" | "M10";
+type ModuleFilter = "ALL" | KnowledgeModuleCode;
 
 export default function BookKnowledgeBaseSandbox() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -240,7 +241,7 @@ export default function BookKnowledgeBaseSandbox() {
             className="px-2 py-1 rounded-lg bg-white/5 border border-white/15 text-xs font-mono text-slate-200 focus:outline-none focus:border-gemini-cyan cursor-pointer"
           >
             <option value="ALL" className="bg-[#0b0f19]">全部模块</option>
-            {(["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10"] as const).map((m) => (
+            {(["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12", "M13-Gov", "M13-Eng"] as const).map((m) => (
               <option key={m} value={m} className="bg-[#0b0f19]">
                 仅看 {m}
               </option>
@@ -536,9 +537,13 @@ export default function BookKnowledgeBaseSandbox() {
                     <option value="M5" className="bg-[#0b0f19]">目标：M5 DoD 验证闭环</option>
                     <option value="M6" className="bg-[#0b0f19]">目标：M6 Bugbot 异步</option>
                     <option value="M7" className="bg-[#0b0f19]">目标：M7 ROI 与演进</option>
-                    <option value="M8" className="bg-[#0b0f19]">目标：M8 案例实战库</option>
+                    <option value="M8" className="bg-[#0b0f19]">目标：M8 长程 Harness</option>
                     <option value="M9" className="bg-[#0b0f19]">目标：M9 全栈白盒图谱</option>
                     <option value="M10" className="bg-[#0b0f19]">目标：M10 审美与效能</option>
+                    <option value="M11" className="bg-[#0b0f19]">目标：M11 Agent 产品蓝图</option>
+                    <option value="M12" className="bg-[#0b0f19]">目标：M12 运行时 Agent 与 KB</option>
+                    <option value="M13-Gov" className="bg-[#0b0f19]">目标：M13-Gov 治理 Capstone</option>
+                    <option value="M13-Eng" className="bg-[#0b0f19]">目标：M13-Eng 工程 Capstone</option>
                   </select>
 
                   <select

@@ -19,14 +19,14 @@ export default function KnowledgeBaseSlide() {
       {/* Vertical Sub Slide 1: Reading-to-Curriculum Mapping */}
       <Slide
         backgroundColor="#050814"
-        notes={`展示这 ${bookCount} 册书籍与论文如何直接为本课程 M1-M10 十大模块提供学术与工程理论底座。`}
+        notes={`展示这 ${bookCount} 册书籍与论文如何为本课程 14 个核心模块提供学术与工程理论底座（由知识库中心链路 A 统一调度）。`}
       >
         <div className="max-w-6xl mx-auto h-full flex flex-col justify-center">
           <div className="text-xs font-mono text-gemini-cyan mb-2">
             KNOWLEDGE-TO-CURRICULUM MAP · 以书建课映射图谱
           </div>
           <h2 className="text-3xl font-bold text-white mb-6">
-            {bookCount} 册馆藏如何通过自动标签实质性增强十大模块？
+            {bookCount} 册馆藏如何通过自动标签实质性增强课程模块？
           </h2>
           <div className="grid grid-cols-4 gap-4 text-xs">
             <div className="p-4 rounded-2xl bg-white/5 border border-white/10">

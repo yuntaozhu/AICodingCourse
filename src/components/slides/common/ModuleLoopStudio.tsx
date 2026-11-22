@@ -21,6 +21,10 @@ import {
   KNOWLEDGE_STATUS_LABELS,
   type KnowledgeModuleCode,
 } from "@/data/teamKnowledgeBase";
+import {
+  getRuntimeKnowledgeEntriesForModule,
+  RUNTIME_WORKSHOP_MODULE_CODES,
+} from "@/data/runtimeKnowledgeBase";
 
 export interface LoopCaseBlock {
   title: string;
@@ -96,9 +100,14 @@ export default function ModuleLoopStudio({
   const [showReflectionHint, setShowReflectionHint] = useState(false);
 
   const teachingPkg = getModuleTeachingPackage(moduleCode);
-  const moduleKbEntries = getKnowledgeEntriesForModule(
-    moduleCode.toUpperCase() as KnowledgeModuleCode
+  const matchedRuntimeCode = RUNTIME_WORKSHOP_MODULE_CODES.find(
+    (code) => code.toLowerCase() === moduleCode.toLowerCase()
   );
+  const isRuntimeModule = Boolean(matchedRuntimeCode);
+  const resolvedModCode = (matchedRuntimeCode || moduleCode.toUpperCase()) as KnowledgeModuleCode;
+  const moduleKbEntries = isRuntimeModule
+    ? getRuntimeKnowledgeEntriesForModule(resolvedModCode)
+    : getKnowledgeEntriesForModule(resolvedModCode);
 
   const toggleDod = (id: string) => {
     setCheckedDodIds((prev) =>
@@ -109,7 +118,7 @@ export default function ModuleLoopStudio({
   const handleOpenTeamKb = () => {
     window.dispatchEvent(
       new CustomEvent("course:open-team-kb", {
-        detail: { moduleCode: moduleCode.toUpperCase() },
+        detail: { moduleCode: resolvedModCode },
       })
     );
   };
@@ -610,7 +619,10 @@ export default function ModuleLoopStudio({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-mono text-purple-200 flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5" />
-                        <span>团队知识库真实沉淀 ({moduleKbEntries.length})</span>
+                        <span>
+                          {isRuntimeModule ? "运行时工作坊" : "工程知识库"}真实沉淀 (
+                          {moduleKbEntries.length})
+                        </span>
                       </span>
                       <button
                         type="button"

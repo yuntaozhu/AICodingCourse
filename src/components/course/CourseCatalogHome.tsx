@@ -16,20 +16,25 @@ import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import {
   COURSE_LABS,
+  COURSE_TRACKS,
   LEARNER_PATHS,
   type LearnerPersonaId,
+  type TrackId,
 } from "@/data/courseCurriculum";
+import { COURSE_SKILLS, getSkillById } from "@/data/courseSkills";
 import {
   COURSE_MODULE_RECORDS,
   getDeliveryPlanMinutes,
   type CourseModuleRecord,
 } from "@/data/courseUnitsModel";
 import {
+  formatModuleCodeFromId,
   getCourseOverallStats,
   getModuleCompletionStats,
   type CourseWorkspaceState,
 } from "@/data/courseWorkspaceStore";
-import { TEAM_KNOWLEDGE_BASE } from "@/data/teamKnowledgeBase";
+import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
+import { TEAM_KNOWLEDGE_BASE, type KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
 
 interface CourseCatalogHomeProps {
   workspaceState: CourseWorkspaceState;
@@ -37,7 +42,7 @@ interface CourseCatalogHomeProps {
   quizAnswersByModule: Record<string, Record<string, number>>;
   onOpenModule: (moduleId: string, unitId?: string, planId?: string) => void;
   onApplyPlanPresetAll: (preset: "double" | "short" | "workshop" | "self") => void;
-  onOpenKnowledgeBase: (moduleCode?: string) => void;
+  onOpenKnowledgeBase: (moduleCode?: string, track?: KnowledgeBaseTrack) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string }) => void;
 }
 
@@ -51,6 +56,7 @@ export default function CourseCatalogHome({
   onSwitchToReveal,
 }: CourseCatalogHomeProps) {
   const [selectedPathId, setSelectedPathId] = useState<LearnerPersonaId | "all">("all");
+  const [selectedTrackId, setSelectedTrackId] = useState<TrackId | "all">("all");
 
   const overall = getCourseOverallStats(workspaceState);
   const overallPercent =
@@ -62,20 +68,37 @@ export default function CourseCatalogHome({
       : LEARNER_PATHS.find((p) => p.id === selectedPathId) ?? null;
 
   const pathSet = activePath ? new Set(activePath.recommendedModuleIds) : null;
+  const pathOrderMap = new Map<string, number>();
+  if (activePath) {
+    activePath.recommendedModuleIds.forEach((modId, index) => {
+      pathOrderMap.set(modId, index + 1);
+    });
+  }
 
-  const orderedModules: CourseModuleRecord[] = pathSet
+  const pathOrderedModules: CourseModuleRecord[] = pathSet
     ? [
-        ...COURSE_MODULE_RECORDS.filter((m) => pathSet.has(m.id)),
+        ...COURSE_MODULE_RECORDS.filter((m) => pathSet.has(m.id)).sort(
+          (a, b) => (pathOrderMap.get(a.id) ?? 99) - (pathOrderMap.get(b.id) ?? 99)
+        ),
         ...COURSE_MODULE_RECORDS.filter((m) => !pathSet.has(m.id)),
       ]
     : COURSE_MODULE_RECORDS;
+
+  const orderedModules: CourseModuleRecord[] =
+    selectedTrackId === "all"
+      ? pathOrderedModules
+      : pathOrderedModules.filter((m) => m.trackId === selectedTrackId);
+
+  const verifiedSkillCount = COURSE_SKILLS.filter((sk) =>
+    Boolean(workspaceState.verifiedSkills?.[sk.id])
+  ).length;
 
   const lastVisitedModule = workspaceState.lastVisited
     ? COURSE_MODULE_RECORDS.find((m) => m.id === workspaceState.lastVisited?.moduleId)
     : undefined;
 
   const resumeLabel = lastVisitedModule
-    ? `继续学习：${lastVisitedModule.code} ${lastVisitedModule.title.replace(/^Module \d+:\s*/i, "")}`
+    ? `继续学习：${lastVisitedModule.code} ${lastVisitedModule.title.replace(/^Module\s+[\w-]+:\s*/i, "")}`
     : "从 M1 完整样板开始学习";
 
   return (
@@ -94,7 +117,7 @@ export default function CourseCatalogHome({
               课程内容管理 · 课堂呈现 · 人机练习 · 知识沉淀
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-              按「意图定义 → 人机边界 → 故意暴露错误与约束纠偏 → DoD/Rubric 验收 → 团队知识库沉淀」组织 10 个课程模块。支持按短讲、工作坊、双课时与自主学习动态重组单元顺序，并与原有 Reveal.js 幻灯片及 16 个交互沙盘无缝并存。
+              按「AI Coding 基本功（Track 1）→ 长程软件 Harness（Track 2）→ Agent 蓝图、运行时 KB 与双轨 Capstone（Track 3）」组织 14 个课程模块。支持按短讲、工作坊、双课时与自主学习动态重组单元顺序，并与 Reveal.js 幻灯片及 {COURSE_LABS.length} 个交互沙盘无缝并存。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -124,7 +147,7 @@ export default function CourseCatalogHome({
             >
               <BookMarked className="w-4 h-4 text-gemini-purple" />
               <span className="tabular-nums">
-                进入知识库中心 ({TEAM_KNOWLEDGE_BASE.length + workspaceState.customKbEntries.length} 条)
+                进入知识库中心 (工程 {TEAM_KNOWLEDGE_BASE.length + workspaceState.customKbEntries.length} · 运行时 {RUNTIME_WORKSHOP_KNOWLEDGE_BASE.length})
               </span>
             </button>
 
@@ -195,12 +218,70 @@ export default function CourseCatalogHome({
         </div>
       </section>
 
+      {/* Skill Readiness Summary Bar */}
+      <section className="p-4 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="font-semibold text-white">
+            前置技能就绪度与能力核验门禁 ({verifiedSkillCount}/{COURSE_SKILLS.length} 已核验)
+          </div>
+          <span className="font-mono text-[11px] text-amber-300">
+            完成 M3 不会自动授予后端鉴权或项目迭代技能，须提交可核验 Starter 证据、通过 2 题诊断或路径基线豁免
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
+          {COURSE_SKILLS.map((sk) => {
+            const verified = workspaceState.verifiedSkills?.[sk.id];
+            const waivedByPath = activePath?.assumedBaselineSkillIds.includes(sk.id);
+            const skillTargetModuleMap: Record<string, string> = {
+              "skill-cli-basics": "m5",
+              "skill-git-pr-ci": "m6",
+              "skill-fullstack-boundary": "m9",
+              "skill-backend-api-auth": "m3",
+              "skill-ai-project-exp": "m3",
+            };
+            const targetMod = sk.remediationModuleId || skillTargetModuleMap[sk.id] || "m5";
+            return (
+              <button
+                key={sk.id}
+                type="button"
+                onClick={() => onOpenModule(targetMod)}
+                className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer space-y-1 ${
+                  verified
+                    ? "bg-emerald-500/10 border-emerald-400/35 text-emerald-100"
+                    : waivedByPath
+                    ? "bg-gemini-cyan/10 border-gemini-cyan/35 text-slate-100"
+                    : "bg-white/[0.025] border-white/10 text-slate-300 hover:border-white/25"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 font-mono text-[10px]">
+                  <span className="truncate">{sk.shortLabel}</span>
+                  <span
+                    className={
+                      verified
+                        ? "text-emerald-300 shrink-0"
+                        : waivedByPath
+                        ? "text-gemini-cyan shrink-0"
+                        : "text-amber-300 shrink-0"
+                    }
+                  >
+                    {verified ? "已核验" : waivedByPath ? "路径豁免" : "待核验"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 line-clamp-1">
+                  点击前往 {formatModuleCodeFromId(targetMod)} 核验 →
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Learner Paths Section */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <Compass className="w-4 h-4 text-gemini-cyan" />
-            <span>按学习者背景与角色筛选推荐路径</span>
+            <span>按学习者背景与角色筛选推荐路径（已通过 DAG + 双层能力闭合验证）</span>
           </div>
           {activePath && (
             <button
@@ -208,7 +289,7 @@ export default function CourseCatalogHome({
               onClick={() => setSelectedPathId("all")}
               className="text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
             >
-              显示全部 10 模块顺序
+              显示全部 {COURSE_MODULE_RECORDS.length} 模块顺序
             </button>
           )}
         </div>
@@ -223,9 +304,9 @@ export default function CourseCatalogHome({
                 : "bg-[#0b0f19] border-white/10 text-slate-300 hover:border-white/25"
             }`}
           >
-            <div className="text-xs font-semibold">完整全栈路径 (M1–M10)</div>
+            <div className="text-xs font-semibold">完整全栈路径 (M1–M13-Eng)</div>
             <div className="text-[11px] text-slate-400 leading-relaxed">
-              按课程标准顺序浏览全 10 个模块、16 个沙盘与完整闭环。
+              浏览全部 {COURSE_MODULE_RECORDS.length} 个模块、{COURSE_LABS.length} 个沙盘与双轨 Capstone。
             </div>
           </button>
 
@@ -258,10 +339,25 @@ export default function CourseCatalogHome({
 
         {activePath && (
           <div className="p-4 rounded-xl bg-white/[0.03] border border-gemini-cyan/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="font-semibold text-white">
-                {activePath.label}推荐路线 · 建议时长 {activePath.estimatedTotalHours} · 核心里程碑：
-                {activePath.keyMilestone}
+                {activePath.label}推荐路线 · 建议时长 {activePath.estimatedTotalHours} · 目标终点：
+                {activePath.capstoneTargetId === "m13-gov"
+                  ? "M13-Gov（无代码产品与治理 Capstone）"
+                  : "M13-Eng（生产级工程 Capstone）"}
+              </div>
+              <div className="text-slate-300">里程碑：{activePath.keyMilestone}</div>
+              <div className="text-slate-400 font-mono text-[11px]">
+                默认入场基线模块：
+                {activePath.assumedBaselineIds.length > 0
+                  ? activePath.assumedBaselineIds.map((id) => id.toUpperCase()).join(", ")
+                  : "无（从零修习）"}{" "}
+                · 默认技能基线：
+                {activePath.assumedBaselineSkillIds.length > 0
+                  ? activePath.assumedBaselineSkillIds
+                      .map((sid) => getSkillById(sid)?.shortLabel || sid)
+                      .join(" / ")
+                  : "无（全量核验）"}
               </div>
               <div className="text-amber-300/90">安全红线：{activePath.focusBoundary}</div>
             </div>
@@ -276,16 +372,86 @@ export default function CourseCatalogHome({
         )}
       </section>
 
+      {/* Track 3 Dual-Capstone Comparison Strip */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div className="p-4 rounded-2xl bg-[#0b0f19] border border-amber-400/30 flex items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="font-mono text-amber-300 font-semibold">
+              Track 3 分流 A · M13-Gov（无代码产品与治理 Capstone）
+            </div>
+            <p className="text-slate-300 leading-relaxed">
+              面向产品经理与非技术学习者，基于 M11 双 PRD 与预制执行轨迹完成模拟治理评审，不强求先修 M12 工程实现。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenModule("m13-gov")}
+            className="px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-200 font-semibold cursor-pointer whitespace-nowrap shrink-0"
+          >
+            进入 M13-Gov
+          </button>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-[#0b0f19] border border-emerald-400/30 flex items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="font-mono text-emerald-300 font-semibold">
+              Track 3 分流 B · M13-Eng（生产级 Agent 与 KB 工程 Capstone）
+            </div>
+            <p className="text-slate-300 leading-relaxed">
+              面向独立开发者、工程团队与高校学生，打通 M8 长程 Coding Harness + M12 ACL/Tombstone 运行时服务 + Dual Eval。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenModule("m13-eng")}
+            className="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 font-semibold cursor-pointer whitespace-nowrap shrink-0"
+          >
+            进入 M13-Eng
+          </button>
+        </div>
+      </section>
+
       {/* Module Catalog Grid */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <Layers className="w-4 h-4 text-gemini-purple" />
-            <span>课程模块目录（全 10 模块均配备 10 类教学闭环单元）</span>
+            <span>
+              课程模块目录（全 {COURSE_MODULE_RECORDS.length} 模块均配备教学闭环单元）
+            </span>
           </div>
           <span className="text-xs font-mono text-slate-400">
-            每个模块均支持短讲 / 工作坊 / 双课时 / 自主学习方案动态切换
+            Track 仅为学习视图分组，不改变模块级真实先修 DAG 依赖
           </span>
+        </div>
+
+        {/* Track Filter Pills (Display View Only) */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSelectedTrackId("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+              selectedTrackId === "all"
+                ? "bg-gemini-cyan text-slate-950 font-semibold"
+                : "bg-[#0b0f19] border border-white/12 text-slate-300 hover:bg-white/10"
+            }`}
+          >
+            全部 14 模块
+          </button>
+          {COURSE_TRACKS.map((track) => (
+            <button
+              key={track.id}
+              type="button"
+              onClick={() => setSelectedTrackId(track.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                selectedTrackId === track.id
+                  ? "bg-gemini-purple text-white font-semibold"
+                  : "bg-[#0b0f19] border border-white/12 text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              {track.title} ({track.moduleIds.length})
+            </button>
+          ))}
         </div>
 
         {/* Batch Delivery Rhythm Preset Bar */}
@@ -346,7 +512,7 @@ export default function CourseCatalogHome({
                   }
                 }}
                 className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
-                title="按当前各模块已选授课方案导出全课 10 模块备课手册 (.md)"
+                title={`按当前各模块已选授课方案导出全课 ${COURSE_MODULE_RECORDS.length} 模块备课手册 (.md)`}
               >
                 <Download className="w-3.5 h-3.5 text-gemini-purple" />
                 <span>导出全课备课手册 (.md)</span>
@@ -363,11 +529,14 @@ export default function CourseCatalogHome({
             const activePlan =
               mod.deliveryPlans.find((p) => p.id === activePlanId) || mod.deliveryPlans[0];
             const stats = getModuleCompletionStats(mod, workspaceState, activePlan?.id);
-            const cleanTitle = mod.title.replace(/^Module \d+:\s*/i, "");
+            const cleanTitle = mod.title.replace(/^Module\s+[\w-]+:\s*/i, "");
             const modLabsDone = mod.labIds.filter((lid) => completedLabIds.includes(lid)).length;
             const teachingPkg = getModuleTeachingPackage(mod.id);
-            const modQuiz = MODULE_QUIZZES[mod.order];
-            const modQuizAnswers = quizAnswersByModule[String(mod.order)] || {};
+            const modQuiz = MODULE_QUIZZES[mod.id];
+            const modQuizAnswers =
+              quizAnswersByModule[mod.id] ??
+              (mod.order <= 10 ? quizAnswersByModule[String(mod.order)] : undefined) ??
+              {};
             const modQuizSummary = modQuiz ? getQuizReviewSummary(modQuiz, modQuizAnswers) : null;
 
             return (
@@ -385,6 +554,7 @@ export default function CourseCatalogHome({
                   {/* Top Metadata Inline Text (No static pill badges) */}
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono tabular-nums">
                     <span className="text-gemini-cyan font-semibold">
+                      {pathOrderMap.has(mod.id) ? `第${pathOrderMap.get(mod.id)}站 · ` : ""}
                       {mod.code} ·{" "}
                       {mod.exemplarLevel === "complete-exemplar"
                         ? "专项精修样板"
@@ -409,6 +579,15 @@ export default function CourseCatalogHome({
                     </h2>
                     <div className="text-xs text-slate-400 mt-1">
                       先修：{mod.prerequisites.join("；")}
+                      {mod.prerequisiteSkillIds.length > 0 && (
+                        <span className="text-amber-300/90">
+                          {" "}
+                          · 能力门禁：
+                          {mod.prerequisiteSkillIds
+                            .map((sid) => getSkillById(sid)?.shortLabel || sid)
+                            .join(" / ")}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -449,7 +628,9 @@ export default function CourseCatalogHome({
                       {stats.totalCount} 单元
                     </span>
                     <span className="text-slate-400">
-                      沙盘 {modLabsDone}/{mod.labIds.length}
+                      {mod.labIds.length > 0
+                        ? `沙盘 ${modLabsDone}/${mod.labIds.length}`
+                        : "无外挂沙盘（蓝图练习单）"}
                       {modQuiz && modQuizSummary
                         ? ` · 测验 ${modQuizSummary.correctCount}/${modQuiz.questions.length}`
                         : ""}
@@ -467,11 +648,16 @@ export default function CourseCatalogHome({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onOpenKnowledgeBase(mod.code)}
+                      onClick={() =>
+                        onOpenKnowledgeBase(
+                          mod.code,
+                          mod.trackId === "agent-runtime" ? "runtime-domain" : "engineering"
+                        )
+                      }
                       className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-slate-200 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <FileCode2 className="w-3.5 h-3.5 text-gemini-purple" />
-                      <span>知识库</span>
+                      <span>{mod.trackId === "agent-runtime" ? "运行时工作坊" : "工程知识库"}</span>
                     </button>
                     <button
                       type="button"

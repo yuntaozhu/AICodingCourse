@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Layers, ShieldCheck, Compass, RotateCcw } from "lucide-react";
+import { Layers, ShieldCheck, Compass, RotateCcw, GitBranch } from "lucide-react";
 import { stopRevealKey, stopRevealWheel } from "./revealEvents";
 
-type SandboxView = "compaction" | "harness" | "blueprint";
+type SandboxView = "compaction" | "harness" | "blueprint" | "long-horizon";
 type AgentModeId = "thinking" | "plan" | "build";
 type ReminderRole = "system_top" | "user_recency";
 
@@ -164,6 +164,44 @@ const AGENT_MODES: Record<
   },
 };
 
+const FIVE_HARNESS_COMPARE = [
+  {
+    id: "instruction",
+    category: "1. 指令（Instruction）",
+    weak: "一句「把项目继续做完」，无架构边界与验收方式，Agent 跨轮次自行脑补需求。",
+    strong: "四段式切片契约 + 本轮单任务锚定（M1/M4），明确声明禁止修改的公共路由与共享类型。",
+    courseModules: "M1 · M4",
+  },
+  {
+    id: "scope",
+    category: "2. 范围与权限（Scope & Permission）",
+    weak: "多个 Agent 在同一分支裸奔改写同一个目录，或 Plan 阶段保留直接删除/写库权限。",
+    strong: "Schema Gating 物理隐身写工具 + 按 Git Worktree 分配目录写入所有权，敏感变更留人类闸门。",
+    courseModules: "M2 · M4 · M8",
+  },
+  {
+    id: "tools",
+    category: "3. 工具与环境（Tools & Environment）",
+    weak: "每次新开会话环境不一致，全量注入 8 个 MCP 吃光 40% 启动预算。",
+    strong: "幂等 bash init.sh 一键对齐依赖与健康检查 + Lazy MCP 按需发现（<5% 启动占用）。",
+    courseModules: "M4 · M8",
+  },
+  {
+    id: "state",
+    category: "4. 状态与交接（State & Handoff）",
+    weak: "靠 40 轮纯聊天回忆进度；一触发自动摘要就把未解决报错和禁止项压缩丢掉。",
+    strong: "feature_list.json（JSON 进度锚点 + passes 只读验收）+ ACC 压缩摘要保留未过报错与路径边界。",
+    courseModules: "M2 · M8",
+  },
+  {
+    id: "verify",
+    category: "5. 验证与反馈（Verification & Feedback）",
+    weak: "修改断言或 skip 测试伪造通过，同一报错死循环修 12 轮烧光配额。",
+    strong: "客观 CLI 门禁（tsc / lint / test）+ 3-Nudge 错因分流（连续 3 次失败强制止损退回 Plan）。",
+    courseModules: "M5 · M6 · M8",
+  },
+];
+
 export default function AgentHarnessSandbox() {
   const [activeView, setActiveView] = useState<SandboxView>("compaction");
   const [pressure, setPressure] = useState<number>(85);
@@ -172,6 +210,8 @@ export default function AgentHarnessSandbox() {
   const [agentMode, setAgentMode] = useState<AgentModeId>("plan");
   const [reminderRole, setReminderRole] = useState<ReminderRole>("user_recency");
   const [blueprintSide, setBlueprintSide] = useState<"curriculum" | "platform">("curriculum");
+  const [harnessStrength, setHarnessStrength] = useState<"weak" | "strong">("strong");
+  const [worktreeMode, setWorktreeMode] = useState<"shared-dir" | "isolated-worktree">("isolated-worktree");
 
   const accStage = useMemo(() => getAccStage(pressure), [pressure]);
   const modeInfo = AGENT_MODES[agentMode];
@@ -237,7 +277,21 @@ export default function AgentHarnessSandbox() {
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
-            <span>03. 课程与系统双轨升级蓝图</span>
+            <span>03. 论文与模块映射</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView("long-horizon")}
+            onKeyDown={stopRevealKey}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
+              activeView === "long-horizon"
+                ? "bg-emerald-400 text-slate-950 font-semibold"
+                : "text-slate-300 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>04. 五类长程 Harness & Worktree</span>
           </button>
         </div>
 
@@ -248,6 +302,8 @@ export default function AgentHarnessSandbox() {
             setLazyMcp(true);
             setAgentMode("plan");
             setReminderRole("user_recency");
+            setHarnessStrength("strong");
+            setWorktreeMode("isolated-worktree");
           }}
           onKeyDown={stopRevealKey}
           className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-slate-300 hover:text-white hover:bg-white/10 transition-colors whitespace-nowrap shrink-0 cursor-pointer inline-flex items-center gap-1"
@@ -664,7 +720,7 @@ export default function AgentHarnessSandbox() {
             </div>
 
             <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] font-mono text-slate-300">
-              已同步收录进 M8 Lab 05 知识库（第 74 号文献），可直接勾选生成任意模块讲义或 .mdc 规则。
+              AI 书籍与工程文献备课已独立沉淀至「知识库中心」（Lab 05），M8 专注于长程软件任务的 Harness 与多 Coding Agent 协同。
             </div>
           </div>
 
@@ -740,7 +796,7 @@ export default function AgentHarnessSandbox() {
                   {
                     layer: "5. 惰性加载实验组件 & 离线 Stale-While-Revalidate",
                     detail:
-                      "延续课程 74 册知识库 + 离线模板引擎设计，即便无外网/无 Key 也能 100% 离线演练 Rules、MCP、Bugbot 与 ACC 沙盘。",
+                      "延续课程 78 册知识库 + 离线模板引擎设计，即便无外网/无 Key 也能 100% 离线演练 Rules、MCP、Bugbot 与 ACC 沙盘。",
                   },
                 ].map((item) => (
                   <div key={item.layer} className="p-3 rounded-xl bg-white/5 border border-white/10">
@@ -750,6 +806,147 @@ export default function AgentHarnessSandbox() {
                 ))}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeView === "long-horizon" && (
+        <div className="grid grid-cols-12 gap-4 h-[435px]">
+          {/* Left Zone: Unified 5 Harness Categories (Weak vs Strong) */}
+          <div
+            onWheel={stopRevealWheel}
+            className="col-span-7 bg-[#0b0f19] rounded-2xl border border-white/10 p-4 flex flex-col justify-between overflow-y-auto space-y-2.5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-mono text-emerald-300">
+                统一五类长程 CODING HARNESS · 弱 vs 强对照
+              </div>
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setHarnessStrength("weak")}
+                  onKeyDown={stopRevealKey}
+                  className={`px-2.5 py-1 rounded cursor-pointer whitespace-nowrap ${
+                    harnessStrength === "weak"
+                      ? "bg-rose-500/80 text-white font-semibold"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  弱 Harness（易失控）
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHarnessStrength("strong")}
+                  onKeyDown={stopRevealKey}
+                  className={`px-2.5 py-1 rounded cursor-pointer whitespace-nowrap ${
+                    harnessStrength === "strong"
+                      ? "bg-emerald-400 text-slate-950 font-semibold"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  强 Harness（长程可控）
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {FIVE_HARNESS_COMPARE.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-2.5 rounded-xl border text-xs ${
+                    harnessStrength === "strong"
+                      ? "bg-emerald-500/[0.06] border-emerald-400/25"
+                      : "bg-rose-500/[0.06] border-rose-400/25"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold text-white">{item.category}</span>
+                    <span className="font-mono text-[10px] text-slate-400">{item.courseModules}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-200 leading-relaxed">
+                    {harnessStrength === "strong" ? item.strong : item.weak}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Zone: init.sh / feature_list.json & Multi-Agent Worktree Isolation */}
+          <div
+            onWheel={stopRevealWheel}
+            className="col-span-5 bg-[#0b0f19] rounded-2xl border border-white/10 p-4 flex flex-col justify-between overflow-y-auto space-y-3"
+          >
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-mono text-gemini-cyan">
+                  多 CODING AGENT 并发工作区模拟
+                </span>
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setWorktreeMode("shared-dir")}
+                    onKeyDown={stopRevealKey}
+                    className={`px-2 py-0.5 rounded cursor-pointer whitespace-nowrap ${
+                      worktreeMode === "shared-dir"
+                        ? "bg-rose-500/80 text-white font-semibold"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    同目录裸奔
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWorktreeMode("isolated-worktree")}
+                    onKeyDown={stopRevealKey}
+                    className={`px-2 py-0.5 rounded cursor-pointer whitespace-nowrap ${
+                      worktreeMode === "isolated-worktree"
+                        ? "bg-gemini-cyan text-slate-950 font-semibold"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    Git Worktree 隔离
+                  </button>
+                </div>
+              </div>
+
+              {worktreeMode === "shared-dir" ? (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-400/35 text-xs space-y-1.5">
+                  <div className="font-mono text-[11px] text-rose-300 font-semibold">
+                    COLLISION ALERT · 并发写入冲突与测试漂移
+                  </div>
+                  <p className="text-[11px] text-slate-200 leading-relaxed">
+                    Agent-A 修改 <code className="text-white">src/server/auth.ts</code> 时，Agent-B 正在同一工作区执行 <code className="text-white">npm test</code> 并改写共享类型，导致两个进程互相覆盖、测试失败无法归因。
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-400/35 text-xs space-y-1.5">
+                  <div className="font-mono text-[11px] text-emerald-300 font-semibold">
+                    ISOLATED WORKTREES · 目录所有权零冲突
+                  </div>
+                  <pre className="font-mono text-[10px] text-slate-200 whitespace-pre-wrap leading-relaxed">
+{`../wt-api -> feat/kb-acl     (Agent-A 仅写 src/server/**)
+../wt-ui  -> feat/eval-panel (Agent-B 仅写 src/components/**)
+交接前统一: bash init.sh && git diff --stat`}
+                  </pre>
+                </div>
+              )}
+
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                <div className="text-[11px] font-mono text-gemini-purple">
+                  SESSION ANCHOR · INIT.SH + FEATURE_LIST.JSON
+                </div>
+                <pre className="p-2 rounded bg-black/50 border border-white/10 font-mono text-[10px] text-slate-200 whitespace-pre-wrap leading-relaxed">
+{`// feature_list.json（跨会话外部状态锚点，禁止删改断言）
+{ "id": "F-02", "target": "ACL Pre-filter", "passes": false }
+// 下一会话开局先跑 bash init.sh 读取剩余 passes: false 任务`}
+                </pre>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 text-[11px] text-slate-300 leading-relaxed">
+              <strong className="text-white">边界划定：</strong>
+              M8 解决“用 Coding Agent 稳定跑通长程编码任务”；云端 Issue-to-PR 在 M6，构建运行给终端用户的 Agent 应用在 M12。
+            </div>
           </div>
         </div>
       )}

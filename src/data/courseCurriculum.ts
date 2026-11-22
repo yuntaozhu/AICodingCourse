@@ -1,3 +1,5 @@
+import type { SkillId } from "./courseSkills";
+
 export type CourseVerificationStatus = "verified" | "needs-review" | "outdated";
 
 export type ResourceSourceType =
@@ -13,6 +15,47 @@ export type LearnerPersonaId =
   | "non-tech"
   | "cs-student";
 
+export type TrackId = "foundation" | "coding-harness" | "agent-runtime";
+
+export interface CourseTrackDefinition {
+  id: TrackId;
+  order: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  moduleIds: string[];
+}
+
+export const COURSE_TRACKS: CourseTrackDefinition[] = [
+  {
+    id: "foundation",
+    order: 1,
+    title: "Track 1 · 基础入门与全栈心智模型",
+    subtitle: "建立意图规范、上下文降噪、Web 三层边界与全栈 MVP 实操基座",
+    description:
+      "Track 仅为学习视图组织，不改变模块级真实先修 DAG 依赖。适合所有角色对齐 AI Native 工程基本功与审美底线。",
+    moduleIds: ["m1", "m2", "m9", "m3", "m10"],
+  },
+  {
+    id: "coding-harness",
+    order: 2,
+    title: "Track 2 · AI Coding 与长程软件 Harness",
+    subtitle: "规则与 MCP 护栏、DoD 自愈闭环、异步 PR 审查、ROI 度量与长程 Coding Harness",
+    description:
+      "聚焦“如何用好 Coding Agent 完成复杂软件工程”，围绕五类统一 Harness 机制（指令、范围与权限、工具与环境、状态与交接、验证与反馈）递进。",
+    moduleIds: ["m4", "m5", "m6", "m7", "m8"],
+  },
+  {
+    id: "agent-runtime",
+    order: 3,
+    title: "Track 3 · Agent 产品、运行时知识库与双轨 Capstone",
+    subtitle: "Agent 系统蓝图、运行时 RAG/Wiki/ACL 实现，以及治理版 / 工程版分流验收",
+    description:
+      "从“使用 Coding Agent”跨入“设计、实现并验收自主 Agent 系统与运行时领域知识库”，提供无代码治理与可运行工程两条 Capstone 路径。",
+    moduleIds: ["m11", "m12", "m13-gov", "m13-eng"],
+  },
+];
+
 export type ModuleShortCode =
   | "M1"
   | "M2"
@@ -23,15 +66,23 @@ export type ModuleShortCode =
   | "M7"
   | "M8"
   | "M9"
-  | "M10";
+  | "M10"
+  | "M11"
+  | "M12"
+  | "M13-Gov"
+  | "M13-Eng";
 
 export interface CourseModule {
   id: string;
   code: ModuleShortCode;
   order: number;
+  trackId: TrackId;
   title: string;
   audience: string[];
   prerequisites: string[];
+  prerequisiteModuleIds: string[];
+  prerequisiteSkillIds: SkillId[];
+  grantsSkillIds: SkillId[];
   learningObjectives: string[];
   estimatedMinutes: number;
   slideCount: number;
@@ -83,13 +134,16 @@ export interface LearnerPathDefinition {
   targetAudience: string;
   goal: string;
   recommendedModuleIds: string[];
+  assumedBaselineIds: string[];
+  assumedBaselineSkillIds: SkillId[];
+  capstoneTargetId: "m13-gov" | "m13-eng";
   starterLabId: string;
   keyMilestone: string;
   estimatedTotalHours: string;
   focusBoundary: string;
 }
 
-export const COURSE_LAST_REVIEWED_AT = "2026-11-18";
+export const COURSE_LAST_REVIEWED_AT = "2026-11-20";
 
 export const LEARNER_PATHS: LearnerPathDefinition[] = [
   {
@@ -97,48 +151,79 @@ export const LEARNER_PATHS: LearnerPathDefinition[] = [
     label: "独立开发者",
     shortLabel: "独立开发者",
     targetAudience: "个人全栈开发者、独立产品构建者",
-    goal: "从需求拆解到登录/数据库/支付上线，兼顾交付速度、安全性与长期维护成本。",
-    recommendedModuleIds: ["m1", "m2", "m3", "m4", "m5", "m7", "m9", "m10"],
+    goal: "从需求拆解到登录/数据库/支付上线，并进阶至 Agent 产品蓝图、运行时领域知识库与工程化 Capstone。",
+    recommendedModuleIds: [
+      "m1",
+      "m2",
+      "m9",
+      "m3",
+      "m4",
+      "m5",
+      "m7",
+      "m8",
+      "m10",
+      "m11",
+      "m12",
+      "m13-eng",
+    ],
+    assumedBaselineIds: [],
+    assumedBaselineSkillIds: ["skill-cli-basics"],
+    capstoneTargetId: "m13-eng",
     starterLabId: "plan-prompt",
-    keyMilestone: "完成带认证与 DoD 门禁的最小可上线 MVP，并用 ROI 指标监控返工率。",
-    estimatedTotalHours: "4.5 - 6 小时（含实操）",
-    focusBoundary: "严禁把支付 Webhook 校验或数据库密钥暴露到前端；上线前跑完安全与类型门禁。",
+    keyMilestone: "先交付安全全栈 MVP 并度过 70% 困境，再完成可运行的运行时知识库 Agent 与双层 Eval 工程 Capstone。",
+    estimatedTotalHours: "7 - 9 小时（含实操）",
+    focusBoundary: "完成 M3 仅代表修习全栈实战，必须提交 Starter 鉴权/迭代证据或通过诊断测评才解锁后续高阶能力门禁。",
   },
   {
     id: "eng-team",
     label: "工程团队与技术负责人",
     shortLabel: "工程团队",
-    targetAudience: "研发团队 TL、架构师、CI/CD 与代码评审负责人",
-    goal: "建立团队级 .mdc 规范、最小特权 MCP 权限模型、有界终端自愈闭环与自动化 PR 评审。",
-    recommendedModuleIds: ["m2", "m4", "m5", "m6", "m7", "m8"],
-    starterLabId: "cursor-rules",
-    keyMilestone: "沉淀仓库级 AGENTS.md + .cursor/rules，并在 CI 中接入独立上下文的审查与密钥拦截。",
-    estimatedTotalHours: "4 - 5.5 小时（含配置）",
-    focusBoundary: "不允许用同一对话上下文既写代码又自审；任何生产写操作或删库命令必须经过人工确认门禁。",
+    targetAudience: "研发团队 TL、架构师、CI/CD 与 Agent 系统工程负责人",
+    goal: "基于团队既定研发基线，建立 .mdc 规则、最小特权 MCP、长程多 Coding Agent Harness、运行时 ACL 知识库与双层 Eval Capstone。",
+    recommendedModuleIds: ["m2", "m4", "m5", "m6", "m8", "m7", "m11", "m12", "m13-eng"],
+    assumedBaselineIds: ["m1", "m9", "m3"],
+    assumedBaselineSkillIds: [
+      "skill-cli-basics",
+      "skill-git-pr-ci",
+      "skill-fullstack-boundary",
+      "skill-backend-api-auth",
+      "skill-ai-project-exp",
+    ],
+    capstoneTargetId: "m13-eng",
+    starterLabId: "context-slice",
+    keyMilestone: "沉淀跨工作目录的多 Coding Agent Harness 与运行时 ACL Pre-filter + Dual Eval 工程交付闭环。",
+    estimatedTotalHours: "6 - 8 小时（含配置）",
+    focusBoundary: "默认豁免 M1/M3/M9 基础门槛（若新成员未达基线需补做技能诊断）；M6 聚焦异步 Issue-to-PR，M8 聚焦长程 Coding Harness。",
   },
   {
     id: "non-tech",
     label: "非技术学习者 / 产品经理",
     shortLabel: "非技术 / PM",
     targetAudience: "产品经理、设计师、运营与零代码经验创造者",
-    goal: "学会用结构化 Spec 表达需求、讲清三层 Web 架构与报错解码，将静态原型安全交接给工程流水线。",
-    recommendedModuleIds: ["m1", "m3", "m8", "m9", "m10"],
-    starterLabId: "vibe-stack-map",
-    keyMilestone: "能写出包含边界与验收标准的 Plan 提示词，并看懂常见构建/环境变量报错原因。",
-    estimatedTotalHours: "3 - 4 小时（含沙盘）",
-    focusBoundary: "避免在盲目 Vibe 报错循环中反复粘贴；遇到鉴权、支付与数据迁移问题必须核验后端边界或求助工程师。",
+    goal: "用结构化 Spec 表达需求与三层 Web 架构，完成 Agent 产品蓝图（Data PRD / Prompt PRD）与无代码治理版 Capstone 评审。",
+    recommendedModuleIds: ["m1", "m9", "m3", "m10", "m11", "m13-gov"],
+    assumedBaselineIds: [],
+    assumedBaselineSkillIds: [],
+    capstoneTargetId: "m13-gov",
+    starterLabId: "plan-prompt",
+    keyMilestone: "产出可交接的 Data/Prompt PRD 与 HITL 审批矩阵，并通过预制轨迹模拟治理评审 Capstone。",
+    estimatedTotalHours: "4.5 - 6 小时（含沙盘）",
+    focusBoundary: "严禁把 M13-Gov 预制轨迹模拟评审宣称为对生产运行系统的实测验证；复杂鉴权实现需交接工程角色完成。",
   },
   {
     id: "cs-student",
     label: "软件工程学生",
     shortLabel: "高校学生",
     targetAudience: "计算机 / 软件工程专业学生与早期工程学习者",
-    goal: "区分“AI 代写代码”与“计算机工程基本功”，用测试、上下文压缩与架构决策训练工程判断力。",
-    recommendedModuleIds: ["m1", "m2", "m4", "m5", "m8", "m9"],
-    starterLabId: "arch-decision-sim",
-    keyMilestone: "能辨识上下文窗口局限、拦截单元测试作弊并运行多 Agent Worktree 隔离协作，形成个人工程规范库。",
-    estimatedTotalHours: "4 - 5 小时（含沙盘）",
-    focusBoundary: "不跳过人工阅读与测试验证直接提交 AI 代码；保留可追溯的测试证据与调试记录。",
+    goal: "夯实全栈基本功、服务端安全证据与长程 Coding Harness，独立构建可运行的 Agent 与运行时知识库工程 Capstone。",
+    recommendedModuleIds: ["m1", "m2", "m9", "m3", "m4", "m5", "m8", "m11", "m12", "m13-eng"],
+    assumedBaselineIds: [],
+    assumedBaselineSkillIds: ["skill-cli-basics"],
+    capstoneTargetId: "m13-eng",
+    starterLabId: "plan-prompt",
+    keyMilestone: "通过 M3 真实后端鉴权 Starter 验证，掌握 Git Worktree 与跨会话交接，最终交付可评测的运行时 Agent 系统。",
+    estimatedTotalHours: "6.5 - 8.5 小时（含沙盘）",
+    focusBoundary: "不跳过人工阅读与测试验证直接提交 AI 代码；M3 完成后须提交可核验 Starter 测试结果或诊断通过，方解锁 M12。",
   },
 ];
 
@@ -147,9 +232,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m1",
     code: "M1",
     order: 1,
+    trackId: "foundation",
     title: "Module 1: Cursor AI Coding 研发范式革命",
     audience: ["独立开发者", "产品经理", "软件工程学生", "技术团队成员"],
     prerequisites: ["了解基础文件目录与终端运行概念（无须精通特定框架）"],
+    prerequisiteModuleIds: [],
+    prerequisiteSkillIds: [],
+    grantsSkillIds: [],
     learningObjectives: [
       "能区分行内补全与 Plan → Agent 多文件协同的适用边界",
       "能使用结构化需求蓝图（Context / Intent / Guardrails / DoD）替代模糊一句话提示词",
@@ -176,17 +265,21 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m2",
     code: "M2",
     order: 2,
+    trackId: "foundation",
     title: "Module 2: Cursor 上下文工程与全量理解",
     audience: ["独立开发者", "工程团队", "软件工程学生"],
     prerequisites: ["能使用 M1 四段式 Plan 蓝图与 DoD 门禁描述单次需求切片"],
+    prerequisiteModuleIds: ["m1"],
+    prerequisiteSkillIds: [],
+    grantsSkillIds: [],
     learningObjectives: [
       "能通过 .cursorignore 与分层索引清除构建产物、日志与大体积二进制噪音",
-      "能诊断上下文污染（Context Rot）并用新会话、精确 @ 引用与摘要恢复信噪比",
+      "能使用上下文切片预算沙盘规划单次任务文件集，诊断 Context Rot 并恢复信噪比",
       "能在大型仓库重构前先绘制调用链与影响面清单",
     ],
     estimatedMinutes: 35,
-    slideCount: 14,
-    labIds: ["agent-harness"],
+    slideCount: 15,
+    labIds: ["context-slice"],
     quizIds: ["m2-q1", "m2-q2", "m2-q3"],
     deliverables: [
       "适用于当前仓库的 .cursorignore 过滤规则清单",
@@ -206,9 +299,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m3",
     code: "M3",
     order: 3,
+    trackId: "foundation",
     title: "Module 3: Cursor 独立产品实战练习",
     audience: ["独立开发者", "非技术学习者 / PM", "全栈学习者"],
-    prerequisites: ["了解前后端分工与环境变量基本概念"],
+    prerequisites: ["已建立 Web 三层架构与环境变量边界认知（完成 M9 或通过三层诊断）"],
+    prerequisiteModuleIds: ["m1", "m9"],
+    prerequisiteSkillIds: ["skill-fullstack-boundary"],
+    grantsSkillIds: [],
     learningObjectives: [
       "能独立串联登录态、持久化数据存储与服务端鉴权路由",
       "能在支付 Webhook 或关键变更路径上强制执行服务端签名校验，杜绝客户端绕过",
@@ -221,7 +318,7 @@ export const COURSE_MODULES: CourseModule[] = [
     deliverables: [
       "端到端垂直切片交付清单、三层架构草图与人工 Review 卡点（E2E_VERTICAL_SLICE_BLUEPRINT.md）",
     ],
-    boundaryNote: "涉及支付、用户隐私与数据库写权限时，必须经过人工复核服务端鉴权逻辑后才允许上线。",
+    boundaryNote: "完成本模块不自动授予服务端鉴权或项目迭代技能；涉及支付与写权限时必须提交可核验 Starter 证据或通过能力诊断。",
     resourceIds: [
       "vibe-vibe",
       "aicg-sec-eval",
@@ -234,9 +331,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m4",
     code: "M4",
     order: 4,
+    trackId: "coding-harness",
     title: "Module 4: .cursor/rules、AGENTS.md 与 MCP 架构",
     audience: ["工程团队", "独立开发者", "软件工程学生"],
-    prerequisites: ["有多个模块或多人协作经验，遇到过 AI 反复忘掉项目规范的问题"],
+    prerequisites: ["已完成 M2 上下文工程并建立三层全栈职责认知"],
+    prerequisiteModuleIds: ["m2"],
+    prerequisiteSkillIds: ["skill-fullstack-boundary"],
+    grantsSkillIds: [],
     learningObjectives: [
       "能编写按 globs 路径自动注入的 .cursor/rules/*.mdc，并区分全局 AGENTS.md 分工",
       "能按最小特权原则配置 .cursor/mcp.json，且全部凭证使用 ${env:...} 引用",
@@ -265,9 +366,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m5",
     code: "M5",
     order: 5,
+    trackId: "coding-harness",
     title: "Module 5: DoD 完成定义与终端自愈闭环",
     audience: ["工程团队", "独立开发者", "软件工程学生"],
-    prerequisites: ["能看懂 tsc / eslint / 测试命令行的退出码与基础报错"],
+    prerequisites: ["已完成 M4 Rules/MCP 护栏且能看懂 tsc / eslint / 测试退出码"],
+    prerequisiteModuleIds: ["m4"],
+    prerequisiteSkillIds: ["skill-cli-basics"],
+    grantsSkillIds: [],
     learningObjectives: [
       "能识别 AI 测试作弊（修改断言凑通过、mock 掉真实校验、skip 失败用例）",
       "能为 Agent 设定有界自愈循环（最大重试次数 + 真实验证命令门禁）",
@@ -293,9 +398,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m6",
     code: "M6",
     order: 6,
+    trackId: "coding-harness",
     title: "Module 6: Background Agents、CLI 与 Bugbot",
     audience: ["工程团队", "技术负责人", "进阶独立开发者"],
-    prerequisites: ["熟悉 Git 分支、Pull Request 流程与基础 CI 概念"],
+    prerequisites: ["已完成 M4/M5 并熟悉 Git 分支、Pull Request 与 CI 检查门禁"],
+    prerequisiteModuleIds: ["m4", "m5"],
+    prerequisiteSkillIds: ["skill-git-pr-ci"],
+    grantsSkillIds: [],
     learningObjectives: [
       "能设计 Issue-to-PR 的异步流水线，并能对比说明独立评审上下文为何优于自写自审",
       "能在 CI 中配置 Bugbot / 自动化评审关注安全漏洞、并发竞态与回归风险",
@@ -308,7 +417,7 @@ export const COURSE_MODULES: CourseModule[] = [
     deliverables: [
       "异步 Agent 任务派发模板与缺陷分级（真实风险/误报）复核记录（ASYNC_AGENT_PR_HANDOFF.md）",
     ],
-    boundaryNote: "异步后台 Agent 不得拥有无审批合并 main 分支或直接操作生产密钥的权限。",
+    boundaryNote: "本模块聚焦云端/CLI Issue-to-PR 异步协作；异步后台 Agent 不得拥有无审批合并 main 分支或直接操作生产密钥的权限。",
     resourceIds: [
       "aicoding-flow",
       "aicg-sec-eval",
@@ -321,9 +430,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m7",
     code: "M7",
     order: 7,
+    trackId: "coding-harness",
     title: "Module 7: 独立开发者 ROI 与架构大脑",
     audience: ["独立开发者", "工程团队负责人"],
-    prerequisites: ["具备 1 个以上使用 AI 辅助开发周级别项目的实际经验"],
+    prerequisites: ["已完成 M3/M5 且具备可核验的真实 AI 辅助项目迭代与返工治理经验"],
+    prerequisiteModuleIds: ["m3", "m5"],
+    prerequisiteSkillIds: ["skill-ai-project-exp"],
+    grantsSkillIds: [],
     learningObjectives: [
       "能识别“千行生成代码数”等虚荣指标，改用返工率、MTTV 与首次通过率度量 ROI",
       "能通过 7 项工程习惯自测定位个人/团队当前最大的效能瓶颈",
@@ -349,27 +462,31 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m8",
     code: "M8",
     order: 8,
-    title: "Module 8: Cursor 工具箱 & AI Studio 案例库",
+    trackId: "coding-harness",
+    title: "Module 8: 长程软件任务的 Harness 与多 Coding Agent 协同",
     audience: ["全体学习者", "独立开发者", "工程团队", "软件工程学生"],
-    prerequisites: ["了解 M1-M6 核心流程或从本模块快速检索特定沙盘工具"],
+    prerequisites: ["已完成 M2 上下文切片、M4 规则/MCP 与 M5 DoD 验证闭环"],
+    prerequisiteModuleIds: ["m2", "m4", "m5"],
+    prerequisiteSkillIds: ["skill-cli-basics"],
+    grantsSkillIds: [],
     learningObjectives: [
-      "能用契约先行方式把在线原型安全迁入多文件工程仓库，避免覆盖现有鉴权与数据层",
-      "能通过 Git Worktree 与目录分区隔离多 Agent 并发任务，防止覆盖冲突",
-      "能结合书籍知识库与 Agent Harness 压缩机制解决长对话记忆衰减",
+      "能按照系统五类 Harness（指令、范围与权限、工具与环境、状态与交接、验证与反馈）配置长程编码护栏",
+      "能使用 init.sh + feature_list.json 状态锚点与 ACC 受控交接抑制长会话 Context Rot",
+      "能通过 Git Worktree 与目录写入所有权隔离多个并发 Coding Agent（并可将原型迁移作为可选参考场景）",
     ],
-    estimatedMinutes: 35,
-    slideCount: 5,
-    labIds: ["book-kb", "agent-harness"],
+    estimatedMinutes: 40,
+    slideCount: 4,
+    labIds: ["agent-harness"],
     quizIds: ["m8-q1", "m8-q2", "m8-q3"],
     deliverables: [
-      "原型工程化三步迁移清单与 Agent Harness 人工可控边界卡（PROTOTYPE_MIGRATION_HARNESS_SOP.md）",
+      "长程 Coding Harness 五要素装配清单、init.sh + feature_list.json 骨架与 ACC 交接卡（LONG_HORIZON_HARNESS_RUNBOOK.md）",
     ],
-    boundaryNote: "AI Studio / 原型工具与本地生产仓库的运行时环境不同，迁移后必须重跑本地安装、环境变量注入与完整构建检查。",
+    boundaryNote: "M8 专注于长程本地编码 Harness（指令/范围/工具/状态/验证），与 M6 云端 Issue-to-PR 及 M12 运行时 Agent 应用保持清晰边界；AI 书籍知识库已迁至独立知识库中心。",
     resourceIds: [
-      "ai-pdf-books",
-      "ms-ai-agents",
-      "dlai-agentic-ai",
+      "learn-harness-engineering",
+      "anthropic-cookbooks",
       "anthropics-skills",
+      "dlai-agentic-ai",
     ],
     status: "verified",
     lastReviewedAt: COURSE_LAST_REVIEWED_AT,
@@ -378,9 +495,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m9",
     code: "M9",
     order: 9,
+    trackId: "foundation",
     title: "Module 9: Vibe Coder's Handbook 全栈工具图谱与白盒实战",
     audience: ["非技术学习者 / PM", "独立开发者", "软件工程学生"],
-    prerequisites: ["无需深厚后端背景，建议先完成 M1"],
+    prerequisites: ["已完成 M1，无须深厚后端背景"],
+    prerequisiteModuleIds: ["m1"],
+    prerequisiteSkillIds: [],
+    grantsSkillIds: ["skill-fullstack-boundary"],
     learningObjectives: [
       "能讲清 Frontend / Backend / Database 三层架构在真实请求中的各自职责",
       "能在常见栈选型中权衡快速上线、团队熟悉度与长期可维护性",
@@ -406,9 +527,13 @@ export const COURSE_MODULES: CourseModule[] = [
     id: "m10",
     code: "M10",
     order: 10,
+    trackId: "foundation",
     title: "Module 10: AI Coding 审美积累与 VibeCoding 效能实践",
     audience: ["独立开发者", "非技术学习者 / PM", "前端与设计导向开发者"],
-    prerequisites: ["熟悉基础组件拆分与提示词结构"],
+    prerequisites: ["已完成 M1 并熟悉基础组件拆分与提示词结构"],
+    prerequisiteModuleIds: ["m1"],
+    prerequisiteSkillIds: [],
+    grantsSkillIds: [],
     learningObjectives: [
       "能识别并剔除“AI 模板味”视觉毛病（无节制圆角卡片、紫色渐变滥用、空心占位）",
       "能用“局部截图 + 明确结构约束 + 可调源码参数”稳定提升前端还原度",
@@ -426,6 +551,137 @@ export const COURSE_MODULES: CourseModule[] = [
       "google-kaggle-prompt",
       "openai-cookbook",
       "easy-vibe",
+    ],
+    status: "verified",
+    lastReviewedAt: COURSE_LAST_REVIEWED_AT,
+  },
+  {
+    id: "m11",
+    code: "M11",
+    order: 11,
+    trackId: "agent-runtime",
+    title: "Module 11: Agent 产品蓝图、Workflow 决策与治理架构",
+    audience: ["产品经理", "非技术学习者 / PM", "独立开发者", "系统架构师"],
+    prerequisites: ["已完成 M9 或具备三层全栈边界与环境变量隔离认知"],
+    prerequisiteModuleIds: ["m9"],
+    prerequisiteSkillIds: ["skill-fullstack-boundary"],
+    grantsSkillIds: [],
+    learningObjectives: [
+      "能用 Workflow vs Agent 决策树识别何时用确定性编排替代过度自主的多轮 Agent",
+      "能编写包含数据源敏感度、权限过滤键（tenantId/role）与版本淘汰策略的 Data PRD",
+      "能设计带工具白名单预算、幻觉拒答阈值与 HITL 人工接管矩阵的 Prompt PRD 与 ROI 商业边界",
+    ],
+    estimatedMinutes: 45,
+    slideCount: 4,
+    labIds: [],
+    quizIds: ["m11-q1", "m11-q2", "m11-q3", "m11-q4"],
+    deliverables: [
+      "Agent 系统双文档蓝图：Workflow vs Agent 判定卡 + Data PRD + Prompt PRD + HITL 审批矩阵（AGENT_PRODUCT_BLUEPRINT.md）",
+    ],
+    boundaryNote: "M11 面向跨职能产研共同对齐产品与治理规格，不强求先会编写 LangGraph/RAG 代码即可独立产出合格架构蓝图。",
+    resourceIds: [
+      "dlai-agentic-ai",
+      "ms-ai-agents",
+      "owasp-llm-top10",
+      "promptfoo",
+    ],
+    status: "verified",
+    lastReviewedAt: COURSE_LAST_REVIEWED_AT,
+  },
+  {
+    id: "m12",
+    code: "M12",
+    order: 12,
+    trackId: "agent-runtime",
+    title: "Module 12: 运行时 Agent 工作流与领域知识库工程实现",
+    audience: ["独立开发者", "工程团队", "软件工程学生"],
+    prerequisites: ["已完成 M2/M5/M11，并通过可核验的服务端鉴权与命令退出码能力检查"],
+    prerequisiteModuleIds: ["m2", "m5", "m11"],
+    prerequisiteSkillIds: ["skill-cli-basics", "skill-backend-api-auth"],
+    grantsSkillIds: [],
+    learningObjectives: [
+      "能区分研发工程知识库与运行时领域知识库（Ingestion / ACL Pre-filter / Hybrid Retrieval / Citation Grounding / Tombstone / Eval）",
+      "能在检索查询前强制执行 tenantId、role 与 active 状态过滤，防止先召回后提示词掩盖导致的越权泄露",
+      "能实现带引用锚点验证的 Agent 工具循环（步数/费用预算熔断 + 结构化 Wiki 与混合检索）",
+    ],
+    estimatedMinutes: 55,
+    slideCount: 4,
+    labIds: ["runtime-kb-rag", "agent-workflow-sim"],
+    quizIds: ["m12-q1", "m12-q2", "m12-q3", "m12-q4"],
+    deliverables: [
+      "可运行的运行时 ACL 检索 + 引用溯源 + 预算熔断 Agent 服务骨架与单元测试集（RUNTIME_AGENT_KB_IMPL.md）",
+    ],
+    boundaryNote: "课堂 Lab 18/19 为本地内存确定性教学模拟，旨在暴露越权、过期召回与死循环失效模式；真实生产需使用支持检索前强过滤的数据库或向量索引。",
+    resourceIds: [
+      "langchain-academy",
+      "haystack-tutorials",
+      "rag-from-scratch",
+      "ragas",
+    ],
+    status: "verified",
+    lastReviewedAt: COURSE_LAST_REVIEWED_AT,
+  },
+  {
+    id: "m13-gov",
+    code: "M13-Gov",
+    order: 13,
+    trackId: "agent-runtime",
+    title: "Module 13-Gov: Agent 系统产品与治理 Capstone（无代码版）",
+    audience: ["产品经理", "非技术学习者 / PM", "业务与合规负责人"],
+    prerequisites: ["已完成 M11 Agent 产品蓝图并建立三层全栈架构边界认知"],
+    prerequisiteModuleIds: ["m11"],
+    prerequisiteSkillIds: ["skill-fullstack-boundary"],
+    grantsSkillIds: [],
+    learningObjectives: [
+      "能审查 Agent 执行轨迹中的跨租户越权、过期版本召回、写操作未审批与无引用幻觉四类高危风险",
+      "能依据 Golden 评测集与合规红线制定上线准出（Go / Conditional / No-Go）治理审签表",
+      "能严格界定模拟治理评审与工程实测的责任边界，向研发团队输出可执行修复工单",
+    ],
+    estimatedMinutes: 45,
+    slideCount: 3,
+    labIds: ["gov-trajectory-eval"],
+    quizIds: ["m13-gov-q1", "m13-gov-q2", "m13-gov-q3", "m13-gov-q4"],
+    deliverables: [
+      "面向非技术/PM 的完整 Agent 上线前模拟治理评审包与 HITL 审批签字单（GOV_CAPSTONE_REVIEW.md）",
+    ],
+    boundaryNote: "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。",
+    resourceIds: [
+      "owasp-llm-top10",
+      "promptfoo",
+      "ragas",
+    ],
+    status: "verified",
+    lastReviewedAt: COURSE_LAST_REVIEWED_AT,
+  },
+  {
+    id: "m13-eng",
+    code: "M13-Eng",
+    order: 14,
+    trackId: "agent-runtime",
+    title: "Module 13-Eng: 生产级 Agent、Harness 与运行时 KB 工程 Capstone",
+    audience: ["独立开发者", "工程团队", "软件工程学生"],
+    prerequisites: ["已完成 M8 长程 Coding Harness、M11 蓝图与 M12 运行时知识库与 Agent 实现"],
+    prerequisiteModuleIds: ["m8", "m11", "m12"],
+    prerequisiteSkillIds: ["skill-cli-basics", "skill-backend-api-auth"],
+    grantsSkillIds: [],
+    learningObjectives: [
+      "能端到端交付绑定真实 ACL 过滤、Tombstone 版本淘汰与引用溯源的运行时 Agent 系统",
+      "能建立检索侧（Recall@K / 零越权 / 零过期）与 Agent 端到端侧（工具准确率 / 步数熔断 / 忠实度）双层 Eval 套件",
+      "能用 Coding Harness 五要素护栏与回归测试证据证明生产上线就绪度",
+    ],
+    estimatedMinutes: 60,
+    slideCount: 3,
+    labIds: [],
+    quizIds: ["m13-eng-q1", "m13-eng-q2", "m13-eng-q3", "m13-eng-q4"],
+    deliverables: [
+      "工程版 Capstone 交付包：可运行服务、双层自动化 Eval 报告与 Harness 运维 Runbook（ENG_CAPSTONE_DELIVERY.md）",
+    ],
+    boundaryNote: "禁止仅靠 3 条正向 Demo 对话通过上线验收；必须给出 ACL 越权探针、Tombstone 淘汰与预算熔断的可重复命令行测试退出码。",
+    resourceIds: [
+      "learn-harness-engineering",
+      "langchain-academy",
+      "ragas",
+      "promptfoo",
     ],
     status: "verified",
     lastReviewedAt: COURSE_LAST_REVIEWED_AT,
@@ -501,9 +757,9 @@ export const COURSE_LABS: LabDefinition[] = [
     id: "book-kb",
     code: "05",
     title: "AI 书籍知识库与备课台",
-    moduleId: "m8",
-    goal: "检索 43 册公开书单/论文并与课程模块建立备课映射。",
-    startingState: "43 册结构化书目与模块标签映射表。",
+    moduleId: "kb-center",
+    goal: "检索 78 册公开书单/论文并与课程模块建立工程知识库备课映射。",
+    startingState: "78 册结构化书目与模块标签映射表（研发工程知识库资产）。",
     cost: "free",
     difficulty: "beginner",
     estimatedMinutes: 10,
@@ -676,6 +932,66 @@ export const COURSE_LABS: LabDefinition[] = [
     acceptanceCriteria: ["能说明不同 Server 组合对上下文和权限面的影响"],
     failureModes: ["盲目开启全套 Server 导致工具调用冲突或延迟飙升"],
     safetyNotes: ["模拟事件流与 60 分钟健康率曲线均为教学沙盘数据，非真实网络请求。"],
+  },
+  {
+    id: "context-slice",
+    code: "17",
+    title: "上下文切片与 Token 预算沙盘",
+    moduleId: "m2",
+    goal: "针对多文件任务装配最小高信噪比文件切片，检验无关目录噪音与 Context Rot 临界点。",
+    startingState: "预设电商鉴权与构建配置混合文件清单，可切换包含文件并实时核算预算。",
+    cost: "free",
+    difficulty: "beginner",
+    estimatedMinutes: 10,
+    deliverables: ["单任务最小文件上下文切片清单与 .cursorignore 排除建议"],
+    acceptanceCriteria: ["保留核心调用链与测试契约文件，剔除 node_modules/dist/日志与无关路由"],
+    failureModes: ["全仓无差别 @ 引用导致关键约束被淹没在海量无关代码中"],
+    safetyNotes: ["本地教学沙盘预算，严禁将 .env 等真实凭证文件放入模型上下文。"],
+  },
+  {
+    id: "runtime-kb-rag",
+    code: "18",
+    title: "运行时 KB：ACL Pre-filter 与混合检索沙盘",
+    moduleId: "m12",
+    goal: "对照验证“检索前 ACL + status 过滤”与“先召回后 Prompt 掩盖”的安全差异、混合检索与 Tombstone 版本淘汰。",
+    startingState: "内置多租户医疗/数学/规章文档切片，含过期文档（deprecated）与跨租户敏感条款。",
+    cost: "free",
+    difficulty: "advanced",
+    estimatedMinutes: 15,
+    deliverables: ["零越权检索验证截图或检索过滤契约清单"],
+    acceptanceCriteria: ["低权限角色 0 越权召回、deprecated 文档被 Tombstone 拦截、输出绑定精确 docId 引用"],
+    failureModes: ["先召回 Top-K 后用 Prompt 约束保密导致原文泄露给模型与攻击者"],
+    safetyNotes: ["教学模拟沙盘仅演示检索过滤逻辑，不等价于生产级向量库或 KMS 隔离部署。"],
+  },
+  {
+    id: "agent-workflow-sim",
+    code: "19",
+    title: "运行时 Agent 工具循环与熔断沙盘",
+    moduleId: "m12",
+    goal: "对比 Workflow 与自主 Agent 步数/费用预算、工具白名单校验、人工确认门禁及工具故障回退。",
+    startingState: "可切换预设轨迹（受控合规、工具无限重试死循环、越权写库未审批）的执行流浏览器。",
+    cost: "free",
+    difficulty: "advanced",
+    estimatedMinutes: 15,
+    deliverables: ["含 maxSteps 熔断与 HITL 挂起条件的运行时控制参数"],
+    acceptanceCriteria: ["验证死循环能在步数阈值内停机，写操作能挂起等待人工确认"],
+    failureModes: ["无预算上限的反思循环耗尽配额或直接触发未授权写操作"],
+    safetyNotes: ["所有工具执行均为本地确定性状态机模拟，不会真实修改外部系统。"],
+  },
+  {
+    id: "gov-trajectory-eval",
+    code: "20",
+    title: "无代码 Agent 预制轨迹风险评估与评审台",
+    moduleId: "m13-gov",
+    goal: "面向 PM 与非技术学习者，从预制执行轨迹中识别越权、过期知识召回、无引用编造与 HITL 缺失并生成上线审签报告。",
+    startingState: "3 条典型业务场景预制轨迹（校园会议助手、医疗合规检索、费用报销 Agent）与可勾选风险矩阵。",
+    cost: "free",
+    difficulty: "intermediate",
+    estimatedMinutes: 15,
+    deliverables: ["含 Go / Conditional / No-Go 结论与 HITL 门禁清单的模拟治理评审报告"],
+    acceptanceCriteria: ["准确标出所有预置高危隐患并写出对应的 Data/Prompt PRD 修正条目"],
+    failureModes: ["把预制轨迹演示通过误当成真实生产环境压测结论"],
+    safetyNotes: ["本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。"],
   },
 ];
 
@@ -1062,11 +1378,95 @@ export const COURSE_RESOURCES: CourseResource[] = [
     license: "待核验",
     licenseVerified: false,
     summary: "课程既有书库侧栏（43 册）外部索引所指向的开源 AI 书籍/讲义汇总仓库。",
-    useInCourse: "供 M8 知识库备课使用；外部 PDF 版权归原作者与出版方所有。",
-    relatedModules: ["M8"],
+    useInCourse: "供知识库中心工程知识链路（研发备课）使用；外部 PDF 版权归原作者与出版方所有。",
+    relatedModules: ["M8", "M12"],
     reviewedAt: COURSE_LAST_REVIEWED_AT,
     status: "verified",
     cautions: "外部文件仓库仅作索引参考；课程未内嵌任何受版权限制的正文内容。",
+  },
+  {
+    id: "learn-harness-engineering",
+    title: "walkinglabs/learn-harness-engineering",
+    url: "https://github.com/walkinglabs/learn-harness-engineering",
+    sourceType: "engineering-repo",
+    organization: "walkinglabs",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "围绕长程编码任务初始化、任务状态表与工作区护栏的 Harness 工程参考实践索引。",
+    useInCourse: "用于对照验证本课程 M8 与 M13-Eng 提出的系统五类 Harness（指令/范围/工具/状态/验证）概念边界。",
+    relatedModules: ["M8", "M13-Eng"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
+  },
+  {
+    id: "langchain-academy",
+    title: "LangChain Academy（Agent & LangGraph 工作流）",
+    url: "https://academy.langchain.com/",
+    sourceType: "official-course",
+    organization: "LangChain",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "覆盖有状态 Agent 图编排、记忆管理、Human-in-the-loop 与工具中断恢复的公开课程。",
+    useInCourse: "辅助 M12 讲解运行时 Agent 状态机、预算熔断与人工接管点设计，概念自建、不复制外部代码。",
+    relatedModules: ["M12", "M13-Eng"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
+  },
+  {
+    id: "haystack-tutorials",
+    title: "Haystack Official Tutorials（RAG Pipeline & Evaluation）",
+    url: "https://haystack.deepset.ai/tutorials",
+    sourceType: "official-doc",
+    organization: "deepset",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "展示数据接入、分块、元数据过滤、混合检索与评估流水线拆分的官方工程文档。",
+    useInCourse: "支撑 M12 梳理“数据接入→ACL 过滤→混合检索→引用溯源→评测”六步运行时链路。",
+    relatedModules: ["M12"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
+  },
+  {
+    id: "rag-from-scratch",
+    title: "langchain-ai/rag-from-scratch",
+    url: "https://github.com/langchain-ai/rag-from-scratch",
+    sourceType: "engineering-repo",
+    organization: "LangChain AI",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "从基础分块、索引路由、查询改写到自我纠错检索的系统化教学代码库。",
+    useInCourse: "帮助 M12 学员比较固定切片 RAG 与结构化 Wiki 路由的适用场景。",
+    relatedModules: ["M12"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
+  },
+  {
+    id: "ragas",
+    title: "Ragas（RAG Assessment Framework）",
+    url: "https://docs.ragas.io/",
+    sourceType: "security-eval",
+    organization: "ExplodingGradients",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "聚焦检索上下文召回率、精确率与答案忠实度（Faithfulness）的无参考/参考评估框架。",
+    useInCourse: "在 M12、M13-Gov 与 M13-Eng 建立检索侧与生成忠实度拆分评测标准。",
+    relatedModules: ["M12", "M13-Gov", "M13-Eng"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
+  },
+  {
+    id: "promptfoo",
+    title: "Promptfoo（LLM Red-Teaming & Regression Eval）",
+    url: "https://www.promptfoo.dev/docs/intro/",
+    sourceType: "security-eval",
+    organization: "Promptfoo",
+    license: "待核验",
+    licenseVerified: false,
+    summary: "支持提示词回归矩阵、越权提示注入红队测试与 CI 门禁断言的开源评测工具。",
+    useInCourse: "支撑 M11、M13-Gov 与 M13-Eng 将“越权探针与 Golden 评测集”纳入上线验收。",
+    relatedModules: ["M11", "M13-Gov", "M13-Eng"],
+    reviewedAt: COURSE_LAST_REVIEWED_AT,
+    status: "verified",
   },
 ];
 

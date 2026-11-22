@@ -30,6 +30,7 @@ import {
 } from "@/data/labPracticeEngine";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import { getKnowledgeEntriesForModule } from "@/data/teamKnowledgeBase";
+import { getRuntimeKnowledgeEntriesForModule } from "@/data/runtimeKnowledgeBase";
 
 interface CourseNavSidebarProps {
   isOpen: boolean;
@@ -382,7 +383,7 @@ export default function CourseNavSidebar({
               const originalIndex = modules.findIndex((m) => m.id === mod.id);
               const isActive = originalIndex === activeModuleIndex;
               const isCompleted = completedModuleIds.includes(mod.id);
-              const shortTitle = mod.title.replace(/^Module\s+\d+:\s*/i, "");
+              const shortTitle = mod.title.replace(/^Module\s+[\w-]+:\s*/i, "");
               const meta = COURSE_MODULES.find((cm) => cm.id === mod.id);
               const pathStep = pathOrderMap.get(mod.id);
               const isOutOfPath = Boolean(activePathDef && !pathStep);
@@ -395,7 +396,13 @@ export default function CourseNavSidebar({
                 ? COURSE_LABS.filter((lab) => meta.labIds.includes(lab.id))
                 : [];
               const teachingPkg = meta ? getModuleTeachingPackage(meta.id) : undefined;
-              const teamKbCount = meta ? getKnowledgeEntriesForModule(meta.code).length : 0;
+              const isRuntimeMeta = meta?.trackId === "agent-runtime";
+              const teamKbCount = meta
+                ? (isRuntimeMeta
+                    ? getRuntimeKnowledgeEntriesForModule(meta.code)
+                    : getKnowledgeEntriesForModule(meta.code)
+                  ).length
+                : 0;
 
               return (
                 <div key={mod.id}>
@@ -595,7 +602,9 @@ export default function CourseNavSidebar({
                             className="inline-flex items-center gap-1 px-2 py-1 rounded bg-gemini-purple/15 hover:bg-gemini-purple/30 border border-gemini-purple/35 text-purple-200 hover:text-white font-mono text-[10px] transition-colors cursor-pointer whitespace-nowrap shrink-0"
                           >
                             <BookOpen className="w-3 h-3" />
-                            <span>团队知识库 ({teamKbCount})</span>
+                            <span>
+                              {isRuntimeMeta ? "运行时工坊" : "工程知识库"} ({teamKbCount})
+                            </span>
                           </button>
                           <button
                             type="button"

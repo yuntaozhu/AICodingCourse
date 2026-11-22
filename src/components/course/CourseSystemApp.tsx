@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookMarked,
   Check,
@@ -7,11 +7,20 @@ import {
   EyeOff,
   Home,
   Presentation as PresentationIcon,
+  Search,
   Trash2,
+  X,
 } from "lucide-react";
 import CourseCatalogHome from "@/components/course/CourseCatalogHome";
-import CourseKnowledgeView from "@/components/course/CourseKnowledgeView";
+import CourseKnowledgeView, {
+  type KnowledgeSectionFilter,
+} from "@/components/course/CourseKnowledgeView";
 import ModuleLearningPage from "@/components/course/ModuleLearningPage";
+import {
+  SEARCH_KIND_LABELS,
+  searchCourseWorkspace,
+  type GlobalSearchResult,
+} from "@/data/courseSearch";
 import { COURSE_MODULE_RECORDS, getModuleRecordById } from "@/data/courseUnitsModel";
 import {
   buildWorkspaceMarkdownExport,
@@ -22,8 +31,10 @@ import {
   type CourseWorkspaceState,
   type CustomKnowledgeDraft,
   type PracticeNoteRecord,
+  type SkillVerificationRecord,
 } from "@/data/courseWorkspaceStore";
 import { getCompletedLabIds, loadAllLabDodProgress } from "@/data/labPracticeEngine";
+import type { KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
 
 type CourseSubView = "catalog" | "module" | "knowledge";
 
@@ -46,9 +57,19 @@ export default function CourseSystemApp({
     initialModuleId || workspaceState.lastVisited?.moduleId || "m1"
   );
   const [activeUnitId, setActiveUnitId] = useState<string | undefined>(
-    workspaceState.lastVisited?.unitId
+    !initialModuleId || initialModuleId === workspaceState.lastVisited?.moduleId
+      ? workspaceState.lastVisited?.unitId
+      : undefined
   );
   const [kbModuleFilter, setKbModuleFilter] = useState<string>("ALL");
+  const [kbInitialSearch, setKbInitialSearch] = useState<string>("");
+  const [kbInitialSection, setKbInitialSection] = useState<KnowledgeSectionFilter>("all");
+  const [kbInitialTrack, setKbInitialTrack] = useState<KnowledgeBaseTrack | undefined>(undefined);
+  const [kbNavSeq, setKbNavSeq] = useState(0);
+  const [moduleNavSeq, setModuleNavSeq] = useState(0);
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [highlightedIdx, setHighlightedIdx] = useState(0);
   const [completedLabIds, setCompletedLabIds] = useState<string[]>(() =>
     getCompletedLabIds(loadAllLabDodProgress())
   );
@@ -58,9 +79,54 @@ export default function CourseSystemApp({
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportedFeedback, setExportedFeedback] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const scrollWorkspaceTop = useCallback(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const searchResponse = useMemo(
+    () =>
+      searchCourseWorkspace(globalQuery, {
+        customKbEntries: workspaceState.customKbEntries,
+        includeInstructorMaterials: workspaceState.viewMode === "instructor",
+        limit: 16,
+      }),
+    [globalQuery, workspaceState.customKbEntries, workspaceState.viewMode]
+  );
+
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditingField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchOpen(true);
+      } else if (!isEditingField && e.key === "/") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -97,14 +163,49 @@ export default function CourseSystemApp({
         selectedPlanByModule: { ...prev.selectedPlanByModule, [moduleId]: planId },
       }));
     }
+    setModuleNavSeq((seq) => seq + 1);
     setSubView("module");
     scrollWorkspaceTop();
   };
 
-  const handleOpenKnowledgeBase = (moduleCode?: string) => {
+  const handleOpenKnowledgeBase = (
+    moduleCode?: string,
+    initialSearch = "",
+    section: KnowledgeSectionFilter = "all",
+    track?: KnowledgeBaseTrack
+  ) => {
     setKbModuleFilter(moduleCode || "ALL");
+    setKbInitialSearch(initialSearch);
+    setKbInitialSection(section);
+    setKbInitialTrack(track);
+    setKbNavSeq((seq) => seq + 1);
     setSubView("knowledge");
     scrollWorkspaceTop();
+  };
+
+  const handleSelectSearchResult = (item: GlobalSearchResult) => {
+    setSearchOpen(false);
+    if (item.kind === "module") {
+      handleOpenModule(item.moduleId);
+    } else if (item.kind === "unit") {
+      handleOpenModule(item.moduleId, item.unitId);
+    } else if (item.kind === "book") {
+      handleOpenKnowledgeBase("ALL", item.kbQuery || globalQuery.trim(), "books", "engineering");
+    } else if (item.kind === "runtime-kb") {
+      handleOpenKnowledgeBase(
+        item.moduleCode,
+        item.kbQuery || globalQuery.trim(),
+        "rules",
+        "runtime-domain"
+      );
+    } else {
+      handleOpenKnowledgeBase(
+        item.moduleCode,
+        item.kbQuery || globalQuery.trim(),
+        item.kbSection || "all",
+        item.kbTrack || "engineering"
+      );
+    }
   };
 
   const handleSelectPlan = (moduleId: string, planId: string) => {
@@ -222,6 +323,16 @@ export default function CourseSystemApp({
     }));
   };
 
+  const handleVerifySkill = (record: SkillVerificationRecord) => {
+    updateState((prev) => ({
+      ...prev,
+      verifiedSkills: {
+        ...prev.verifiedSkills,
+        [record.skillId]: record,
+      },
+    }));
+  };
+
   const handleExportMarkdown = async () => {
     const md = buildWorkspaceMarkdownExport(workspaceState, quizAnswersByModule);
     try {
@@ -310,6 +421,154 @@ export default function CourseSystemApp({
               <BookMarked className="w-3.5 h-3.5" />
               <span>知识库中心</span>
             </button>
+
+            {/* Global Search Bar beside Navigation Tabs */}
+            <div ref={searchBoxRef} className="relative ml-0 sm:ml-1.5 w-full sm:w-64 lg:w-72">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                role="combobox"
+                aria-expanded={searchOpen && globalQuery.trim().length > 0}
+                aria-label="全局检索课程模块、单元内容与自定义知识库"
+                value={globalQuery}
+                onFocus={() => setSearchOpen(true)}
+                onChange={(e) => {
+                  setGlobalQuery(e.target.value);
+                  setHighlightedIdx(0);
+                  setSearchOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setSearchOpen(false);
+                    searchInputRef.current?.blur();
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSearchOpen(true);
+                    setHighlightedIdx((prev) =>
+                      searchResponse.results.length > 0
+                        ? (prev + 1) % searchResponse.results.length
+                        : 0
+                    );
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSearchOpen(true);
+                    setHighlightedIdx((prev) =>
+                      searchResponse.results.length > 0
+                        ? (prev - 1 + searchResponse.results.length) % searchResponse.results.length
+                        : 0
+                    );
+                  } else if (e.key === "Enter" && searchResponse.results.length > 0) {
+                    e.preventDefault();
+                    const picked =
+                      searchResponse.results[highlightedIdx] || searchResponse.results[0];
+                    if (picked) {
+                      handleSelectSearchResult(picked);
+                    }
+                  }
+                }}
+                placeholder="全局检索模块、单元、知识库..."
+                className="w-full pl-8 pr-12 py-1.5 rounded-lg bg-white/5 border border-white/15 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-gemini-cyan focus:bg-white/[0.08] transition-colors"
+              />
+              {globalQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGlobalQuery("");
+                    setHighlightedIdx(0);
+                    searchInputRef.current?.focus();
+                  }}
+                  aria-label="清空全局搜索"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <span className="hidden sm:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-500 pointer-events-none">
+                  /
+                </span>
+              )}
+
+              {/* Global Search Results Dropdown */}
+              {searchOpen && globalQuery.trim().length > 0 && (
+                <div className="absolute left-0 top-full mt-2 w-[min(92vw,34rem)] max-h-[70vh] overflow-y-auto rounded-xl bg-[#0a0f1d] border border-white/15 shadow-2xl z-50 custom-scrollbar">
+                  <div className="sticky top-0 px-3 py-2 bg-[#0a0f1d]/95 backdrop-blur-sm border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+                    <span>
+                      命中 {searchResponse.totalCount} 条
+                      {searchResponse.totalCount > searchResponse.results.length
+                        ? `（展示前 ${searchResponse.results.length} 条）`
+                        : ""}
+                    </span>
+                    <span className="tabular-nums">
+                      模块 {searchResponse.counts.module} · 单元 {searchResponse.counts.unit} ·
+                      自建 {searchResponse.counts["custom-kb"]} · 工程{" "}
+                      {searchResponse.counts["team-kb"]} · 运行时{" "}
+                      {searchResponse.counts["runtime-kb"]} · 书籍 {searchResponse.counts.book}
+                    </span>
+                  </div>
+
+                  {searchResponse.results.length === 0 ? (
+                    <div className="p-5 text-center space-y-1 text-xs">
+                      <div className="text-slate-200 font-medium">
+                        未找到与 “{globalQuery.trim()}” 匹配的内容
+                      </div>
+                      <div className="text-slate-400">
+                        可尝试搜索模块编号（如 M4）、工程关键词（如 Plan、MCP、DoD）、书名或自建知识标题
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-1.5 space-y-1">
+                      {searchResponse.results.map((item, idx) => {
+                        const isHighlighted = idx === highlightedIdx;
+                        const kindTone =
+                          item.kind === "module"
+                            ? "text-gemini-cyan border-gemini-cyan/35 bg-gemini-cyan/10"
+                            : item.kind === "custom-kb"
+                            ? "text-sky-300 border-sky-400/35 bg-sky-500/10"
+                            : item.kind === "runtime-kb"
+                            ? "text-emerald-300 border-emerald-400/40 bg-emerald-500/15"
+                            : item.kind === "team-kb"
+                            ? "text-purple-200 border-gemini-purple/40 bg-gemini-purple/15"
+                            : item.kind === "book"
+                            ? "text-amber-300 border-amber-400/35 bg-amber-500/10"
+                            : "text-slate-200 border-white/15 bg-white/5";
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onMouseEnter={() => setHighlightedIdx(idx)}
+                            onClick={() => handleSelectSearchResult(item)}
+                            className={`w-full text-left p-2.5 rounded-lg border transition-colors cursor-pointer space-y-1 ${
+                              isHighlighted
+                                ? "bg-white/10 border-gemini-cyan/50"
+                                : "bg-transparent border-transparent hover:bg-white/[0.06]"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-white leading-snug">
+                                {item.title}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded border text-[10px] font-mono shrink-0 ${kindTone}`}
+                              >
+                                {SEARCH_KIND_LABELS[item.kind]}
+                              </span>
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-400">
+                              {item.subtitle}
+                            </div>
+                            <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">
+                              {item.snippet}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -412,14 +671,16 @@ export default function CourseSystemApp({
             quizAnswersByModule={quizAnswersByModule}
             onOpenModule={handleOpenModule}
             onApplyPlanPresetAll={handleApplyPlanPresetAll}
-            onOpenKnowledgeBase={handleOpenKnowledgeBase}
+            onOpenKnowledgeBase={(modCode, track) =>
+              handleOpenKnowledgeBase(modCode, "", "all", track)
+            }
             onSwitchToReveal={onSwitchToReveal}
           />
         )}
 
         {subView === "module" && activeModuleRecord && (
           <ModuleLearningPage
-            key={activeModuleRecord.id}
+            key={`${activeModuleRecord.id}-${moduleNavSeq}`}
             moduleRecord={activeModuleRecord}
             initialUnitId={activeUnitId}
             workspaceState={workspaceState}
@@ -432,8 +693,11 @@ export default function CourseSystemApp({
             onToggleCriterion={handleToggleCriterion}
             onSavePracticeNote={handleSavePracticeNote}
             onAddCustomKb={handleAddCustomKb}
+            onVerifySkill={handleVerifySkill}
             onToggleViewMode={handleToggleViewMode}
-            onOpenKnowledgeBase={handleOpenKnowledgeBase}
+            onOpenKnowledgeBase={(modCode, track) =>
+              handleOpenKnowledgeBase(modCode, "", "all", track)
+            }
             onSwitchToReveal={onSwitchToReveal}
             onScrollTop={scrollWorkspaceTop}
           />
@@ -441,12 +705,17 @@ export default function CourseSystemApp({
 
         {subView === "knowledge" && (
           <CourseKnowledgeView
-            key={kbModuleFilter}
+            key={`${kbInitialTrack || "auto"}-${kbModuleFilter}-${kbInitialSection}-${kbNavSeq}`}
+            initialTrack={kbInitialTrack}
             initialModuleFilter={kbModuleFilter}
+            initialSearchQuery={kbInitialSearch}
+            initialSection={kbInitialSection}
             customEntries={workspaceState.customKbEntries}
             onAddCustomEntry={handleAddCustomKb}
             onDeleteCustomEntry={handleDeleteCustomKb}
             onJumpToModule={(modId) => handleOpenModule(modId)}
+            onOpenBookLab={() => onSwitchToReveal({ labId: "book-kb" })}
+            onOpenRuntimeLab={(labId) => onSwitchToReveal({ labId })}
           />
         )}
       </main>

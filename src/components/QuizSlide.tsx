@@ -22,6 +22,7 @@ import {
   getQuestionRemediation,
   MODULE_OBJECTIVES,
 } from "@/data/quizRemediation";
+import { formatModuleCodeFromId } from "@/data/courseWorkspaceStore";
 import { cn } from "@/lib/utils";
 
 interface QuizSlideProps {
@@ -32,27 +33,40 @@ const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
 const STORAGE_KEY = "cursor_course_quiz_v1";
 
-function loadStoredModuleAnswers(moduleNumber: number): Record<string, number> {
+function loadStoredModuleAnswers(
+  moduleId: string,
+  legacyModuleNumber: number
+): Record<string, number> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, Record<string, number>>;
-    return parsed[String(moduleNumber)] || {};
+    return (
+      parsed[moduleId] ??
+      (legacyModuleNumber <= 10 ? parsed[String(legacyModuleNumber)] : undefined) ??
+      {}
+    );
   } catch {
     return {};
   }
 }
 
-function saveStoredModuleAnswers(moduleNumber: number, moduleAnswers: Record<string, number>) {
+function saveStoredModuleAnswers(
+  moduleId: string,
+  legacyModuleNumber: number,
+  moduleAnswers: Record<string, number>
+) {
   if (typeof window === "undefined") return;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {};
     if (Object.keys(moduleAnswers).length === 0) {
-      delete parsed[String(moduleNumber)];
+      delete parsed[moduleId];
+      delete parsed[String(legacyModuleNumber)];
     } else {
-      parsed[String(moduleNumber)] = moduleAnswers;
+      parsed[moduleId] = moduleAnswers;
+      delete parsed[String(legacyModuleNumber)];
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     window.dispatchEvent(new CustomEvent("course:quiz-progress-updated"));
@@ -64,7 +78,7 @@ function saveStoredModuleAnswers(moduleNumber: number, moduleAnswers: Record<str
 export default function QuizSlide({ quiz }: QuizSlideProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>(() =>
-    loadStoredModuleAnswers(quiz.moduleNumber)
+    loadStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber)
   );
   const [showSummary, setShowSummary] = useState(false);
 
@@ -109,7 +123,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
         ...prev,
         [currentQuestion.id]: optionIndex,
       };
-      saveStoredModuleAnswers(quiz.moduleNumber, next);
+      saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, next);
       return next;
     });
   };
@@ -142,7 +156,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const handleReset = (e: MouseEvent) => {
     e.stopPropagation();
     setAnswers({});
-    saveStoredModuleAnswers(quiz.moduleNumber, {});
+    saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, {});
     setCurrentIndex(0);
     setShowSummary(false);
   };
@@ -151,13 +165,14 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
     e.stopPropagation();
     const { keptAnswers, firstWrongIndex } = buildRetryWrongAnswersState(questions, answers);
     setAnswers(keptAnswers);
-    saveStoredModuleAnswers(quiz.moduleNumber, keptAnswers);
+    saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, keptAnswers);
     setCurrentIndex(firstWrongIndex);
     setShowSummary(false);
   };
 
-  const currentRemediation = getQuestionRemediation(currentQuestion.id, quiz.moduleNumber);
-  const moduleObjective = MODULE_OBJECTIVES[quiz.moduleNumber];
+  const currentRemediation = getQuestionRemediation(currentQuestion.id, quiz.moduleId);
+  const moduleObjective = MODULE_OBJECTIVES[quiz.moduleId];
+  const displayModuleCode = formatModuleCodeFromId(quiz.moduleId);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (showSummary) return;
@@ -209,7 +224,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   return (
     <Slide
       backgroundColor={quiz.backgroundColor ?? "#020205"}
-      notes={`Module ${quiz.moduleNumber} 课后测验：${quiz.moduleTitle}。共 ${totalCount} 道单选巩固题，检验学习掌握度。`}
+      notes={`${displayModuleCode} 课后测验：${quiz.moduleTitle}。共 ${totalCount} 道单选巩固题，检验学习掌握度。`}
     >
       <div
         className="max-w-6xl mx-auto h-full flex flex-col justify-center select-none"
@@ -220,7 +235,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
         <div className="flex items-end justify-between border-b border-white/10 pb-3.5 mb-4">
           <div>
             <div className="text-[11px] font-mono tracking-[0.18em] text-gemini-cyan uppercase mb-1">
-              MODULE {String(quiz.moduleNumber).padStart(2, "0")} · 课后知识测验
+              {displayModuleCode} · 课后知识测验
             </div>
             <div className="text-2xl font-bold text-white tracking-tight leading-tight">
               {quiz.moduleTitle}
@@ -404,7 +419,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                         onClick={(e) =>
                           handleJumpToReviewTarget(
                             currentQuestion.reviewTarget ?? {
-                              label: currentRemediation.labLabel ?? `M${quiz.moduleNumber} 首页`,
+                              label: currentRemediation.labLabel ?? `${displayModuleCode} 首页`,
                               labId: currentRemediation.labId,
                               moduleId: currentRemediation.moduleId,
                             },
@@ -422,7 +437,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                         <span>
                           {currentQuestion.reviewTarget?.label ??
                             currentRemediation.labLabel ??
-                            `回看 M${quiz.moduleNumber} 首页`}
+                            `回看 ${displayModuleCode} 首页`}
                         </span>
                       </button>
                     </div>
@@ -701,7 +716,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3 text-xs text-white/50">
                 <span>作答记录仅保存在当前浏览器 localStorage（非云端同步）</span>
                 <span className="font-mono tabular-nums shrink-0">
-                  MODULE {String(quiz.moduleNumber).padStart(2, "0")} COMPLETE
+                  {displayModuleCode} COMPLETE
                 </span>
               </div>
             </div>

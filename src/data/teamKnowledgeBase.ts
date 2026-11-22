@@ -11,6 +11,13 @@ export type KnowledgeCategory =
 
 export type KnowledgeValidationStatus = "verified" | "hypothesis" | "deprecated";
 
+export type KnowledgeBaseTrack = "engineering" | "runtime-domain";
+
+export const KNOWLEDGE_TRACK_LABELS: Record<KnowledgeBaseTrack, string> = {
+  engineering: "研发工程知识库（给开发者 / Coding Agent）",
+  "runtime-domain": "应用运行时领域知识库工坊（给运行中 Agent / RAG）",
+};
+
 export type KnowledgeModuleCode =
   | "M1"
   | "M2"
@@ -21,11 +28,16 @@ export type KnowledgeModuleCode =
   | "M7"
   | "M8"
   | "M9"
-  | "M10";
+  | "M10"
+  | "M11"
+  | "M12"
+  | "M13-Gov"
+  | "M13-Eng";
 
 export interface TeamKnowledgeEntry {
   id: string;
   title: string;
+  kbTrack: KnowledgeBaseTrack;
   category: KnowledgeCategory;
   validationStatus: KnowledgeValidationStatus;
   modules: KnowledgeModuleCode[];
@@ -78,6 +90,7 @@ export const TEAM_KNOWLEDGE_BASE: TeamKnowledgeEntry[] = [
   {
     id: "kb-m1-plan-blueprint",
     title: "Plan → Agent 四段式需求蓝图模板",
+    kbTrack: "engineering",
     category: "template",
     validationStatus: "verified",
     modules: ["M1", "M3"],
@@ -105,6 +118,7 @@ export const TEAM_KNOWLEDGE_BASE: TeamKnowledgeEntry[] = [
   {
     id: "kb-m2-cursorignore-baseline",
     title: "仓库上下文降噪基线（.cursorignore）",
+    kbTrack: "engineering",
     category: "starter-rule",
     validationStatus: "verified",
     modules: ["M2", "M8"],
@@ -134,6 +148,7 @@ coverage/
   {
     id: "kb-m3-webhook-server-auth",
     title: "服务端 Webhook 验签与客户端隔离示例",
+    kbTrack: "engineering",
     category: "example",
     validationStatus: "verified",
     modules: ["M3", "M9"],
@@ -160,6 +175,7 @@ coverage/
   {
     id: "kb-m4-rules-mcp-audit",
     title: "Rules 与 MCP 最小特权审计检查清单",
+    kbTrack: "engineering",
     category: "checklist",
     validationStatus: "verified",
     modules: ["M4"],
@@ -183,6 +199,7 @@ coverage/
   {
     id: "kb-m4-adr-layered-rules",
     title: "ADR-001：轻量 AGENTS.md + globs 分层 .mdc 架构决策",
+    kbTrack: "engineering",
     category: "adr",
     validationStatus: "verified",
     modules: ["M4", "M8"],
@@ -209,6 +226,7 @@ alwaysApply: false
   {
     id: "kb-m5-dod-anti-cheat",
     title: "防测试作弊（Reward Hacking）与有界自愈核查清单",
+    kbTrack: "engineering",
     category: "checklist",
     validationStatus: "verified",
     modules: ["M5"],
@@ -232,6 +250,7 @@ alwaysApply: false
   {
     id: "kb-m5-failure-reward-hacking",
     title: "F-01：AI 篡改测试断言制造“全绿假象”失败案例",
+    kbTrack: "engineering",
     category: "failure-case",
     validationStatus: "verified",
     modules: ["M5"],
@@ -254,6 +273,7 @@ alwaysApply: false
   {
     id: "kb-m6-async-pr-convention",
     title: "Issue-to-PR 异步派发与上下文隔离审查约定",
+    kbTrack: "engineering",
     category: "team-convention",
     validationStatus: "verified",
     modules: ["M6"],
@@ -276,6 +296,7 @@ alwaysApply: false
   {
     id: "kb-m6-failure-bugbot-false-positive",
     title: "F-04：盲采 AI 评审误报引入并发超卖案例",
+    kbTrack: "engineering",
     category: "failure-case",
     validationStatus: "verified",
     modules: ["M6"],
@@ -297,6 +318,7 @@ alwaysApply: false
   {
     id: "kb-m7-roi-baseline-template",
     title: "AI Coding 真实 ROI 度量周报模板",
+    kbTrack: "engineering",
     category: "template",
     validationStatus: "verified",
     modules: ["M7"],
@@ -320,6 +342,7 @@ alwaysApply: false
   {
     id: "kb-m7-deprecated-loc-metric",
     title: "已废弃：以“生成代码行数 / 补全采纳率”评估工程 ROI",
+    kbTrack: "engineering",
     category: "deprecated",
     validationStatus: "deprecated",
     modules: ["M7", "M5"],
@@ -342,7 +365,8 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   },
   {
     id: "kb-m8-contract-worktree-convention",
-    title: "原型契约先行迁移与 Git Worktree 并发隔离约定",
+    title: "多 Agent 并发目录隔离：Git Worktree 约定（含原型迁移参考）",
+    kbTrack: "engineering",
     category: "team-convention",
     validationStatus: "verified",
     modules: ["M8"],
@@ -364,6 +388,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m8-hypothesis-acc-threshold",
     title: "待验证假设：长任务每 12~15 轮或约 60% 上下文主动执行 ACC 摘要重开",
+    kbTrack: "engineering",
     category: "hypothesis",
     validationStatus: "hypothesis",
     modules: ["M8", "M2"],
@@ -388,6 +413,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m9-debug-adr-template",
     title: "全栈白盒报错 5 步解码与简化 ADR 模板",
+    kbTrack: "engineering",
     category: "template",
     validationStatus: "verified",
     modules: ["M9", "M3"],
@@ -411,6 +437,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m9-deprecated-blind-vibe",
     title: "已废弃：无分层归因直接“把整个报错反复贴回 AI 碰运气”",
+    kbTrack: "engineering",
     category: "deprecated",
     validationStatus: "deprecated",
     modules: ["M9", "M3"],
@@ -432,6 +459,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m4-deprecated-always-apply",
     title: "已废弃：将全部规则设为 alwaysApply: true 且在 mcp.json 填明文 Token",
+    kbTrack: "engineering",
     category: "deprecated",
     validationStatus: "deprecated",
     modules: ["M4", "M2"],
@@ -453,6 +481,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m10-anti-ai-slop-spec",
     title: "去 AI 模板味 UI 组件与可访问性验收规格模板",
+    kbTrack: "engineering",
     category: "template",
     validationStatus: "verified",
     modules: ["M10"],
@@ -475,6 +504,7 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
   {
     id: "kb-m10-hypothesis-single-slice-visual",
     title: "待验证假设：局部状态分步喂料比一次喂整套多页截图偏差更低",
+    kbTrack: "engineering",
     category: "hypothesis",
     validationStatus: "hypothesis",
     modules: ["M10"],
@@ -493,7 +523,79 @@ MTTV + 首次评审通过率 + 7 天缺陷返工率 + 复用资产数`,
     copyableSnippet: `Step 1: 先定桌面端页面网格与主排版骨架
 Step 2: 单独传入 Navbar 展开态 + 移动端截图补齐响应式与交互态`,
   },
+  {
+    id: "kb-m8-long-horizon-harness",
+    title: "长程 Coding Harness 五要素装配（init.sh + feature_list.json + Worktree）",
+    kbTrack: "engineering",
+    category: "template",
+    validationStatus: "verified",
+    modules: ["M8"],
+    version: "v1.0",
+    updatedAt: "2026-11-20",
+    owner: "Harness 工程教学组",
+    source: "系统统一五类 Harness 架构（借鉴长程编码护栏工程模式）",
+    scope: "跨多轮会话、跨多个模块的长程编码任务与多 Coding Agent 协同",
+    summary:
+      "用 init.sh 锁定可重复环境，用 feature_list.json 固化任务状态与防删条，用 Git Worktree 物理隔离多 Agent 写范围，消除长对话漂移。",
+    whenToUse: "任务预计超过 15 轮会话或需要 2 个以上 Coding Agent 并行推进时。",
+    antiPatternOrWarning: "不要与 M6 异步 Issue-to-PR 混淆；本地多 Agent 并发必须先划清目录所有权。",
+    migrationNotes: "将示例 feature_list.json 字段映射为当前仓库真实测试命令。",
+    feedbackLoop: "每次交接失败后补齐缺失锚点到 AGENTS.md 与交接模板。",
+    repoPath: "docs/knowledge-base/templates-and-checklists.md",
+    copyableSnippet: `{
+  "featureId": "feat-runtime-acl",
+  "scopeAllowlist": ["src/server/kb/**", "tests/kbAcl.test.ts"],
+  "verifyCommand": "npm test && npx tsc --noEmit",
+  "passes": false,
+  "handoffNote": "已完成类型定义，下一步仅实现检索前 tenantId 过滤"
+}`,
+  },
 ];
+
+export const ENGINEERING_MODULE_CODES: KnowledgeModuleCode[] = [
+  "M1",
+  "M2",
+  "M3",
+  "M4",
+  "M5",
+  "M6",
+  "M7",
+  "M8",
+  "M9",
+  "M10",
+];
+
+export function searchEngineeringKnowledgeBase(options: {
+  query?: string;
+  moduleFilter?: string;
+  categoryFilter?: KnowledgeCategory | "ALL";
+  statusFilter?: KnowledgeValidationStatus | "ALL";
+}): TeamKnowledgeEntry[] {
+  const normalizedQuery = (options.query || "").trim().toLowerCase();
+  const moduleFilter = options.moduleFilter || "ALL";
+  const categoryFilter = options.categoryFilter || "ALL";
+  const statusFilter = options.statusFilter || "ALL";
+
+  return TEAM_KNOWLEDGE_BASE.filter((item) => {
+    if (moduleFilter !== "ALL" && !item.modules.includes(moduleFilter as KnowledgeModuleCode)) {
+      return false;
+    }
+    if (categoryFilter !== "ALL" && item.category !== categoryFilter) {
+      return false;
+    }
+    if (statusFilter !== "ALL" && item.validationStatus !== statusFilter) {
+      return false;
+    }
+    if (normalizedQuery) {
+      const haystack =
+        `${item.title} ${item.summary} ${item.scope} ${item.copyableSnippet} ${item.owner}`.toLowerCase();
+      if (!haystack.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
 
 export function getKnowledgeEntriesForModule(moduleCode: KnowledgeModuleCode): TeamKnowledgeEntry[] {
   return TEAM_KNOWLEDGE_BASE.filter((entry) => entry.modules.includes(moduleCode));

@@ -137,32 +137,46 @@ export default function Presentation({
 
       const currentModules = modulesRef.current;
       if (currentModules.length > 0) {
-        const modIdx = currentModules.reduce((acc, mod, idx) => {
-          return nextH >= mod.startIndex ? idx : acc;
-        }, 0);
+        const lastMod = currentModules[currentModules.length - 1];
+        const lastModEndIndex =
+          lastMod && typeof lastMod.slideCount === "number"
+            ? lastMod.startIndex + lastMod.slideCount - 1
+            : nextTotalH - 1;
+        const isTrailingExtraSlide = nextH > lastModEndIndex;
 
-        setCompletedModuleIds((prev) => {
-          const next = new Set(prev);
-          for (let i = 0; i < modIdx; i += 1) {
-            if (currentModules[i]) {
-              next.add(currentModules[i].id);
+        if (!isTrailingExtraSlide) {
+          const modIdx = currentModules.reduce((acc, mod, idx) => {
+            return nextH >= mod.startIndex ? idx : acc;
+          }, 0);
+
+          setCompletedModuleIds((prev) => {
+            const next = new Set(prev);
+            for (let i = 0; i < modIdx; i += 1) {
+              if (currentModules[i]) {
+                next.add(currentModules[i].id);
+              }
             }
-          }
-          const activeMod = currentModules[modIdx];
-          if (activeMod && nextTotalH > 0) {
-            const nextMod = currentModules[modIdx + 1];
-            const modEndIndex = nextMod ? nextMod.startIndex - 1 : nextTotalH - 1;
-            if (nextH >= modEndIndex) {
-              next.add(activeMod.id);
+            const activeMod = currentModules[modIdx];
+            if (activeMod && nextTotalH > 0) {
+              const nextMod = currentModules[modIdx + 1];
+              const modEndIndex =
+                typeof activeMod.slideCount === "number"
+                  ? activeMod.startIndex + activeMod.slideCount - 1
+                  : nextMod
+                  ? nextMod.startIndex - 1
+                  : nextTotalH - 1;
+              if (nextH >= modEndIndex && nextH <= modEndIndex) {
+                next.add(activeMod.id);
+              }
             }
-          }
-          const nextArr = Array.from(next);
-          if (nextArr.length === prev.length && nextArr.every((id, i) => id === prev[i])) {
-            return prev;
-          }
-          saveCompletedModules(nextArr);
-          return nextArr;
-        });
+            const nextArr = Array.from(next);
+            if (nextArr.length === prev.length && nextArr.every((id, i) => id === prev[i])) {
+              return prev;
+            }
+            saveCompletedModules(nextArr);
+            return nextArr;
+          });
+        }
       }
     };
 
@@ -298,9 +312,17 @@ export default function Presentation({
     };
   }, []);
 
-  const activeModuleIndex = modules.reduce((acc, mod, idx) => {
-    return currentH >= mod.startIndex ? idx : acc;
-  }, 0);
+  const lastMod = modules[modules.length - 1];
+  const lastModEnd =
+    lastMod && typeof lastMod.slideCount === "number"
+      ? lastMod.startIndex + lastMod.slideCount - 1
+      : Number.POSITIVE_INFINITY;
+  const activeModuleIndex =
+    currentH > lastModEnd
+      ? -1
+      : modules.reduce((acc, mod, idx) => {
+          return currentH >= mod.startIndex ? idx : acc;
+        }, 0);
 
   const handleJumpTo = (h: number, v = 0) => {
     const deck = revealInstanceRef.current;

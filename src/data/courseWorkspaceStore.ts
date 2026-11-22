@@ -9,13 +9,27 @@ import {
   LEGACY_M4_MCP_DOD_KEY,
 } from "./labPracticeEngine";
 import {
+  getBookGithubUrl,
+  type KnowledgeBookItem,
+} from "./aiBooksKnowledgeBase";
+import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
+  KNOWLEDGE_TRACK_LABELS,
   type KnowledgeCategory,
   type KnowledgeModuleCode,
   type TeamKnowledgeEntry,
 } from "./teamKnowledgeBase";
+import {
+  RUNTIME_KB_WORKSHOP_RULES,
+  RUNTIME_PIPELINE_STAGE_LABELS,
+  type RuntimeKnowledgeEntry,
+} from "./runtimeKnowledgeBase";
+import { COURSE_SKILLS, type SkillId, type SkillVerificationMethod } from "./courseSkills";
 import { getQuizReviewSummary, MODULE_QUIZZES } from "./moduleQuizzes";
+
+export const M13_GOV_SIMULATION_DISCLAIMER =
+  "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";
 
 export type CourseViewMode = "learner" | "instructor";
 
@@ -44,6 +58,13 @@ export interface LastVisitedRecord {
   updatedAt: string;
 }
 
+export interface SkillVerificationRecord {
+  skillId: SkillId;
+  method: SkillVerificationMethod;
+  evidenceSummary: string;
+  verifiedAt: string;
+}
+
 export interface CourseWorkspaceState {
   viewMode: CourseViewMode;
   selectedPlanByModule: Record<string, string>;
@@ -51,6 +72,7 @@ export interface CourseWorkspaceState {
   dodCheckedByUnit: Record<string, string[]>;
   practiceNotes: Record<string, PracticeNoteRecord>;
   customKbEntries: CustomKnowledgeDraft[];
+  verifiedSkills: Record<string, SkillVerificationRecord>;
   lastVisited: LastVisitedRecord | null;
 }
 
@@ -66,6 +88,7 @@ export function createInitialWorkspaceState(): CourseWorkspaceState {
     dodCheckedByUnit: {},
     practiceNotes: {},
     customKbEntries: [],
+    verifiedSkills: {},
     lastVisited: null,
   };
 }
@@ -97,6 +120,10 @@ export function loadWorkspaceState(): CourseWorkspaceState {
           ? parsed.practiceNotes
           : {},
       customKbEntries: Array.isArray(parsed.customKbEntries) ? parsed.customKbEntries : [],
+      verifiedSkills:
+        parsed.verifiedSkills && typeof parsed.verifiedSkills === "object"
+          ? parsed.verifiedSkills
+          : {},
       lastVisited:
         parsed.lastVisited && typeof parsed.lastVisited === "object" ? parsed.lastVisited : null,
     };
@@ -105,15 +132,53 @@ export function loadWorkspaceState(): CourseWorkspaceState {
   }
 }
 
+export function formatModuleCodeFromId(moduleId: string): string {
+  const trimmed = moduleId.trim().toLowerCase();
+  if (trimmed === "m13-gov") return "M13-Gov";
+  if (trimmed === "m13-eng") return "M13-Eng";
+  return trimmed.toUpperCase();
+}
+
+export function normalizeQuizAnswersRecord(
+  rawMap: unknown
+): Record<string, Record<string, number>> {
+  if (!rawMap || typeof rawMap !== "object") return {};
+  const result: Record<string, Record<string, number>> = {};
+  const entries = Object.entries(rawMap as Record<string, unknown>);
+
+  // Pass 1: apply legacy numeric keys ("1".."10")
+  for (const [rawKey, value] of entries) {
+    if (!value || typeof value !== "object") continue;
+    const trimmed = rawKey.trim();
+    if (!/^\d+$/.test(trimmed)) continue;
+    const normalizedKey = `m${trimmed}`;
+    result[normalizedKey] = {
+      ...(result[normalizedKey] || {}),
+      ...(value as Record<string, number>),
+    };
+  }
+
+  // Pass 2: canonical keys ("m1", "m13-gov", ...) take precedence
+  for (const [rawKey, value] of entries) {
+    if (!value || typeof value !== "object") continue;
+    const trimmed = rawKey.trim();
+    if (/^\d+$/.test(trimmed)) continue;
+    const normalizedKey = trimmed.toLowerCase();
+    result[normalizedKey] = {
+      ...(result[normalizedKey] || {}),
+      ...(value as Record<string, number>),
+    };
+  }
+
+  return result;
+}
+
 export function loadAllQuizAnswers(): Record<string, Record<string, number>> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(QUIZ_ANSWERS_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, Record<string, number>>)
-      : {};
+    return normalizeQuizAnswersRecord(JSON.parse(raw));
   } catch {
     return {};
   }
@@ -294,16 +359,36 @@ export function buildWorkspaceMarkdownExport(
   lines.push(`## 三、各模块巩固测验成绩汇总`);
   lines.push(``);
 
+  const normalizedQuizzes = normalizeQuizAnswersRecord(quizAnswersByModule);
   let hasQuiz = false;
+  let touchesM13Gov = false;
+
   for (const mod of COURSE_MODULE_RECORDS) {
-    const quiz = MODULE_QUIZZES[mod.order];
-    const answers = quizAnswersByModule[String(mod.order)] || {};
+    const quiz = MODULE_QUIZZES[mod.id];
+    const answers = normalizedQuizzes[mod.id] || {};
     if (quiz && Object.keys(answers).length > 0) {
       hasQuiz = true;
+      if (mod.id === "m13-gov") touchesM13Gov = true;
       const summary = getQuizReviewSummary(quiz, answers);
       lines.push(
         `- ${mod.code} (${quiz.moduleTitle})：已答 ${summary.answeredCount}/${quiz.questions.length} 题，正确 ${summary.correctCount} 题（正确率 ${summary.accuracyPct}%）`
       );
+    }
+    if (
+      mod.id === "m13-gov" &&
+      mod.units.some(
+        (u) =>
+          Boolean(state.completedUnitIds[u.id]) ||
+          (state.dodCheckedByUnit[u.id]?.length ?? 0) > 0 ||
+          Boolean(
+            state.practiceNotes[u.id] &&
+              (state.practiceNotes[u.id].artifactDraft.trim() ||
+                state.practiceNotes[u.id].reflectionNote.trim() ||
+                state.practiceNotes[u.id].selectedTransferTier)
+          )
+      )
+    ) {
+      touchesM13Gov = true;
     }
   }
 
@@ -311,6 +396,30 @@ export function buildWorkspaceMarkdownExport(
     lines.push(`> 暂无已保存的模块测验作答记录。`);
   }
   lines.push(``);
+
+  lines.push(`---`);
+  lines.push(``);
+  lines.push(`## 四、已核验前置技能门禁（可核验证据 / 诊断 / 基线豁免）`);
+  lines.push(``);
+  const verifiedList = Object.values(state.verifiedSkills || {});
+  if (verifiedList.length === 0) {
+    lines.push(`> 尚未登记通过核验的先修技能（仅勾选模块完成不自动发放技能）。`);
+  } else {
+    for (const rec of verifiedList) {
+      const sk = COURSE_SKILLS.find((s) => s.id === rec.skillId);
+      lines.push(
+        `- ${sk?.title ?? rec.skillId}：方式 \`${rec.method}\` ｜ 核验日期 ${rec.verifiedAt} ｜ 摘要：${rec.evidenceSummary}`
+      );
+    }
+  }
+  lines.push(``);
+
+  if (touchesM13Gov) {
+    lines.push(`---`);
+    lines.push(``);
+    lines.push(`> **M13-Gov 模拟治理评审边界声明**：${M13_GOV_SIMULATION_DISCLAIMER}`);
+    lines.push(``);
+  }
 
   return lines.join("\n");
 }
@@ -409,7 +518,7 @@ export function buildFullCourseInstructorHandbookMarkdown(
   }
 
   return [
-    `# AICodingCourse 全课 10 模块教师备课总手册`,
+    `# AICodingCourse 全课 ${COURSE_MODULE_RECORDS.length} 模块教师备课总手册`,
     ``,
     `- 生成日期：${new Date().toISOString().slice(0, 10)}`,
     `- 覆盖模块：${COURSE_MODULE_RECORDS.length} 个模块 ｜ 合计单元：${totalCourseUnits} 个 ｜ 总预计课时：约 ${totalCourseMinutes} 分钟`,
@@ -423,9 +532,10 @@ export function buildFullCourseInstructorHandbookMarkdown(
 export function buildKnowledgeBaseMarkdownExport(options: {
   builtInEntries: TeamKnowledgeEntry[];
   customEntries: CustomKnowledgeDraft[];
+  books?: KnowledgeBookItem[];
   filterSummary?: string;
 }): string {
-  const { builtInEntries, customEntries, filterSummary } = options;
+  const { builtInEntries, customEntries, books = [], filterSummary } = options;
   const dateStr = new Date().toISOString().slice(0, 10);
 
   const lines: string[] = [
@@ -433,7 +543,7 @@ export function buildKnowledgeBaseMarkdownExport(options: {
     ``,
     `- 导出日期：${dateStr}`,
     `- 筛选条件：${filterSummary || "全部条目"}`,
-    `- 仓库内置条目：${builtInEntries.length} 条 ｜ 个人/团队自建草稿：${customEntries.length} 条`,
+    `- 仓库内置规范：${builtInEntries.length} 条 ｜ 个人/团队自建草稿：${customEntries.length} 条 ｜ AI-pdf-books 书目：${books.length} 册`,
     ``,
     `---`,
     ``,
@@ -462,11 +572,11 @@ export function buildKnowledgeBaseMarkdownExport(options: {
 
   lines.push(`---`);
   lines.push(``);
-  lines.push(`## 二、课程内置团队工程知识条目`);
+  lines.push(`## 二、内置团队研发工程规范条目（${KNOWLEDGE_TRACK_LABELS.engineering} · ${builtInEntries.length} 条）`);
   lines.push(``);
 
   if (builtInEntries.length === 0) {
-    lines.push(`> 当前筛选条件下无内置知识条目。`);
+    lines.push(`> 当前筛选条件下无工程规范条目。`);
     lines.push(``);
   } else {
     for (const entry of builtInEntries) {
@@ -476,6 +586,67 @@ export function buildKnowledgeBaseMarkdownExport(options: {
       lines.push(`- 适用范围：${entry.scope}`);
       lines.push(`- 来源与维护：${entry.source} · ${entry.owner} · 版本 ${entry.version} · 更新 ${entry.updatedAt}`);
       lines.push(`- 警示与边界：${entry.antiPatternOrWarning}`);
+      lines.push("```markdown");
+      lines.push(entry.copyableSnippet.trim());
+      lines.push("```");
+      lines.push(``);
+    }
+  }
+
+  if (books.length > 0) {
+    lines.push(`---`);
+    lines.push(``);
+    lines.push(`## 三、AI-pdf-books 开源书库与参考专著（${books.length} 册 · 归属研发工程知识库备课）`);
+    lines.push(``);
+    for (const book of books) {
+      lines.push(
+        `### [${book.targetModules.join("/")}] ${book.title}（${book.category}）`
+      );
+      lines.push(`- 作者/出版方：${book.authorOrSource} ｜ 文件体积：${book.sizeMB.toFixed(1)} MB`);
+      lines.push(`- 核心要点：${book.coreTakeaways}`);
+      lines.push(`- 课程应用：${book.courseApplication}`);
+      lines.push(`- 原文链接：${getBookGithubUrl(book)}`);
+      lines.push(``);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function buildRuntimeWorkshopMarkdownExport(options: {
+  runtimeEntries: RuntimeKnowledgeEntry[];
+  filterSummary?: string;
+}): string {
+  const { runtimeEntries, filterSummary } = options;
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const lines: string[] = [
+    `# AICodingCourse 运行时领域知识库工坊规范导出`,
+    ``,
+    `- 导出日期：${dateStr}`,
+    `- 归属链路：${RUNTIME_KB_WORKSHOP_RULES.trackName}`,
+    `- 筛选条件：${filterSummary || "全部运行时阶段"}`,
+    `- 收录规范与契约：${runtimeEntries.length} 条（与研发工程 KB 及 AI-pdf-books 严格隔离）`,
+    `- 边界说明：${RUNTIME_KB_WORKSHOP_RULES.simulationNotice}`,
+    ``,
+    `---`,
+    ``,
+    `## 运行时检索六步链路与验收契约`,
+    ``,
+  ];
+
+  if (runtimeEntries.length === 0) {
+    lines.push(`> 当前筛选条件下无运行时工作坊条目。`);
+    lines.push(``);
+  } else {
+    for (const entry of runtimeEntries) {
+      lines.push(
+        `### [${entry.modules.join("/")}] ${entry.title}（${RUNTIME_PIPELINE_STAGE_LABELS[entry.pipelineStage]} · ${KNOWLEDGE_STATUS_LABELS[entry.validationStatus]}）`
+      );
+      lines.push(`- 适用范围：${entry.scope}`);
+      lines.push(`- 验收门禁：${entry.evalGate}`);
+      lines.push(`- 来源与维护：${entry.source} · ${entry.owner} · 版本 ${entry.version} · 更新 ${entry.updatedAt}`);
+      lines.push(`- 风险警示：${entry.antiPatternOrWarning}`);
       lines.push("```markdown");
       lines.push(entry.copyableSnippet.trim());
       lines.push("```");

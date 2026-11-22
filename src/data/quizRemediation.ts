@@ -1,4 +1,4 @@
-import type { QuizQuestion } from "@/data/moduleQuizzes";
+import type { QuizQuestion } from "./moduleQuizzes";
 
 export const VALID_LAB_IDS = [
   "plan-prompt",
@@ -17,6 +17,10 @@ export const VALID_LAB_IDS = [
   "prompt-crafting",
   "velocity-heatmap",
   "mcp-registry",
+  "context-slice",
+  "runtime-kb-rag",
+  "agent-workflow-sim",
+  "gov-trajectory-eval",
 ] as const;
 
 export type ValidLabId = (typeof VALID_LAB_IDS)[number];
@@ -35,56 +39,76 @@ export interface QuizRemediationEntry {
   labLabel?: string;
 }
 
-export const MODULE_OBJECTIVES: Record<number, ModuleObjectiveMeta> = {
-  1: {
+export const MODULE_OBJECTIVES: Record<string, ModuleObjectiveMeta> = {
+  m1: {
     moduleId: "m1",
     audience: "刚转向 AI-Native 研发的产品经理与独立开发者",
     observableOutcome: "能用 Plan 模式输出带边界与 DoD 门禁的可执行需求蓝图",
   },
-  2: {
+  m2: {
     moduleId: "m2",
     audience: "需要在多文件项目中精准投喂上下文的开发者",
-    observableOutcome: "能过滤目录噪音并规划跨模块重构及安全审计上下文",
+    observableOutcome: "能过滤目录噪音并规划跨模块重构及最小高信噪比上下文切片",
   },
-  3: {
+  m3: {
     moduleId: "m3",
     audience: "正在落地登录、数据库与支付闭环的全栈建设者",
-    observableOutcome: "能守住服务端 Webhook 鉴权底线并利用现场日志排障回滚",
+    observableOutcome: "能守住服务端 Webhook 鉴权底线并提交可核验 Starter 证据",
   },
-  4: {
+  m4: {
     moduleId: "m4",
     audience: "准备团队化/长期维护 Cursor 项目的工程师",
     observableOutcome: "能配置按 globs 触发的 .mdc 规则与最小特权 .cursor/mcp.json",
   },
-  5: {
+  m5: {
     moduleId: "m5",
     audience: "关注 AI 代码质量与自动化验收的技术负责人",
     observableOutcome: "能识别测试作弊（Reward Hacking）与死代码，设定有界自愈门禁",
   },
-  6: {
+  m6: {
     moduleId: "m6",
     audience: "尝试异步 Agent 并行开发与自动 PR 审查的团队",
     observableOutcome: "能构建独立上下文的 Bugbot 审查流与三层密钥防线",
   },
-  7: {
+  m7: {
     moduleId: "m7",
     audience: "追求长期研发复利的独立开发者与技术管理者",
     observableOutcome: "能区分代码行数幻觉与真实 MTTV/返工率 ROI 指标",
   },
-  8: {
+  m8: {
     moduleId: "m8",
-    audience: "需要把原型迁入工程仓库并调度多 Agent 协作的开发者",
-    observableOutcome: "能执行契约先行的原型迁移与 Worktree 目录隔离协作",
+    audience: "需要驾驭长程跨会话任务与多 Coding Agent 并发的开发者",
+    observableOutcome: "能装配五类长程 Coding Harness（init.sh/feature_list/Worktree/ACC）防偏航",
   },
-  9: {
+  m9: {
     moduleId: "m9",
     audience: "需要系统梳理现代 Web 三层全栈架构的 Vibe Coder",
     observableOutcome: "能做出清醒的技术选型、守住 45% 安全底线并精准解码报错",
   },
-  10: {
+  m10: {
     moduleId: "m10",
     audience: "希望提升前端产品完成度与 AI 视觉还原度的开发者",
     observableOutcome: "能使用高信噪比整站/局部截图及调参源码稳定驱动 UI 生成",
+  },
+  m11: {
+    moduleId: "m11",
+    audience: "规划并评估 Agent 系统的产品经理、架构师与技术负责人",
+    observableOutcome: "能完成 Workflow vs Agent 决策并交付 Data PRD、Prompt PRD 与 HITL 审批矩阵",
+  },
+  m12: {
+    moduleId: "m12",
+    audience: "实现运行时 Agent 与领域知识库的工程师及进阶独立开发者",
+    observableOutcome: "能落地 ACL 检索前强过滤、Tombstone 淘汰、引用溯源与步数预算熔断",
+  },
+  "m13-gov": {
+    moduleId: "m13-gov",
+    audience: "非技术学习者、产品经理与合规评审负责人",
+    observableOutcome: "能基于预制轨迹与评测集审计高危风险，输出带模拟边界声明的治理审签表",
+  },
+  "m13-eng": {
+    moduleId: "m13-eng",
+    audience: "构建可上线 Agent 系统的工程团队、独立开发者与高校学生",
+    observableOutcome: "能交付带双层 Eval、零越权探针与五类 Harness 护栏的生产级 Agent 系统",
   },
 };
 
@@ -259,25 +283,25 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
   },
   // Module 8
   "m8-q1": {
-    learningObjective: "能执行原型工具导出的前端代码迁入全栈工程的三步安全加固",
-    reviewAction: "到 Lab 14 为迁移任务生成前后端代理隔离的 AGENTS.md",
-    moduleId: "m8",
-    labId: "prompt-crafting",
-    labLabel: "Lab 14 · 规则生成器",
-  },
-  "m8-q2": {
-    learningObjective: "实施 Contract-First 契约先行与目录/Worktree 隔离防冲突",
-    reviewAction: "前往 Lab 06 查看多 Agent 隔离调度与上下文门控机制",
+    learningObjective: "用 init.sh、feature_list.json 与 ACC 摘要卡固定长程跨会话状态锚点",
+    reviewAction: "前往 Lab 06 切换「强长程 Harness」对照观察 ACC 压缩与状态锚点保留效果",
     moduleId: "m8",
     labId: "agent-harness",
-    labLabel: "Lab 06 · Agent Harness",
+    labLabel: "Lab 06 · 长程 Coding Harness",
+  },
+  "m8-q2": {
+    learningObjective: "实施 Contract-First 契约先行与 Git Worktree 目录所有权隔离并发冲突",
+    reviewAction: "前往 Lab 06 查看多 Coding Agent Worktree 分区隔离架构",
+    moduleId: "m8",
+    labId: "agent-harness",
+    labLabel: "Lab 06 · 长程 Coding Harness",
   },
   "m8-q3": {
-    learningObjective: "厘清常驻/路径防呆规则 (.mdc) 与可移植工作流 (SKILL.md) 的边界",
-    reviewAction: "前往 Lab 02 对比 00-project-dna 与专项规则文件职责划分",
+    learningObjective: "严格区分 M6 异步 PR、M8 长程 Coding Harness 与 M12 运行时 Agent 应用边界",
+    reviewAction: "回看 M8 五类 Harness 映射图，厘清使用 Coding Agent 与开发运行时 Agent 的分工",
     moduleId: "m8",
-    labId: "cursor-rules",
-    labLabel: "Lab 02 · Rules 沙盘",
+    labId: "agent-harness",
+    labLabel: "Lab 06 · 长程 Coding Harness",
   },
   // Module 9
   "m9-q1": {
@@ -330,18 +354,138 @@ export const QUIZ_REMEDIATION_MAP: Record<string, QuizRemediationEntry> = {
     labId: "ui-inspiration",
     labLabel: "Lab 08 · UI 审美参考库",
   },
+  // Module 11
+  "m11-q1": {
+    learningObjective: "利用 Workflow vs Agent 决策树识别应保留确定性编排的场景",
+    reviewAction: "回看 M11 Workflow vs Agent 判定卡，核对确定性流程与自主循环边界",
+    moduleId: "m11",
+  },
+  "m11-q2": {
+    learningObjective: "在 Data PRD 中锁定敏感分级、ACL 隔离键与失效版本淘汰契约",
+    reviewAction: "对照知识库 M11 Agent 产品蓝图双文档模板逐项补全 Data PRD",
+    moduleId: "m11",
+  },
+  "m11-q3": {
+    learningObjective: "在 Prompt PRD 中划定工具白名单预算与不可逆写操作的 HITL 审批门禁",
+    reviewAction: "复核 M11 HITL 风险矩阵，列出写操作暂停与低置信度拒答条件",
+    moduleId: "m11",
+  },
+  "m11-q4": {
+    learningObjective: "明确非技术角色通过 M13-Gov 治理评审并与 M12/M13-Eng 交接的分工链路",
+    reviewAction: "查看 M11 到 M13-Gov 无代码治理 Capstone 的产研交接流程",
+    moduleId: "m11",
+  },
+  // Module 12
+  "m12-q1": {
+    learningObjective: "区分研发工程知识库与运行时领域知识库的架构与生命周期差异",
+    reviewAction: "前往 Lab 18 对照运行中 Agent 所需的 6 步运行时 KB 流水线",
+    moduleId: "m12",
+    labId: "runtime-kb-rag",
+    labLabel: "Lab 18 · 运行时 KB 沙盘",
+  },
+  "m12-q2": {
+    learningObjective: "在检索前过滤（Pre-filter）阶段强制执行 tenantId、role 与 active 状态校验",
+    reviewAction: "在 Lab 18 切换「先召回后 Prompt 掩盖」模式观察跨租户泄露漏洞",
+    moduleId: "m12",
+    labId: "runtime-kb-rag",
+    labLabel: "Lab 18 · 运行时 KB 沙盘",
+  },
+  "m12-q3": {
+    learningObjective: "配置 Tombstone 状态淘汰旧版文档并要求每条回答绑定 docId+version 引用锚点",
+    reviewAction: "到 Lab 18 实测开启 Tombstone 后 deprecated 历史条款召回降为 0",
+    moduleId: "m12",
+    labId: "runtime-kb-rag",
+    labLabel: "Lab 18 · 运行时 KB 沙盘",
+  },
+  "m12-q4": {
+    learningObjective: "为运行时工具调用循环设置步数上限、费用预算熔断与异常转人工门禁",
+    reviewAction: "前往 Lab 19 触发工具超时死循环样例，验证 maxSteps 熔断与 HITL 挂起",
+    moduleId: "m12",
+    labId: "agent-workflow-sim",
+    labLabel: "Lab 19 · 运行时 Agent 熔断沙盘",
+  },
+  // Module 13-Gov
+  "m13-gov-q1": {
+    learningObjective: "在预制 Agent 轨迹中精准定级跨租户与低权限 ACL 越权漏过滤 P0 隐患",
+    reviewAction: "打开 Lab 20 审查预制轨迹 1，标出 ACL Pre-filter 缺失阻断项",
+    moduleId: "m13-gov",
+    labId: "gov-trajectory-eval",
+    labLabel: "Lab 20 · 治理轨迹评审台",
+  },
+  "m13-gov-q2": {
+    learningObjective: "识别零依据编造政策条款的忠实度失效并补充拒答与转人工门槛",
+    reviewAction: "在 Lab 20 检查无引用输出样本，补全 Prompt PRD 拒答策略条款",
+    moduleId: "m13-gov",
+    labId: "gov-trajectory-eval",
+    labLabel: "Lab 20 · 治理轨迹评审台",
+  },
+  "m13-gov-q3": {
+    learningObjective: "准确声明 M13-Gov 模拟治理评审边界，绝不冒充生产运行系统实测验证",
+    reviewAction: "复核 M13-Gov 报告页底部必须保留的预制轨迹模拟声明文案",
+    moduleId: "m13-gov",
+    labId: "gov-trajectory-eval",
+    labLabel: "Lab 20 · 治理轨迹评审台",
+  },
+  "m13-gov-q4": {
+    learningObjective: "针对缺少 HITL 确认与过期召回的高危样本下达 No-Go / Conditional 阻断判定",
+    reviewAction: "使用 Lab 20 完成完整审签勾选并导出含修复工单的评审报告",
+    moduleId: "m13-gov",
+    labId: "gov-trajectory-eval",
+    labLabel: "Lab 20 · 治理轨迹评审台",
+  },
+  // Module 13-Eng
+  "m13-eng-q1": {
+    learningObjective: "拆分 KB 检索指标（Recall@K/零越权/零过期）与 Agent 端到端轨迹评测维度",
+    reviewAction: "对照 Lab 18 与 Lab 19 分别核验检索精度与工具调用轨迹准确率",
+    moduleId: "m13-eng",
+    labId: "runtime-kb-rag",
+    labLabel: "Lab 18 · 运行时 KB 沙盘",
+  },
+  "m13-eng-q2": {
+    learningObjective: "编写不可绕过的跨角色越权探针与 Tombstone 历史版本回归测试",
+    reviewAction: "前往 Lab 18 查看 0% 越权与 0% 过期误召回的断言契约",
+    moduleId: "m13-eng",
+    labId: "runtime-kb-rag",
+    labLabel: "Lab 18 · 运行时 KB 沙盘",
+  },
+  "m13-eng-q3": {
+    learningObjective: "在生产级 Agent 工程中落地 M8 五类 Coding Harness 护栏维持长期演进",
+    reviewAction: "前往 Lab 06 复盘 init.sh、feature_list.json 与回归验证闭环",
+    moduleId: "m13-eng",
+    labId: "agent-harness",
+    labLabel: "Lab 06 · 长程 Coding Harness",
+  },
+  "m13-eng-q4": {
+    learningObjective: "提供命令行退出码 0、双层 Eval 报告与 Harness Runbook 作为上线客观证据",
+    reviewAction: "前往 Lab 19 验证预算熔断回归与工程 Capstone 交付清单",
+    moduleId: "m13-eng",
+    labId: "agent-workflow-sim",
+    labLabel: "Lab 19 · 运行时 Agent 熔断沙盘",
+  },
 };
+
+export function normalizeModuleIdKey(moduleIdOrNumber: string | number): string {
+  if (typeof moduleIdOrNumber === "number") {
+    return `m${moduleIdOrNumber}`;
+  }
+  const trimmed = String(moduleIdOrNumber).trim().toLowerCase();
+  if (/^\d+$/.test(trimmed)) {
+    return `m${trimmed}`;
+  }
+  return trimmed;
+}
 
 export function getQuestionRemediation(
   questionId: string,
-  moduleNumber: number
+  moduleIdOrNumber: string | number
 ): QuizRemediationEntry {
   const mapped = QUIZ_REMEDIATION_MAP[questionId];
   if (mapped) return mapped;
+  const resolvedId = normalizeModuleIdKey(moduleIdOrNumber);
   return {
     learningObjective: "能执行并验证本模块核心工程原则",
-    reviewAction: `建议回到 Module ${moduleNumber} 首页重新梳理本节概念`,
-    moduleId: `m${moduleNumber}`,
+    reviewAction: `建议回到 ${resolvedId.toUpperCase()} 首页重新梳理本节概念`,
+    moduleId: resolvedId,
   };
 }
 

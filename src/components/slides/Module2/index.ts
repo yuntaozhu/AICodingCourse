@@ -3,6 +3,7 @@ import P12 from "./P12";
 import P12b from "./P12b";
 import P12c from "./P12c";
 import P12d from "./P12d";
+import P12e from "./P12e";
 import P13 from "./P13";
 import P14 from "./P14";
 import P15 from "./P15";
@@ -14,5 +15,5 @@ import P20 from "./P20";
 import { Module2Quiz } from "@/components/ModuleQuizSlides";
 
 export const Module2Slides = [
-  P11, P12, P12b, P12c, P12d, P13, P14, P15, P16, P17, P18, P19, P20, Module2Quiz
+  P11, P12, P12b, P12c, P12d, P12e, P13, P14, P15, P16, P17, P18, P19, P20, Module2Quiz
 ];

@@ -65,9 +65,9 @@ export default function HarnessMigrationSlide() {
   return (
     <ModuleLoopStudio
       moduleCode="M8"
-      eyebrow="PROTOTYPE ➔ PRODUCTION & HARNESS BOUNDS · 迁移案例与可控边界"
-      title="原型转工程三步迁移 × Agent Harness 人工可控边界"
-      notes="通过分阶段迁移案例（拆分模块、补全错误处理与测试、替换 Mock 数据）阐明 Agent Harness 的适用范围、停止条件、压缩锚点与人工审批边界。"
+      eyebrow="OPTIONAL LONG-HORIZON SCENARIO · 原型转工程参考场景与可控边界"
+      title="可选参考场景：原型转工程三步迁移 × 长程 Harness 护栏"
+      notes="将原型迁入生产仓库作为长程 Coding Harness 的典型参考案例：拆模块、补验证、去 Mock，并显式设定停止条件、ACC 压缩锚点与人工审批边界。"
       objective="能将单文件快速原型分 3 步安全迁入可维护工程结构，并为长程 Agent 设定停止条件、上下文压缩锚点与人工审批边界。"
       boundary="切勿把原型代码整段覆盖现有生产目录；涉及鉴权、Schema 变更或连续自愈失败 3 次时，必须由人类介入审批或接管。"
       positiveCase={{

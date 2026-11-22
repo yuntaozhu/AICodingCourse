@@ -104,12 +104,12 @@ export async function handleBillingWebhook(rawBody: Buffer, signature: string) {
 
 ---
 
-## 8. [team-convention] M8 原型迁入与 Git Worktree 并发隔离约定（v1.1）
-- **Owner**：前端与全栈架构组 | **Scope**：在线原型工程化迁移与多 Agent 并行 | **Status**：`verified` (2026-11-19)
-- **Contract-First 迁移三步**：
-  1. 先锁定 `types.ts` / API 契约与现有鉴权中间件白名单，再逐页面迁入 UI；
-  2. 多 Agent 并行使用 `git worktree add ../wt-feature-a` 隔离目录与文件所有权，禁止两个 Agent 同时改共享路由或公共类型文件；
-  3. 迁入后必须重新执行 `npm install`、`npm run lint`、`npx tsc --noEmit` 与 `npm run build`。
+## 8. [team-convention] M8 长程 Coding Harness 与 Git Worktree 并发隔离约定（v1.2）
+- **Owner**：Harness 工程与全栈架构组 | **Scope**：跨多轮会话长程任务、多 Coding Agent 并行（含原型迁移参考场景） | **Status**：`verified` (2026-11-20)
+- **五要素装配与并发隔离**：
+  1. **状态锚点外部化**：用 `init.sh` 锁定可重复启动命令，用 `feature_list.json` 固化 `scopeAllowlist` / `verifyCommand` / `passes` 防删账本，阶段切换保留结构化 ACC 交接卡；
+  2. **Contract-First + Worktree 隔离**：先锁定 `types.ts` / API 契约，再用 `git worktree add ../wt-feature-a` 隔离并发 Agent 目录所有权，禁止两个 Agent 同时改共享路由或公共类型文件；
+  3. **退出前真实验证**：合入前必须重新执行 `npm install`、`npm run lint`、`npx tsc --noEmit` 与 `npm run build`。
 
 ---
 

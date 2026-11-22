@@ -1,3 +1,5 @@
+import type { KnowledgeModuleCode } from "./teamKnowledgeBase";
+
 export type BookCategory =
   | "AI Architecture"
   | "AI Engineering"
@@ -15,7 +17,7 @@ export interface KnowledgeBookItem {
   repoPath: string;
   externalUrl?: string;
   sizeMB: number;
-  targetModules: ("M1" | "M2" | "M3" | "M4" | "M5" | "M6" | "M7" | "M8" | "M9" | "M10")[];
+  targetModules: KnowledgeModuleCode[];
   coreTakeaways: string;
   courseApplication: string;
   keywords: string[];
@@ -24,7 +26,7 @@ export interface KnowledgeBookItem {
 export interface CurriculumBookBundle {
   id: string;
   label: string;
-  targetModule: "M1" | "M2" | "M3" | "M4" | "M5" | "M6" | "M7" | "M8" | "M9" | "M10";
+  targetModule: KnowledgeModuleCode;
   goal: string;
   bookIds: string[];
 }

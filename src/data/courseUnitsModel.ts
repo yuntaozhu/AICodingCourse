@@ -5,10 +5,16 @@ import {
   COURSE_RESOURCES,
   type CourseModule,
   type CourseVerificationStatus,
+  type TrackId,
 } from "./courseCurriculum";
+import type { SkillId } from "./courseSkills";
 import { MODULE_QUIZZES } from "./moduleQuizzes";
 import { MODULE_TEACHING_PACKAGES, type ModuleTeachingPackage } from "./moduleTeachingPackages";
 import { TEAM_KNOWLEDGE_BASE } from "./teamKnowledgeBase";
+import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "./runtimeKnowledgeBase";
+
+const M13_GOV_DISCLAIMER_TEXT =
+  "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";
 
 export type CourseUnitType =
   | "concept"
@@ -109,10 +115,14 @@ export interface CourseModuleRecord {
   id: string;
   code: CourseModule["code"];
   order: number;
+  trackId: TrackId;
   title: string;
   exemplarLevel: "complete-exemplar" | "compatible-adapter";
   audience: string[];
   prerequisites: string[];
+  prerequisiteModuleIds: string[];
+  prerequisiteSkillIds: SkillId[];
+  grantsSkillIds: SkillId[];
   learningObjectives: string[];
   boundaryNote: string;
   units: CourseUnit[];
@@ -637,15 +647,16 @@ const MODULE_STARTER_ARTIFACTS: Record<string, UnitLearnerArtifactSpec> = {
 - [ ] 跨文件改动不超过 5 个核心模块；超出则拆成子任务`,
   },
   m3: {
-    title: "M3 独立产品垂直切片与接口契约卡",
+    title: "M3 独立产品垂直切片、鉴权证据与接口契约卡",
     filename: "PRODUCT_SLICE_SPEC.md",
     templateContent: `## 垂直切片范围（只保留 1 个可端到端跑通闭环）
 - 用户流程: 表单提交 -> Zod 服务端校验 -> 本地/服务端持久化 -> 错误提示回显
 - 严禁前端直连: 任何真实数据库管理员密钥或第三方支付 Secret 严禁放入 VITE_*
 
-## 接口异常契约
+## 接口异常契约与 Starter 技能核验说明
 - 400 Bad Request: 字段校验失败返回结构化 fieldErrors
-- 401/403: 未认证或越权操作拒绝写库
+- 401/403: 未认证或越权操作拒绝写库（须附带 401/403 拒绝测试输出或签名验证日志）
+- 重要声明: 仅勾选完成 M3 不会自动解锁 skill-backend-api-auth / skill-ai-project-exp，须在模块页提交 Starter 证据或通过诊断测评
 - 验证命令: npx tsc --noEmit && curl 异常与正常状态码`,
   },
   m4: {
@@ -697,13 +708,17 @@ alwaysApply: false
 - [ ] 大型重构超过 2 轮无收敛立即回滚拆分，不继续堆砌修复补丁`,
   },
   m8: {
-    title: "M8 AI Studio 原型迁移与 Agent Harness 检查单",
-    filename: "HARNESS_MIGRATION_RUNBOOK.md",
-    templateContent: `## 原型迁入工程仓库 4 步闭环
-1. 环境与依赖对齐: 核对 package.json 与 .env.example（密钥仅放服务端）
-2. 上下文压缩（ACC）: 长对话仅保留阶段契约摘要，丢弃冗余试错日志
-3. 替换模拟桩: 明确标出本地 Mock 与真实外部 API 的边界差异
-4. 验收命令: npm run lint && npx tsc --noEmit && npm run build`,
+    title: "M8 长程 Coding Harness 五要素装配与多 Worktree 交接卡",
+    filename: "LONG_HORIZON_HARNESS_RUNBOOK.md",
+    templateContent: `## 系统五类长程 Coding Harness 装配清单
+1. 指令（Instruction）: 锁定本轮单切片契约与禁止修改目录
+2. 范围与权限（Scope & Permission）: Plan 模式 Schema Gating + Git Worktree 目录所有权隔离（agent-a -> src/server/**，agent-b -> src/components/**）
+3. 工具与环境（Tools & Environment）: bash init.sh 幂等环境自检 + Lazy MCP 按需挂载
+4. 状态与交接（State & Handoff）: feature_list.json（JSON 状态锚点，passes 只读验收）+ ACC 压缩摘要（保留未解报错与路径边界）
+5. 验证与反馈（Verification & Feedback）: 3-Nudge 错因分流 + npm run lint && npx tsc --noEmit && npm run build
+
+## 可选参考场景：原型工程化三步迁移
+- 仅在迁入 AI Studio 原型时执行：拆 types/api/ui -> 补 Zod 与单测 -> 替换 Mock 为受控接口`,
   },
   m9: {
     title: "M9 全栈三层架构决策记录 (ADR) 与排错卡",
@@ -728,16 +743,73 @@ alwaysApply: false
 - [ ] 移动端 < 640px 无横向溢出
 - [ ] 表单输入与模态框支持键盘导航且不与全局快捷键冲突`,
   },
+  m11: {
+    title: "M11 Agent 产品蓝图（Workflow 决策 + Data/Prompt PRD + HITL 矩阵）",
+    filename: "AGENT_PRODUCT_BLUEPRINT.md",
+    templateContent: `## 1. Workflow vs Agent 架构判定
+- 业务流程是否步骤固定且规则可枚举？ [ ] 是（优先确定性 Workflow） / [ ] 否（进入受控 Agent）
+- 高风险写操作清单: 外部发送 / 删库 / 资金入账（全部要求人工 HITL 审批）
+
+## 2. Data PRD（运行时领域知识契约）
+- 数据源与更新频率: 规章文档 / 历史工单（每日增量 + 版本淘汰 Tombstone）
+- 权限过滤主键: tenantId + role + status='active'（检索查询前强制 pre-filter）
+- 溯源要求: 每条关键结论必须返回 docId + version + sectionAnchor
+
+## 3. Prompt PRD 与预算熔断
+- maxSteps 上限: 5 步 ｜ 单次调用 Token 上限: 12k ｜ 工具白名单: kb_search, ticket_draft
+- 拒答与兜底话术: 无匹配授权引用时明确输出「依据不足，请转人工复核」，严禁编造条款`,
+  },
+  m12: {
+    title: "M12 运行时 Agent 与领域知识库实现契约（ACL Pre-filter + Eval）",
+    filename: "RUNTIME_AGENT_KB_IMPL.md",
+    templateContent: `## 1. 运行时 KB 六步工程检查
+- [ ] Ingestion: 文档切片携带 docId / version / tenantId / allowedRoles / status('active'|'deprecated')
+- [ ] ACL Pre-filter: 查询索引前先按 caller.tenantId 与 caller.role 过滤，严禁先召回后靠 Prompt 遮蔽
+- [ ] Hybrid + Wiki 路由: 结构化概念走 Wiki 词条路由，长文档走 BM25 + 向量混合召回
+- [ ] Tombstone 淘汰: 发现新版本发布立即置 deprecated，检索零命中过期条款
+- [ ] Citation Grounding: 输出校验每条事实均有有效引用 ID
+- [ ] Dual Eval: 分别跑检索侧（0 越权 / 0 过期）与 Agent 端到端（步数熔断 + HITL 挂起）测试`,
+  },
+  "m13-gov": {
+    title: "M13-Gov 无代码 Agent 上线前模拟治理评审审签单",
+    filename: "GOV_CAPSTONE_REVIEW.md",
+    templateContent: `> **重要声明**：${M13_GOV_DISCLAIMER_TEXT}
+
+## 1. 预制轨迹风险扫描记录
+- [ ] 跨租户/角色越权泄露核查（是否发现检索未做 ACL Pre-filter）
+- [ ] 过期版本条款（deprecated）召回核查
+- [ ] 无引用锚点编造结论核查
+- [ ] 外部写操作（退款/发邮件/改权限）HITL 人工暂停核查
+
+## 2. 模拟治理评审裁决
+- 评审结论: [ ] Go（满足模拟条件） / [ ] Conditional（附条件整改） / [ ] No-Go（退回研发）
+- 退回研发工单: 写明需研发在 M12/M13-Eng 补齐的真实测试与工程修复项`,
+  },
+  "m13-eng": {
+    title: "M13-Eng 生产级 Agent、Harness 与运行时 KB 工程 Capstone 交付单",
+    filename: "ENG_CAPSTONE_DELIVERY.md",
+    templateContent: `## 1. 可运行系统与 Harness 护栏验收
+- [ ] 长程开发期已通过 init.sh + Worktree 隔离 + 5 类 Coding Harness 检查
+- [ ] 运行时 KB 已实施数据库/索引级 tenantId + role + active pre-filter（附单测退出码 0）
+
+## 2. 双层 Eval 实测证据（严禁仅凭 3 条正向 Demo 过关）
+- 检索侧 Eval: Recall@K 达标 ｜ 跨租户越权探针命中 = 0 ｜ 过期 Tombstone 召回 = 0
+- Agent 端到端 Eval: 预算超限 maxSteps 熔断通过 ｜ 写操作 HITL 挂起通过 ｜ 忠实度校验通过
+- 验证命令: npm run lint && npx tsc --noEmit && npm test`,
+  },
 };
 
 function buildCompatibleUnitsForModule(
   mod: CourseModule,
   pkg: ModuleTeachingPackage
 ): { units: CourseUnit[]; deliveryPlans: DeliveryPlan[] } {
-  const modKbEntries = TEAM_KNOWLEDGE_BASE.filter((kb) => kb.modules.includes(mod.code));
+  const modKbEntries = [
+    ...TEAM_KNOWLEDGE_BASE,
+    ...RUNTIME_WORKSHOP_KNOWLEDGE_BASE,
+  ].filter((kb) => kb.modules.includes(mod.code));
   const kbIds = modKbEntries.map((k) => k.id);
   const modLabs = COURSE_LABS.filter((l) => mod.labIds.includes(l.id));
-  const quiz = MODULE_QUIZZES[mod.order];
+  const quiz = MODULE_QUIZZES[mod.id];
   const quizSlideOffset = Math.max(0, mod.slideCount - 1);
   const demoSlideOffset = Math.min(2, quizSlideOffset);
   const practiceSlideOffset = Math.min(Math.max(1, Math.floor(mod.slideCount / 2)), quizSlideOffset);
@@ -1165,6 +1237,8 @@ function buildCompatibleUnitsForModule(
   return { units, deliveryPlans };
 }
 
+const COMPLETE_EXEMPLAR_IDS = new Set(["m1", "m11", "m12", "m13-gov", "m13-eng"]);
+
 export const COURSE_MODULE_RECORDS: CourseModuleRecord[] = COURSE_MODULES.map((mod) => {
   const pkg = MODULE_TEACHING_PACKAGES[mod.id];
   if (mod.id === "m1") {
@@ -1172,10 +1246,14 @@ export const COURSE_MODULE_RECORDS: CourseModuleRecord[] = COURSE_MODULES.map((m
       id: mod.id,
       code: mod.code,
       order: mod.order,
+      trackId: mod.trackId,
       title: mod.title,
       exemplarLevel: "complete-exemplar",
       audience: mod.audience,
       prerequisites: mod.prerequisites,
+      prerequisiteModuleIds: mod.prerequisiteModuleIds,
+      prerequisiteSkillIds: mod.prerequisiteSkillIds,
+      grantsSkillIds: mod.grantsSkillIds,
       learningObjectives: mod.learningObjectives,
       boundaryNote: mod.boundaryNote,
       units: M1_FULL_UNITS,
@@ -1183,19 +1261,37 @@ export const COURSE_MODULE_RECORDS: CourseModuleRecord[] = COURSE_MODULES.map((m
       labIds: mod.labIds,
       resourceIds: mod.resourceIds,
       status: mod.status,
-      updatedAt: "2026-11-19",
+      updatedAt: "2026-11-20",
     };
   }
 
   const compatible = buildCompatibleUnitsForModule(mod, pkg);
+  if (mod.id === "m13-gov") {
+    compatible.units = compatible.units.map((u) =>
+      u.type === "concept" || u.type === "sandbox" || u.type === "collab-practice"
+        ? {
+            ...u,
+            contentBlocks: [
+              `【模拟治理边界声明】${M13_GOV_DISCLAIMER_TEXT}`,
+              ...u.contentBlocks,
+            ],
+          }
+        : u
+    );
+  }
+
   return {
     id: mod.id,
     code: mod.code,
     order: mod.order,
+    trackId: mod.trackId,
     title: mod.title,
-    exemplarLevel: "compatible-adapter",
+    exemplarLevel: COMPLETE_EXEMPLAR_IDS.has(mod.id) ? "complete-exemplar" : "compatible-adapter",
     audience: mod.audience,
     prerequisites: mod.prerequisites,
+    prerequisiteModuleIds: mod.prerequisiteModuleIds,
+    prerequisiteSkillIds: mod.prerequisiteSkillIds,
+    grantsSkillIds: mod.grantsSkillIds,
     learningObjectives: mod.learningObjectives,
     boundaryNote: mod.boundaryNote,
     units: compatible.units,

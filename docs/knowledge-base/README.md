@@ -1,10 +1,12 @@
-# AI Coding 团队工程知识库治理与目录规范
+# AI Coding 双链路知识库治理与目录规范
 
-> 本目录是课程与真实工程团队共享的**活体工程资产库（Living Knowledge Base）**，与课程界面右侧「知识库与来源 → 团队知识库」标签页保持结构映射，避免“只写在 PPT 里、带不回仓库”的纸面规范。
+> 本目录维护课程与真实工程共享的两条独立知识链路，与工作台「知识库中心」保持严格边界隔离：
+> - **链路 A · 研发工程知识库**（`src/data/teamKnowledgeBase.ts`，覆盖 M1–M10）：服务开发者与 Coding Agent 的工程规则、模板、失败复盘与 ADR；
+> - **链路 B · 应用运行时领域知识库工坊**（`src/data/runtimeKnowledgeBase.ts`，覆盖 M11–M13-Eng）：服务运行中 Agent 应用的数据接入、ACL 检索前过滤、混合检索、引用溯源、Tombstone 淘汰与双层 Eval 门禁。
 
 ---
 
-## 1. 知识分类体系（9 类严格区分）
+## 1. 工程知识分类体系（链路 A · 9 类严格区分）
 
 | 分类编码 | 中文标签 | 适用职责 | 典型存放内容 |
 | :--- | :--- | :--- | :--- |
@@ -54,5 +56,8 @@
 
 ## 5. 文档文件索引
 
-- [`templates-and-checklists.md`](./templates-and-checklists.md)：入门规则、模板、检查清单、示例与团队约定（覆盖 M1–M10 可复用片段）
-- [`failures-and-decisions.md`](./failures-and-decisions.md)：失败案例、架构决策记录（ADR）、待验证假设与已废弃实践（含替代迁移路径）
+- **链路 A · 研发工程知识库（给开发者 / Coding Agent，M1–M10）**：
+  - [`templates-and-checklists.md`](./templates-and-checklists.md)：入门规则、模板、检查清单、示例与团队约定（覆盖 M1–M10 与 M8 长程 Coding Harness 可复用片段）
+  - [`failures-and-decisions.md`](./failures-and-decisions.md)：失败案例、架构决策记录（ADR）、待验证假设与已废弃实践（含替代迁移路径）
+- **链路 B · 应用运行时领域知识库工坊（给运行中 Agent / RAG，M11–M13-Eng）**：
+  - [`runtime-domain-kb.md`](./runtime-domain-kb.md)：Data/Prompt PRD、ACL 检索前强过滤、混合/Wiki 检索、Citation Grounding 溯源、Tombstone 淘汰与 Retrieval + 轨迹双层 Eval 门禁（教学模拟与工程边界声明）

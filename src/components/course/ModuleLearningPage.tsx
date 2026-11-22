@@ -19,8 +19,15 @@ import {
   Play,
   Presentation as PresentationIcon,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import { COURSE_LABS } from "@/data/courseCurriculum";
+import {
+  COURSE_SKILLS,
+  evaluateModuleReadiness,
+  getSkillById,
+  type SkillId,
+} from "@/data/courseSkills";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import {
@@ -39,18 +46,22 @@ import {
 import {
   buildInstructorLessonPlanMarkdown,
   getModuleCompletionStats,
+  M13_GOV_SIMULATION_DISCLAIMER,
   QUIZ_ANSWERS_STORAGE_KEY,
   type CourseWorkspaceState,
   type CustomKnowledgeDraft,
   type PracticeNoteRecord,
+  type SkillVerificationRecord,
 } from "@/data/courseWorkspaceStore";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   TEAM_KNOWLEDGE_BASE,
+  type KnowledgeBaseTrack,
   type KnowledgeCategory,
   type KnowledgeModuleCode,
 } from "@/data/teamKnowledgeBase";
+import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 
 interface ModuleLearningPageProps {
   moduleRecord: CourseModuleRecord;
@@ -65,30 +76,40 @@ interface ModuleLearningPageProps {
   onToggleCriterion: (unitId: string, criterionText: string) => void;
   onSavePracticeNote: (unitId: string, note: Partial<PracticeNoteRecord>) => void;
   onAddCustomKb: (entry: Omit<CustomKnowledgeDraft, "id" | "updatedAt">) => void;
+  onVerifySkill: (record: SkillVerificationRecord) => void;
   onToggleViewMode: () => void;
-  onOpenKnowledgeBase: (moduleCode?: string) => void;
+  onOpenKnowledgeBase: (moduleCode?: string, track?: KnowledgeBaseTrack) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string; slideOffset?: number }) => void;
   onScrollTop?: () => void;
 }
 
-function loadQuizAnswers(moduleOrder: number): Record<string, number> {
+function loadQuizAnswers(moduleId: string, moduleOrder: number): Record<string, number> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(QUIZ_ANSWERS_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, Record<string, number>>;
-    return parsed[String(moduleOrder)] || {};
+    return parsed[moduleId] ?? (moduleOrder <= 10 ? parsed[String(moduleOrder)] : undefined) ?? {};
   } catch {
     return {};
   }
 }
 
-function saveQuizAnswers(moduleOrder: number, answers: Record<string, number>) {
+function saveQuizAnswers(
+  moduleId: string,
+  moduleOrder: number,
+  answers: Record<string, number>
+) {
   if (typeof window === "undefined") return;
   try {
     const raw = window.localStorage.getItem(QUIZ_ANSWERS_STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as Record<string, Record<string, number>>) : {};
-    parsed[String(moduleOrder)] = answers;
+    if (Object.keys(answers).length === 0) {
+      delete parsed[moduleId];
+    } else {
+      parsed[moduleId] = answers;
+    }
+    delete parsed[String(moduleOrder)];
     window.localStorage.setItem(QUIZ_ANSWERS_STORAGE_KEY, JSON.stringify(parsed));
     window.dispatchEvent(new CustomEvent("course:quiz-progress-updated"));
   } catch {
@@ -109,6 +130,7 @@ export default function ModuleLearningPage({
   onToggleCriterion,
   onSavePracticeNote,
   onAddCustomKb,
+  onVerifySkill,
   onToggleViewMode,
   onOpenKnowledgeBase,
   onSwitchToReveal,
@@ -120,7 +142,14 @@ export default function ModuleLearningPage({
     moduleRecord.deliveryPlans.find((p) => p.id === activePlanId) ||
     moduleRecord.deliveryPlans[0];
 
-  const [showAllModuleUnits, setShowAllModuleUnits] = useState(false);
+  const defaultPlanUnits = getUnitsForPlan(moduleRecord, activePlan?.id);
+  const [showAllModuleUnits, setShowAllModuleUnits] = useState<boolean>(() =>
+    Boolean(
+      initialUnitId &&
+        moduleRecord.units.some((u) => u.id === initialUnitId) &&
+        !defaultPlanUnits.some((u) => u.id === initialUnitId)
+    )
+  );
 
   const visibleUnits = useMemo(() => {
     if (showAllModuleUnits) return moduleRecord.units;
@@ -128,10 +157,10 @@ export default function ModuleLearningPage({
   }, [moduleRecord, activePlan?.id, showAllModuleUnits]);
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>(() => {
-    if (initialUnitId && visibleUnits.some((u) => u.id === initialUnitId)) {
+    if (initialUnitId && moduleRecord.units.some((u) => u.id === initialUnitId)) {
       return initialUnitId;
     }
-    return visibleUnits[0]?.id || moduleRecord.units[0]?.id || "";
+    return defaultPlanUnits[0]?.id || moduleRecord.units[0]?.id || "";
   });
 
   const [revealedFailureSolutionUnitId, setRevealedFailureSolutionUnitId] = useState<string | null>(
@@ -141,8 +170,16 @@ export default function ModuleLearningPage({
 
   // Quiz state synced with localStorage
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>(() =>
-    loadQuizAnswers(moduleRecord.order)
+    loadQuizAnswers(moduleRecord.id, moduleRecord.order)
   );
+
+  // Skill verification interactive state
+  const [activeDiagSkillId, setActiveDiagSkillId] = useState<SkillId | null>(null);
+  const [diagAnswersBySkill, setDiagAnswersBySkill] = useState<
+    Record<string, Record<string, number>>
+  >({});
+  const [diagFeedbackBySkill, setDiagFeedbackBySkill] = useState<Record<string, string>>({});
+  const [evidenceDraftBySkill, setEvidenceDraftBySkill] = useState<Record<string, string>>({});
 
   // Quick KB draft inline form
   const [kbTitle, setKbTitle] = useState("");
@@ -185,19 +222,58 @@ export default function ModuleLearningPage({
   const unitDodChecked = activeUnit ? workspaceState.dodCheckedByUnit[activeUnit.id] || [] : [];
   const unitCompleted = activeUnit ? Boolean(workspaceState.completedUnitIds[activeUnit.id]) : false;
 
+  const isRuntimeModule = moduleRecord.trackId === "agent-runtime";
+  const kbTrackForModule: KnowledgeBaseTrack = isRuntimeModule ? "runtime-domain" : "engineering";
   const relatedResources = activeUnit ? getResourcesByIds(activeUnit.relatedResourceIds) : [];
   const relatedKbEntries = activeUnit
-    ? TEAM_KNOWLEDGE_BASE.filter(
+    ? (isRuntimeModule ? RUNTIME_WORKSHOP_KNOWLEDGE_BASE : TEAM_KNOWLEDGE_BASE).filter(
         (kb) =>
           activeUnit.knowledgeEntryIds.includes(kb.id) || kb.modules.includes(moduleRecord.code)
       )
     : [];
-  const moduleCustomKbs = workspaceState.customKbEntries.filter(
-    (entry) => entry.moduleCode === moduleRecord.code
+  const moduleCustomKbs = !isRuntimeModule
+    ? workspaceState.customKbEntries.filter((entry) => entry.moduleCode === moduleRecord.code)
+    : [];
+
+  const moduleQuiz = MODULE_QUIZZES[moduleRecord.id];
+  const quizSummary = moduleQuiz ? getQuizReviewSummary(moduleQuiz, quizAnswers) : null;
+
+  const completedModuleIdsSet = useMemo(() => {
+    const done = new Set<string>();
+    for (const mod of COURSE_MODULE_RECORDS) {
+      const s = getModuleCompletionStats(mod, workspaceState);
+      if (s.totalCount > 0 && s.completedCount === s.totalCount) {
+        done.add(mod.id);
+      }
+    }
+    return done;
+  }, [workspaceState]);
+
+  const verifiedSkillIdsSet = useMemo(() => {
+    return new Set<SkillId>(
+      COURSE_SKILLS.filter((s) => Boolean(workspaceState.verifiedSkills?.[s.id])).map((s) => s.id)
+    );
+  }, [workspaceState.verifiedSkills]);
+
+  const readiness = useMemo(
+    () =>
+      evaluateModuleReadiness({
+        module: moduleRecord,
+        completedModuleIds: completedModuleIdsSet,
+        verifiedSkillIds: verifiedSkillIdsSet,
+      }),
+    [moduleRecord, completedModuleIdsSet, verifiedSkillIdsSet]
   );
 
-  const moduleQuiz = MODULE_QUIZZES[moduleRecord.order];
-  const quizSummary = moduleQuiz ? getQuizReviewSummary(moduleQuiz, quizAnswers) : null;
+  const gateSkillIds = useMemo(() => {
+    const ids = new Set<SkillId>(moduleRecord.prerequisiteSkillIds);
+    for (const sk of COURSE_SKILLS) {
+      if (sk.remediationModuleId === moduleRecord.id) {
+        ids.add(sk.id);
+      }
+    }
+    return Array.from(ids);
+  }, [moduleRecord.id, moduleRecord.prerequisiteSkillIds]);
 
   const moduleIdx = COURSE_MODULE_RECORDS.findIndex((m) => m.id === moduleRecord.id);
   const prevModule = moduleIdx > 0 ? COURSE_MODULE_RECORDS[moduleIdx - 1] : null;
@@ -260,19 +336,73 @@ export default function ModuleLearningPage({
   const handleSelectQuizOption = (questionId: string, optionIdx: number) => {
     const next = { ...quizAnswers, [questionId]: optionIdx };
     setQuizAnswers(next);
-    saveQuizAnswers(moduleRecord.order, next);
+    saveQuizAnswers(moduleRecord.id, moduleRecord.order, next);
   };
 
   const handleRetryWrongQuiz = () => {
     if (!moduleQuiz) return;
     const retryState = buildRetryWrongAnswersState(moduleQuiz.questions, quizAnswers);
     setQuizAnswers(retryState.keptAnswers);
-    saveQuizAnswers(moduleRecord.order, retryState.keptAnswers);
+    saveQuizAnswers(moduleRecord.id, moduleRecord.order, retryState.keptAnswers);
   };
 
   const handleResetQuiz = () => {
     setQuizAnswers({});
-    saveQuizAnswers(moduleRecord.order, {});
+    saveQuizAnswers(moduleRecord.id, moduleRecord.order, {});
+  };
+
+  const handleSubmitSkillDiagnostic = (skillId: SkillId) => {
+    const sk = getSkillById(skillId);
+    if (!sk) return;
+    const ans = diagAnswersBySkill[skillId] || {};
+    const allAnswered = sk.diagnosticQuestions.every((q) => typeof ans[q.id] === "number");
+    if (!allAnswered) {
+      setDiagFeedbackBySkill((prev) => ({
+        ...prev,
+        [skillId]: "请先完成全部 2 道能力诊断题。",
+      }));
+      return;
+    }
+    const correctCount = sk.diagnosticQuestions.filter((q) => ans[q.id] === q.correctIndex).length;
+    if (correctCount < sk.diagnosticQuestions.length) {
+      setDiagFeedbackBySkill((prev) => ({
+        ...prev,
+        [skillId]: `诊断得分 ${correctCount}/${sk.diagnosticQuestions.length}，须全部答对才可通过；请核对解析后重选。`,
+      }));
+      return;
+    }
+    onVerifySkill({
+      skillId,
+      method: "diagnostic-check",
+      evidenceSummary: `通过 ${correctCount}/${sk.diagnosticQuestions.length} 能力诊断测评`,
+      verifiedAt: new Date().toISOString().slice(0, 10),
+    });
+    setDiagFeedbackBySkill((prev) => ({
+      ...prev,
+      [skillId]: "能力诊断通过，已登记到本地技能档案！",
+    }));
+    setActiveDiagSkillId(null);
+  };
+
+  const handleSubmitStarterEvidence = (skillId: SkillId) => {
+    const draft = (evidenceDraftBySkill[skillId] || "").trim();
+    if (draft.length < 15) {
+      setDiagFeedbackBySkill((prev) => ({
+        ...prev,
+        [skillId]: "请填写至少 15 字的可核验 Starter 仓库切片、路由鉴权说明或测试命令输出。",
+      }));
+      return;
+    }
+    onVerifySkill({
+      skillId,
+      method: "starter-repo-evidence",
+      evidenceSummary: draft.slice(0, 140),
+      verifiedAt: new Date().toISOString().slice(0, 10),
+    });
+    setDiagFeedbackBySkill((prev) => ({
+      ...prev,
+      [skillId]: "Starter 可核验证据已登记，已解锁关联高阶技能门禁！",
+    }));
   };
 
   const handleSubmitQuickKb = (e: React.FormEvent) => {
@@ -465,15 +595,223 @@ export default function ModuleLearningPage({
               </button>
               <button
                 type="button"
-                onClick={() => onOpenKnowledgeBase(moduleRecord.code)}
+                onClick={() => onOpenKnowledgeBase(moduleRecord.code, kbTrackForModule)}
                 className="font-mono text-purple-200 hover:underline cursor-pointer"
               >
-                打开 {moduleRecord.code} 知识库 →
+                打开 {moduleRecord.code} {isRuntimeModule ? "运行时工作坊" : "工程知识库"} →
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* M13-Gov Verbatim Simulation Disclaimer */}
+      {moduleRecord.id === "m13-gov" && (
+        <div className="p-4 rounded-2xl bg-amber-500/12 border border-amber-400/50 flex items-start gap-3 text-xs text-amber-100">
+          <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-mono text-amber-300 font-semibold">
+              无代码治理 Capstone 边界声明
+            </div>
+            <p className="leading-relaxed font-medium">{M13_GOV_SIMULATION_DISCLAIMER}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Dual-Layer Prerequisite & Skill Verification Gate */}
+      {(moduleRecord.prerequisiteModuleIds.length > 0 || gateSkillIds.length > 0) && (
+        <div className="p-4 rounded-2xl bg-[#0b0f19] border border-white/12 space-y-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-semibold text-white">
+              <ShieldCheck
+                className={`w-4 h-4 ${
+                  readiness.ready ? "text-emerald-400" : "text-amber-300"
+                }`}
+              />
+              <span>
+                {moduleRecord.id === "m3"
+                  ? "M3 能力证据核验台（完成 M3 不会自动发放技能，须提交 Starter 证据或通过诊断）"
+                  : readiness.ready
+                  ? "双层先修门禁已就绪（模块先修与能力先修均已满足）"
+                  : "双层先修与能力门禁检查（建议先补齐缺失项）"}
+              </span>
+            </div>
+            <span className="font-mono text-[11px] text-slate-400">
+              前置模块 {moduleRecord.prerequisiteModuleIds.length - readiness.missingModuleIds.length}/
+              {moduleRecord.prerequisiteModuleIds.length} ·{" "}
+              {moduleRecord.prerequisiteSkillIds.length > 0
+                ? `必备技能 ${moduleRecord.prerequisiteSkillIds.length - readiness.missingSkillIds.length}/${moduleRecord.prerequisiteSkillIds.length}`
+                : `本节核验技能 ${gateSkillIds.filter((sid) => Boolean(workspaceState.verifiedSkills?.[sid])).length}/${gateSkillIds.length}`}
+            </span>
+          </div>
+
+          {moduleRecord.prerequisiteModuleIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-slate-400 font-mono">模块先修：</span>
+              {moduleRecord.prerequisiteModuleIds.map((pid) => {
+                const pMod = COURSE_MODULE_RECORDS.find((m) => m.id === pid);
+                const done = completedModuleIdsSet.has(pid);
+                return (
+                  <button
+                    key={pid}
+                    type="button"
+                    onClick={() => onOpenModule(pid)}
+                    className={`px-2 py-0.5 rounded-lg border font-mono text-[11px] cursor-pointer transition-colors ${
+                      done
+                        ? "bg-emerald-500/12 border-emerald-400/40 text-emerald-200"
+                        : "bg-amber-500/10 border-amber-400/35 text-amber-200 hover:bg-amber-500/20"
+                    }`}
+                  >
+                    {pMod?.code || pid.toUpperCase()} {done ? "[✓]" : "[未完成 · 前往]"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {gateSkillIds.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {gateSkillIds.map((sid) => {
+                const skill = getSkillById(sid);
+                if (!skill) return null;
+                const record = workspaceState.verifiedSkills?.[sid];
+                const isDiagOpen = activeDiagSkillId === sid;
+                const feedback = diagFeedbackBySkill[sid];
+
+                return (
+                  <div
+                    key={sid}
+                    className={`p-3 rounded-xl border space-y-2 ${
+                      record
+                        ? "bg-emerald-500/[0.06] border-emerald-400/35"
+                        : "bg-white/[0.025] border-white/10"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="font-semibold text-white">{skill.title}</span>
+                      <span
+                        className={`font-mono text-[10px] ${
+                          record ? "text-emerald-300" : "text-amber-300"
+                        }`}
+                      >
+                        {record ? `已核验 (${record.method})` : "待核验"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      {skill.evidencePrompt}
+                    </p>
+
+                    {record ? (
+                      <div className="text-[11px] font-mono text-emerald-200 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg">
+                        核验记录 ({record.verifiedAt})：{record.evidenceSummary}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {skill.acceptedMethods.includes("starter-repo-evidence") && (
+                          <div className="space-y-1.5">
+                            <input
+                              type="text"
+                              value={evidenceDraftBySkill[sid] || ""}
+                              onChange={(e) =>
+                                setEvidenceDraftBySkill((prev) => ({
+                                  ...prev,
+                                  [sid]: e.target.value,
+                                }))
+                              }
+                              placeholder="贴入 Starter 鉴权路由/Webhook 验签说明及测试退出码 (≥15字)..."
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-black/50 border border-white/15 text-[11px] text-white placeholder:text-slate-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitStarterEvidence(sid)}
+                              className="px-2.5 py-1 rounded-lg bg-gemini-cyan text-slate-950 font-semibold text-[11px] cursor-pointer"
+                            >
+                              提交可核验 Starter 证据并登记技能
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          {skill.acceptedMethods.includes("diagnostic-check") && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveDiagSkillId((prev) => (prev === sid ? null : sid))
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-[11px] text-purple-100 cursor-pointer"
+                            >
+                              {isDiagOpen ? "收起 2 题诊断测评" : "开始 2 题能力诊断测评 (需 2/2)"}
+                            </button>
+                          )}
+                          {skill.remediationModuleId && skill.remediationModuleId !== moduleRecord.id && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenModule(skill.remediationModuleId!)}
+                              className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-mono text-slate-300 cursor-pointer"
+                            >
+                              前往 {skill.remediationModuleId.toUpperCase()} 补修 →
+                            </button>
+                          )}
+                        </div>
+
+                        {isDiagOpen && (
+                          <div className="p-2.5 rounded-lg bg-black/50 border border-white/15 space-y-2.5">
+                            {skill.diagnosticQuestions.map((dq, dIdx) => {
+                              const picked = diagAnswersBySkill[sid]?.[dq.id];
+                              return (
+                                <div key={dq.id} className="space-y-1">
+                                  <div className="text-[11px] font-semibold text-white">
+                                    D{dIdx + 1}. {dq.prompt}
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {dq.options.map((opt, oIdx) => (
+                                      <button
+                                        key={oIdx}
+                                        type="button"
+                                        onClick={() =>
+                                          setDiagAnswersBySkill((prev) => ({
+                                            ...prev,
+                                            [sid]: {
+                                              ...(prev[sid] || {}),
+                                              [dq.id]: oIdx,
+                                            },
+                                          }))
+                                        }
+                                        className={`px-2 py-1 rounded text-left text-[11px] border cursor-pointer ${
+                                          picked === oIdx
+                                            ? "bg-gemini-cyan/20 border-gemini-cyan text-white"
+                                            : "bg-white/[0.03] border-white/10 text-slate-300"
+                                        }`}
+                                      >
+                                        {["A", "B", "C", "D"][oIdx]}. {opt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitSkillDiagnostic(sid)}
+                              className="px-3 py-1 rounded-lg bg-emerald-500 text-slate-950 font-semibold text-[11px] cursor-pointer"
+                            >
+                              提交诊断并验证
+                            </button>
+                          </div>
+                        )}
+
+                        {feedback && (
+                          <div className="text-[11px] text-amber-300">{feedback}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Split: Left Unit Nav + Right Unit Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -965,7 +1303,7 @@ export default function ModuleLearningPage({
                       const picked = quizAnswers[q.id];
                       const answered = typeof picked === "number";
                       const isCorrect = picked === q.correctIndex;
-                      const rem = getQuestionRemediation(q.id, moduleRecord.order);
+                      const rem = getQuestionRemediation(q.id, moduleRecord.id);
 
                       return (
                         <div
@@ -1224,10 +1562,10 @@ export default function ModuleLearningPage({
                   </span>
                   <button
                     type="button"
-                    onClick={() => onOpenKnowledgeBase(moduleRecord.code)}
+                    onClick={() => onOpenKnowledgeBase(moduleRecord.code, kbTrackForModule)}
                     className="text-xs font-mono text-gemini-cyan hover:underline cursor-pointer"
                   >
-                    打开完整知识库中心 →
+                    打开{isRuntimeModule ? "链路 B 运行时工作坊" : "链路 A 工程知识库"} →
                   </button>
                 </div>
 
@@ -1242,7 +1580,16 @@ export default function ModuleLearningPage({
                       <div className="space-y-1">
                         <div className="font-semibold text-white leading-snug">{kb.title}</div>
                         <div className="text-[10px] font-mono text-slate-400">
-                          {KNOWLEDGE_CATEGORY_LABELS[kb.category]} ·{" "}
+                          <span
+                            className={
+                              kb.kbTrack === "runtime-domain"
+                                ? "text-emerald-300"
+                                : "text-purple-200"
+                            }
+                          >
+                            {kb.kbTrack === "runtime-domain" ? "运行时工作坊" : "研发工程 KB"}
+                          </span>{" "}
+                          · {KNOWLEDGE_CATEGORY_LABELS[kb.category]} ·{" "}
                           {KNOWLEDGE_STATUS_LABELS[kb.validationStatus]} · {kb.version}
                         </div>
                         <div className="text-[11px] text-slate-300 line-clamp-2">{kb.summary}</div>
@@ -1313,13 +1660,13 @@ export default function ModuleLearningPage({
                   ))}
                 </div>
 
-                {activeUnit.type === "knowledge-base" && (
+                {activeUnit.type === "knowledge-base" && !isRuntimeModule && (
                   <form
                     onSubmit={handleSubmitQuickKb}
                     className="pt-3 border-t border-white/10 space-y-2"
                   >
                     <div className="text-xs font-semibold text-white">
-                      快速沉淀 1 条到我的知识库（随成果导出 Markdown）
+                      快速沉淀 1 条到我的工程知识草稿（归入链路 A · 随成果导出 Markdown）
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <input
@@ -1371,6 +1718,21 @@ export default function ModuleLearningPage({
                       </button>
                     </div>
                   </form>
+                )}
+
+                {activeUnit.type === "knowledge-base" && isRuntimeModule && (
+                  <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-300">
+                      当前模块属于「链路 B · Agent 运行时领域知识库工坊」，与链路 A 个人工程草稿彻底隔离；请前往运行时工坊检索契约与导出规范。
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenKnowledgeBase(moduleRecord.code, "runtime-domain")}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 font-medium cursor-pointer whitespace-nowrap"
+                    >
+                      前往链路 B 运行时工作坊 →
+                    </button>
+                  </div>
                 )}
               </div>
 

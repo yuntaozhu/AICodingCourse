@@ -32,18 +32,30 @@ import {
   type ResourceSourceType,
 } from "@/data/courseCurriculum";
 import {
+  ENGINEERING_MODULE_CODES,
   KB_GOVERNANCE_RULES,
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
+  searchEngineeringKnowledgeBase,
   TEAM_KNOWLEDGE_BASE,
   type KnowledgeCategory,
+  type KnowledgeModuleCode,
   type KnowledgeValidationStatus,
   type TeamKnowledgeEntry,
 } from "@/data/teamKnowledgeBase";
+import {
+  RUNTIME_KB_WORKSHOP_RULES,
+  RUNTIME_PIPELINE_STAGE_LABELS,
+  RUNTIME_WORKSHOP_KNOWLEDGE_BASE,
+  RUNTIME_WORKSHOP_MODULE_CODES,
+  searchRuntimeKnowledgeBase,
+  type RuntimeKnowledgeEntry,
+  type RuntimePipelineStage,
+} from "@/data/runtimeKnowledgeBase";
 import { stopRevealKey, stopRevealWheel } from "@/components/sandboxes/revealEvents";
 
-type ModuleFilter = "ALL" | "M1" | "M2" | "M3" | "M4" | "M5" | "M6" | "M7" | "M8" | "M9" | "M10";
-type SidebarTab = "books" | "team-kb" | "sources";
+type ModuleFilter = "ALL" | KnowledgeModuleCode;
+type SidebarTab = "books" | "team-kb" | "runtime-kb" | "sources";
 
 const SOURCE_TYPE_LABELS: Record<ResourceSourceType, string> = {
   "official-course": "官方课程",
@@ -68,6 +80,7 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
   const [statusFilter, setStatusFilter] = useState<CourseVerificationStatus | "ALL">("ALL");
   const [kbCategoryFilter, setKbCategoryFilter] = useState<KnowledgeCategory | "ALL">("ALL");
   const [kbStatusFilter, setKbStatusFilter] = useState<KnowledgeValidationStatus | "ALL">("ALL");
+  const [runtimeStageFilter, setRuntimeStageFilter] = useState<RuntimePipelineStage | "ALL">("ALL");
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null);
   const [expandedKbId, setExpandedKbId] = useState<string | null>(null);
@@ -90,9 +103,13 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
         moduleCode?: ModuleFilter;
         category?: KnowledgeCategory;
       }>;
-      setActiveTab("team-kb");
-      setModuleFilter(custom.detail?.moduleCode ?? "ALL");
+      const targetMod = custom.detail?.moduleCode ?? "ALL";
+      const isRuntimeTarget =
+        targetMod !== "ALL" && RUNTIME_WORKSHOP_MODULE_CODES.includes(targetMod);
+      setActiveTab(isRuntimeTarget ? "runtime-kb" : "team-kb");
+      setModuleFilter(targetMod);
       setKbCategoryFilter(custom.detail?.category ?? "ALL");
+      setRuntimeStageFilter("ALL");
       setKbStatusFilter("ALL");
       setSearchQuery("");
     };
@@ -159,23 +176,27 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
     });
   }, [searchQuery, sourceTypeFilter, statusFilter, moduleFilter]);
 
-  const filteredTeamKb = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return TEAM_KNOWLEDGE_BASE.filter((entry) => {
-      if (kbCategoryFilter !== "ALL" && entry.category !== kbCategoryFilter) return false;
-      if (kbStatusFilter !== "ALL" && entry.validationStatus !== kbStatusFilter) return false;
-      if (moduleFilter !== "ALL" && !entry.modules.includes(moduleFilter)) return false;
-      if (!q) return true;
-      return (
-        entry.title.toLowerCase().includes(q) ||
-        entry.summary.toLowerCase().includes(q) ||
-        entry.owner.toLowerCase().includes(q) ||
-        entry.scope.toLowerCase().includes(q) ||
-        entry.repoPath.toLowerCase().includes(q) ||
-        entry.copyableSnippet.toLowerCase().includes(q)
-      );
-    });
-  }, [searchQuery, kbCategoryFilter, kbStatusFilter, moduleFilter]);
+  const filteredTeamKb = useMemo(
+    () =>
+      searchEngineeringKnowledgeBase({
+        query: searchQuery,
+        moduleFilter,
+        categoryFilter: kbCategoryFilter,
+        statusFilter: kbStatusFilter,
+      }),
+    [searchQuery, kbCategoryFilter, kbStatusFilter, moduleFilter]
+  );
+
+  const filteredRuntimeKb = useMemo(
+    () =>
+      searchRuntimeKnowledgeBase({
+        query: searchQuery,
+        moduleFilter,
+        stageFilter: runtimeStageFilter,
+        statusFilter: kbStatusFilter,
+      }),
+    [searchQuery, runtimeStageFilter, kbStatusFilter, moduleFilter]
+  );
 
   const handleResetFilters = () => {
     setSearchQuery("");
@@ -186,9 +207,10 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
     setStatusFilter("ALL");
     setKbCategoryFilter("ALL");
     setKbStatusFilter("ALL");
+    setRuntimeStageFilter("ALL");
   };
 
-  const handleCopyKbSnippet = async (entry: TeamKnowledgeEntry) => {
+  const handleCopyKbSnippet = async (entry: TeamKnowledgeEntry | RuntimeKnowledgeEntry) => {
     try {
       await navigator.clipboard.writeText(entry.copyableSnippet);
       setCopiedKbId(entry.id);
@@ -235,7 +257,9 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
             {activeTab === "books"
               ? `书库 ${AI_BOOKS_KNOWLEDGE_BASE.length} 册 · 显示 ${filteredBooks.length} 册`
               : activeTab === "team-kb"
-              ? `工程知识库 ${TEAM_KNOWLEDGE_BASE.length} 条 · 显示 ${filteredTeamKb.length} 条`
+              ? `链路 A 工程 KB ${TEAM_KNOWLEDGE_BASE.length} 条 · 显示 ${filteredTeamKb.length} 条`
+              : activeTab === "runtime-kb"
+              ? `链路 B 运行时工作坊 ${RUNTIME_WORKSHOP_KNOWLEDGE_BASE.length} 项 · 显示 ${filteredRuntimeKb.length} 项`
               : `官方与开源来源 ${COURSE_RESOURCES.length} 项 · 显示 ${filteredResources.length} 项`}
           </div>
         </div>
@@ -266,7 +290,7 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
       {/* Mode Switcher Tabs */}
       <div className="px-3 pt-2.5 pb-2 border-b border-white/10 bg-[#0a0f1a] shrink-0">
         <div
-          className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-white/[0.04] border border-white/10"
+          className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-white/[0.04] border border-white/10"
           role="tablist"
           aria-label="知识库视图切换"
         >
@@ -288,7 +312,12 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
             type="button"
             role="tab"
             aria-selected={activeTab === "team-kb"}
-            onClick={() => setActiveTab("team-kb")}
+            onClick={() => {
+              setActiveTab("team-kb");
+              if (moduleFilter !== "ALL" && !ENGINEERING_MODULE_CODES.includes(moduleFilter)) {
+                setModuleFilter("ALL");
+              }
+            }}
             onKeyDown={stopRevealKey}
             className={`px-2 py-1.5 rounded text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap truncate ${
               activeTab === "team-kb"
@@ -296,7 +325,26 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
                 : "text-slate-300 hover:text-white hover:bg-white/10"
             }`}
           >
-            团队知识库 ({TEAM_KNOWLEDGE_BASE.length})
+            链路A·工程KB ({TEAM_KNOWLEDGE_BASE.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "runtime-kb"}
+            onClick={() => {
+              setActiveTab("runtime-kb");
+              if (moduleFilter !== "ALL" && !RUNTIME_WORKSHOP_MODULE_CODES.includes(moduleFilter)) {
+                setModuleFilter("ALL");
+              }
+            }}
+            onKeyDown={stopRevealKey}
+            className={`px-2 py-1.5 rounded text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap truncate ${
+              activeTab === "runtime-kb"
+                ? "bg-emerald-400 text-slate-950 font-semibold"
+                : "text-slate-300 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            链路B·运行时 ({RUNTIME_WORKSHOP_KNOWLEDGE_BASE.length})
           </button>
           <button
             type="button"
@@ -328,14 +376,18 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
               activeTab === "books"
                 ? "检索书名、作者、arXiv 或 Cursor 主题..."
                 : activeTab === "team-kb"
-                ? "检索规则、模板、失败案例、ADR、仓库路径或片段..."
+                ? "检索链路 A 工程规则、模板、ADR 或片段..."
+                : activeTab === "runtime-kb"
+                ? "检索链路 B ACL、Citation、Tombstone 或 Eval..."
                 : "检索官方课程、组织、开源仓库或课程用法..."
             }
             aria-label={
               activeTab === "books"
                 ? "检索知识库书籍"
                 : activeTab === "team-kb"
-                ? "检索团队工程知识库"
+                ? "检索研发工程知识库"
+                : activeTab === "runtime-kb"
+                ? "检索运行时领域知识库工坊"
                 : "检索课程来源索引"
             }
             className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-white/5 border border-white/15 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-gemini-cyan"
@@ -385,6 +437,23 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
                 </option>
               ))}
             </select>
+          ) : activeTab === "runtime-kb" ? (
+            <select
+              value={runtimeStageFilter}
+              onChange={(e) => setRuntimeStageFilter(e.target.value as RuntimePipelineStage | "ALL")}
+              onKeyDown={stopRevealKey}
+              aria-label="按运行时管线阶段筛选"
+              className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-white/5 border border-white/15 text-[11px] text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
+            >
+              <option value="ALL" className="bg-[#090d16]">
+                全部 6 个运行时管线阶段
+              </option>
+              {(Object.keys(RUNTIME_PIPELINE_STAGE_LABELS) as RuntimePipelineStage[]).map((st) => (
+                <option key={st} value={st} className="bg-[#090d16]">
+                  {RUNTIME_PIPELINE_STAGE_LABELS[st]}
+                </option>
+              ))}
+            </select>
           ) : (
             <select
               value={sourceTypeFilter}
@@ -414,7 +483,12 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
             <option value="ALL" className="bg-[#090d16]">
               全部模块
             </option>
-            {(["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10"] as const).map((m) => (
+            {(activeTab === "team-kb"
+              ? ENGINEERING_MODULE_CODES
+              : activeTab === "runtime-kb"
+              ? RUNTIME_WORKSHOP_MODULE_CODES
+              : (["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12", "M13-Gov", "M13-Eng"] as const)
+            ).map((m) => (
               <option key={m} value={m} className="bg-[#090d16]">
                 {m}
               </option>
@@ -465,7 +539,7 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
               </button>
             ))}
           </div>
-        ) : activeTab === "team-kb" ? (
+        ) : activeTab === "team-kb" || activeTab === "runtime-kb" ? (
           <div className="flex items-center justify-between gap-2 pt-0.5">
             <div className="flex items-center gap-1 flex-wrap">
               {(
@@ -493,6 +567,7 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
             </div>
             {(moduleFilter !== "ALL" ||
               kbCategoryFilter !== "ALL" ||
+              runtimeStageFilter !== "ALL" ||
               kbStatusFilter !== "ALL" ||
               searchQuery.trim() !== "") && (
               <button
@@ -552,7 +627,7 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
         {activeTab === "team-kb" && (
           <div className="rounded-xl border border-gemini-purple/30 bg-gemini-purple/[0.08] p-2.5 text-[11px] text-slate-300 leading-relaxed space-y-1">
             <div className="flex items-center justify-between gap-2 font-medium text-white">
-              <span>团队工程知识库与仓库映射</span>
+              <span>链路 A · 团队工程知识库与仓库映射</span>
               <span className="font-mono text-[10px] text-purple-200">
                 {KB_GOVERNANCE_RULES.repoRootPath}
               </span>
@@ -561,6 +636,19 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
             <p className="text-slate-400">
               用后闭环：{KB_GOVERNANCE_RULES.postUseActions.join(" / ")}
             </p>
+          </div>
+        )}
+
+        {activeTab === "runtime-kb" && (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/[0.08] p-2.5 text-[11px] text-slate-300 leading-relaxed space-y-1">
+            <div className="flex items-center justify-between gap-2 font-medium text-white">
+              <span>链路 B · Agent 运行时领域知识库工坊</span>
+              <span className="font-mono text-[10px] text-emerald-300">
+                {RUNTIME_KB_WORKSHOP_RULES.repoRootPath}
+              </span>
+            </div>
+            <p className="text-slate-300">{RUNTIME_KB_WORKSHOP_RULES.separationBoundary}</p>
+            <p className="text-amber-300/90">{RUNTIME_KB_WORKSHOP_RULES.simulationNotice}</p>
           </div>
         )}
 
@@ -837,6 +925,130 @@ export default function KnowledgeBaseSidebar({ isOpen, onClose }: KnowledgeBaseS
                               onClick={() => handleJumpModule(mod)}
                               onKeyDown={stopRevealKey}
                               className="px-2 py-0.5 rounded bg-white/10 hover:bg-gemini-cyan hover:text-slate-950 font-mono text-white transition-colors cursor-pointer"
+                            >
+                              {mod}
+                            </button>
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-slate-500 truncate">
+                          来源：{entry.source}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )
+        ) : activeTab === "runtime-kb" ? (
+          filteredRuntimeKb.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center text-center px-4 text-xs text-slate-400 space-y-2">
+              <BookOpen className="w-6 h-6 opacity-50" />
+              <p>未找到匹配的运行时领域知识库工坊条目。</p>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                onKeyDown={stopRevealKey}
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs cursor-pointer transition-colors"
+              >
+                重置筛选条件
+              </button>
+            </div>
+          ) : (
+            filteredRuntimeKb.map((entry: RuntimeKnowledgeEntry) => {
+              const isExpanded = expandAllDetails || expandedKbId === entry.id;
+              return (
+                <div
+                  key={entry.id}
+                  className={`rounded-xl border transition-colors ${
+                    isExpanded
+                      ? "bg-white/[0.06] border-emerald-400/45"
+                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedKbId((prev) => (prev === entry.id ? null : entry.id))}
+                    onKeyDown={stopRevealKey}
+                    aria-expanded={isExpanded}
+                    className="w-full p-2.5 text-left flex items-start justify-between gap-2 cursor-pointer"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-white leading-snug">
+                        {entry.title}
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap tabular-nums">
+                        <span className="text-emerald-300">
+                          {RUNTIME_PIPELINE_STAGE_LABELS[entry.pipelineStage]}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{KNOWLEDGE_STATUS_LABELS[entry.validationStatus]}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{entry.version}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="text-gemini-cyan">{entry.modules.join("/")}</span>
+                      </div>
+                    </div>
+                    <span className="text-slate-400 mt-0.5 shrink-0">
+                      {isExpanded ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-2.5 pb-2.5 pt-1.5 border-t border-white/10 space-y-2 text-[11px]">
+                      <div className="text-slate-400 font-mono">
+                        维护人：{entry.owner} · 适用范围：{entry.scope}
+                      </div>
+                      <p className="text-slate-200 leading-relaxed">{entry.summary}</p>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-400/25 text-emerald-100">
+                        <span className="font-mono text-emerald-300">客观验收门禁：</span>
+                        {entry.evalGate}
+                      </div>
+                      <p className="text-amber-300/95 leading-relaxed">
+                        <span className="font-mono">风险边界：</span>
+                        {entry.antiPatternOrWarning}
+                      </p>
+                      <div className="rounded-lg bg-black/55 border border-white/10 p-2 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[10px] text-slate-400 truncate">
+                            参考实现：{entry.repoPath}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyKbSnippet(entry)}
+                            onKeyDown={stopRevealKey}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white font-mono text-[10px] cursor-pointer whitespace-nowrap shrink-0"
+                          >
+                            {copiedKbId === entry.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span>已复制</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 text-emerald-300" />
+                                <span>复制契约</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <pre className="font-mono text-[10px] text-slate-200 whitespace-pre-wrap leading-relaxed">
+                          {entry.copyableSnippet}
+                        </pre>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {entry.modules.map((mod) => (
+                            <button
+                              key={mod}
+                              type="button"
+                              onClick={() => handleJumpModule(mod)}
+                              onKeyDown={stopRevealKey}
+                              className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-400 hover:text-slate-950 font-mono text-emerald-200 transition-colors cursor-pointer"
                             >
                               {mod}
                             </button>
