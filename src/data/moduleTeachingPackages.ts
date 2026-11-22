@@ -1,4 +1,4 @@
-import type { ModuleShortCode } from "./courseCurriculum";
+import type { ModuleShortCode } from "./courseCurriculum.ts";
 
 export interface DeliveryModeOption {
   mode: "double-period" | "short-lecture" | "workshop" | "seminar" | "self-paced";

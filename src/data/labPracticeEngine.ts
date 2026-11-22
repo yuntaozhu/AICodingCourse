@@ -1,5 +1,5 @@
-import type { RuleTemplate } from "./cursorPresets";
-import { COURSE_LABS, type LabDefinition } from "./courseCurriculum";
+import type { RuleTemplate } from "./cursorPresets.ts";
+import { COURSE_LABS, type LabDefinition } from "./courseCurriculum.ts";
 
 export interface LabAuditCheck {
   id: string;

@@ -1,4 +1,4 @@
-import type { SkillId } from "./courseSkills";
+import type { SkillId } from "./courseSkills.ts";
 
 export type CourseVerificationStatus = "verified" | "needs-review" | "outdated";
 

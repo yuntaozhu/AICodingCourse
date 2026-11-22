@@ -26,7 +26,7 @@ import ModuleLearningPage from "@/components/course/ModuleLearningPage";
 import AdminConsole from "@/components/lms/AdminConsole";
 import CohortLearnerPanel from "@/components/lms/CohortLearnerPanel";
 import InstructorCockpit from "@/components/lms/InstructorCockpit";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/authContextCore";
 import {
   SEARCH_KIND_LABELS,
   searchCourseWorkspace,

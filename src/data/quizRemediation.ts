@@ -1,4 +1,4 @@
-import type { QuizQuestion } from "./moduleQuizzes";
+import type { QuizQuestion } from "./moduleQuizzes.ts";
 
 export const VALID_LAB_IDS = [
   "plan-prompt",

@@ -10,8 +10,8 @@ import {
   submissions,
   users,
 } from "../../db/schema.ts";
-import { COURSE_SKILLS } from "../../data/courseSkills";
-import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore";
+import { COURSE_SKILLS } from "../../data/courseSkills.ts";
+import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
 import type { AuthContext } from "../auth.ts";
 import { CURRICULUM_VERSION } from "./curriculumService.ts";
 

@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useState,
   type ReactNode,
@@ -19,20 +17,7 @@ import {
 } from "@/lib/apiClient";
 import { setMemoryIdToken } from "@/lib/authTokenStore";
 import { auth, googleAuthProvider } from "@/lib/firebase";
-
-interface AuthContextValue {
-  firebaseUser: User | null;
-  session: AuthSessionData | null;
-  loading: boolean;
-  authError: string | null;
-  clearAuthError: () => void;
-  signInWithGoogle: () => Promise<void>;
-  signOutUser: () => Promise<void>;
-  refreshSession: () => Promise<AuthSessionData | null>;
-  claimInitialAdmin: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { AuthContext } from "./authContextCore";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
@@ -122,12 +107,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used inside <AuthProvider>");
-  }
-  return ctx;
 }

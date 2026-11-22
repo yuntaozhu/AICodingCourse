@@ -6,12 +6,12 @@ import {
   type CourseModule,
   type CourseVerificationStatus,
   type TrackId,
-} from "./courseCurriculum";
-import type { SkillId } from "./courseSkills";
-import { MODULE_QUIZZES } from "./moduleQuizzes";
-import { MODULE_TEACHING_PACKAGES, type ModuleTeachingPackage } from "./moduleTeachingPackages";
-import { TEAM_KNOWLEDGE_BASE } from "./teamKnowledgeBase";
-import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "./runtimeKnowledgeBase";
+} from "./courseCurriculum.ts";
+import type { SkillId } from "./courseSkills.ts";
+import { MODULE_QUIZZES } from "./moduleQuizzes.ts";
+import { MODULE_TEACHING_PACKAGES, type ModuleTeachingPackage } from "./moduleTeachingPackages.ts";
+import { TEAM_KNOWLEDGE_BASE } from "./teamKnowledgeBase.ts";
+import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "./runtimeKnowledgeBase.ts";
 
 const M13_GOV_DISCLAIMER_TEXT =
   "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";

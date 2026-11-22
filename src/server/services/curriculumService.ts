@@ -11,13 +11,13 @@ import {
   COURSE_MODULES,
   COURSE_TRACKS,
   LEARNER_PATHS,
-} from "../../data/courseCurriculum";
-import { COURSE_SKILLS, type SkillId } from "../../data/courseSkills";
-import { getModuleRecordById } from "../../data/courseUnitsModel";
-import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore";
-import { MODULE_QUIZZES } from "../../data/moduleQuizzes";
-import { getModuleTeachingPackage } from "../../data/moduleTeachingPackages";
-import { getQuestionRemediation } from "../../data/quizRemediation";
+} from "../../data/courseCurriculum.ts";
+import { COURSE_SKILLS, type SkillId } from "../../data/courseSkills.ts";
+import { getModuleRecordById } from "../../data/courseUnitsModel.ts";
+import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
+import { MODULE_QUIZZES } from "../../data/moduleQuizzes.ts";
+import { getModuleTeachingPackage } from "../../data/moduleTeachingPackages.ts";
+import { getQuestionRemediation } from "../../data/quizRemediation.ts";
 import type { AuthContext } from "../auth.ts";
 
 export const CURRICULUM_VERSION = "2026.11";

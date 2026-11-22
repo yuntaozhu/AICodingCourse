@@ -1,4 +1,4 @@
-import type { KnowledgeModuleCode } from "./teamKnowledgeBase";
+import type { KnowledgeModuleCode } from "./teamKnowledgeBase.ts";
 
 export type BookCategory =
   | "AI Architecture"

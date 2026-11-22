@@ -8,12 +8,37 @@ declare global {
 
 export const createPool = () => {
   if (!global._postgresPool) {
+    const host =
+      process.env.SQL_HOST ||
+      process.env.PGHOST ||
+      process.env.POSTGRES_HOST;
+    const user =
+      process.env.SQL_USER ||
+      process.env.PGUSER ||
+      process.env.POSTGRES_USER;
+    const password =
+      process.env.SQL_PASSWORD ||
+      process.env.PGPASSWORD ||
+      process.env.POSTGRES_PASSWORD;
+    const database =
+      process.env.SQL_DB_NAME ||
+      process.env.PGDATABASE ||
+      process.env.POSTGRES_DATABASE;
+
+    const isRemoteTlsHost = Boolean(
+      host &&
+        !host.startsWith("/") &&
+        host !== "localhost" &&
+        host !== "127.0.0.1"
+    );
+
     global._postgresPool = new Pool({
-      host: process.env.SQL_HOST,
-      user: process.env.SQL_USER,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DB_NAME,
-      max: 10,
+      host,
+      user,
+      password,
+      database,
+      ...(isRemoteTlsHost ? { ssl: { rejectUnauthorized: true } } : {}),
+      max: isRemoteTlsHost ? 5 : 10,
       connectionTimeoutMillis: 15000,
     });
 

@@ -75,7 +75,7 @@ function saveStoredModuleAnswers(
   }
 }
 
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/authContextCore";
 import { submitQuizAnswers } from "@/lib/apiClient";
 
 export default function QuizSlide({ quiz }: QuizSlideProps) {
@@ -758,7 +758,11 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
               </div>
 
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3 text-xs text-white/50">
-                <span>作答记录仅保存在当前浏览器 localStorage（非云端同步）</span>
+                <span>
+                  {session
+                    ? "已同步至云端学习档案与本地浏览器（可按模块持久化成绩）"
+                    : "免费试学作答暂存当前浏览器，登录后可云端持久化"}
+                </span>
                 <span className="font-mono tabular-nums shrink-0">
                   {displayModuleCode} COMPLETE
                 </span>

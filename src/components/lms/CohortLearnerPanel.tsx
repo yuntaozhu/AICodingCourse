@@ -6,12 +6,14 @@ import {
   FileCheck2,
   Send,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/authContextCore";
 import { COURSE_MODULES } from "@/data/courseCurriculum";
 import {
   fetchMyCohorts,
   submitCohortWork,
+  uploadSubmissionAttachment,
   type LearnerCohortItem,
   type SubmissionRecord,
   type SubmissionReviewRecord,
@@ -36,6 +38,7 @@ export default function CohortLearnerPanel({
   const { session, signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
+  const [blobUploadEnabled, setBlobUploadEnabled] = useState(false);
   const [cohorts, setCohorts] = useState<LearnerCohortItem[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
   const [reviewsBySub, setReviewsBySub] = useState<Record<number, SubmissionReviewRecord[]>>({});
@@ -47,6 +50,7 @@ export default function CohortLearnerPanel({
   const [artifactTitle, setArtifactTitle] = useState("");
   const [artifactText, setArtifactText] = useState("");
   const [artifactUrl, setArtifactUrl] = useState("");
+  const [uploadingBlob, setUploadingBlob] = useState(false);
   const [attachBugbotAudit, setAttachBugbotAudit] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -57,6 +61,7 @@ export default function CohortLearnerPanel({
     try {
       const data = await fetchMyCohorts();
       setEnrolled(data.enrolled);
+      setBlobUploadEnabled(Boolean(data.blobUploadEnabled));
       setCohorts(data.cohorts);
       setSubmissions(data.submissions);
       setReviewsBySub(data.reviewsBySubmissionId);
@@ -105,6 +110,39 @@ export default function CohortLearnerPanel({
     setSelectedModuleId(modId);
     if (!artifactTitle.trim()) {
       setArtifactTitle(`${msTitle} · 作业交付`);
+    }
+  };
+
+  const handleFileUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setNotice(null);
+    if (file.size > 3 * 1024 * 1024) {
+      setNotice({ ok: false, text: "附件超过 3MB 上限，请压缩后再试或改填 GitHub 链接。" });
+      return;
+    }
+    setUploadingBlob(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const contentBase64 = btoa(binary);
+      const uploaded = await uploadSubmissionAttachment({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        contentBase64,
+      });
+      setArtifactUrl(uploaded.url);
+      setNotice({ ok: true, text: `已上传附件 ${file.name} 并自动填入下方链接。` });
+    } catch (err) {
+      setNotice({
+        ok: false,
+        text: err instanceof Error ? err.message : "附件上传失败。",
+      });
+    } finally {
+      setUploadingBlob(false);
     }
   };
 
@@ -385,10 +423,28 @@ export default function CohortLearnerPanel({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">
-                GitHub PR / 预览链接（选填，需以 https:// 开头）
-              </label>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-slate-300 font-medium">
+                  GitHub PR / 附件链接（选填，需以 https:// 开头）
+                </label>
+                {blobUploadEnabled && (
+                  <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gemini-cyan/40 bg-gemini-cyan/10 text-gemini-cyan cursor-pointer hover:bg-gemini-cyan/20">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{uploadingBlob ? "上传中..." : "上传作业附件 (≤3MB)"}</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".md,.txt,.pdf,.json,.zip,.png,.jpg,.jpeg,.webp"
+                      disabled={uploadingBlob}
+                      onChange={(e) => {
+                        void handleFileUpload(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
               <input
                 type="url"
                 value={artifactUrl}

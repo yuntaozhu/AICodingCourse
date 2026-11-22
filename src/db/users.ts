@@ -9,18 +9,19 @@ export async function getOrCreateUser(input: {
   avatarUrl?: string;
 }) {
   try {
+    const normalizedEmail = input.email.trim().toLowerCase();
     const result = await db
       .insert(users)
       .values({
         uid: input.uid,
-        email: input.email,
+        email: normalizedEmail,
         displayName: input.displayName ?? "",
         avatarUrl: input.avatarUrl ?? "",
       })
       .onConflictDoUpdate({
         target: users.uid,
         set: {
-          email: input.email,
+          email: normalizedEmail,
           displayName: input.displayName ?? "",
           avatarUrl: input.avatarUrl ?? "",
           updatedAt: new Date(),

@@ -483,10 +483,27 @@ export function redeemCode(code: string) {
 export function fetchMyCohorts() {
   return apiFetch<{
     enrolled: boolean;
+    blobUploadEnabled?: boolean;
     cohorts: LearnerCohortItem[];
     submissions: SubmissionRecord[];
     reviewsBySubmissionId: Record<number, SubmissionReviewRecord[]>;
   }>("/api/cohorts/my");
+}
+
+export function uploadSubmissionAttachment(payload: {
+  filename: string;
+  contentType: string;
+  contentBase64: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    url: string;
+    pathname: string;
+    size: number;
+  }>("/api/submissions/upload", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function submitCohortWork(payload: {

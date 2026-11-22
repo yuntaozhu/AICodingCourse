@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/authContextCore";
 import {
   fetchInstructorCockpit,
   reviewSubmission,

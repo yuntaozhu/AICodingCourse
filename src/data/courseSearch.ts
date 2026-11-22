@@ -1,20 +1,20 @@
-import { AI_BOOKS_KNOWLEDGE_BASE } from "./aiBooksKnowledgeBase";
+import { AI_BOOKS_KNOWLEDGE_BASE } from "./aiBooksKnowledgeBase.ts";
 import {
   COURSE_MODULE_RECORDS,
   COURSE_UNIT_TYPE_LABELS,
-} from "./courseUnitsModel";
-import type { CustomKnowledgeDraft } from "./courseWorkspaceStore";
+} from "./courseUnitsModel.ts";
+import type { CustomKnowledgeDraft } from "./courseWorkspaceStore.ts";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
   KNOWLEDGE_TRACK_LABELS,
   TEAM_KNOWLEDGE_BASE,
   type KnowledgeBaseTrack,
-} from "./teamKnowledgeBase";
+} from "./teamKnowledgeBase.ts";
 import {
   RUNTIME_PIPELINE_STAGE_LABELS,
   RUNTIME_WORKSHOP_KNOWLEDGE_BASE,
-} from "./runtimeKnowledgeBase";
+} from "./runtimeKnowledgeBase.ts";
 
 export type GlobalSearchResultKind =
   | "module"

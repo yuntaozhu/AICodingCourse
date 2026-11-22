@@ -19,7 +19,7 @@ import {
 import heroImg from "@/assets/images/hero_ai_workshop_1795338779605.jpg";
 import govTrackImg from "@/assets/images/track_governance_blueprint_1795338778462.jpg";
 import engTrackImg from "@/assets/images/track_engineering_harness_1795338777589.jpg";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/authContextCore";
 import { COURSE_LABS, COURSE_MODULES, COURSE_TRACKS } from "@/data/courseCurriculum";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "@/data/courseWorkspaceStore";
 import {

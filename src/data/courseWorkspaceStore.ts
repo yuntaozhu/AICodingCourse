@@ -2,16 +2,16 @@ import {
   COURSE_MODULE_RECORDS,
   getUnitsForPlan,
   type CourseModuleRecord,
-} from "./courseUnitsModel";
+} from "./courseUnitsModel.ts";
 import {
   LAB_ARTIFACTS_STORAGE_KEY,
   LAB_DOD_STORAGE_KEY,
   LEGACY_M4_MCP_DOD_KEY,
-} from "./labPracticeEngine";
+} from "./labPracticeEngine.ts";
 import {
   getBookGithubUrl,
   type KnowledgeBookItem,
-} from "./aiBooksKnowledgeBase";
+} from "./aiBooksKnowledgeBase.ts";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_STATUS_LABELS,
@@ -19,14 +19,14 @@ import {
   type KnowledgeCategory,
   type KnowledgeModuleCode,
   type TeamKnowledgeEntry,
-} from "./teamKnowledgeBase";
+} from "./teamKnowledgeBase.ts";
 import {
   RUNTIME_KB_WORKSHOP_RULES,
   RUNTIME_PIPELINE_STAGE_LABELS,
   type RuntimeKnowledgeEntry,
-} from "./runtimeKnowledgeBase";
-import { COURSE_SKILLS, type SkillId, type SkillVerificationMethod } from "./courseSkills";
-import { getQuizReviewSummary, MODULE_QUIZZES } from "./moduleQuizzes";
+} from "./runtimeKnowledgeBase.ts";
+import { COURSE_SKILLS, type SkillId, type SkillVerificationMethod } from "./courseSkills.ts";
+import { getQuizReviewSummary, MODULE_QUIZZES } from "./moduleQuizzes.ts";
 
 export const M13_GOV_SIMULATION_DISCLAIMER =
   "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";

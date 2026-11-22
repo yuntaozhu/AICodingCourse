@@ -2,7 +2,7 @@ import type {
   KnowledgeCategory,
   KnowledgeModuleCode,
   KnowledgeValidationStatus,
-} from "./teamKnowledgeBase";
+} from "./teamKnowledgeBase.ts";
 
 export type RuntimePipelineStage =
   | "blueprint-prd"

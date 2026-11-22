@@ -1,4 +1,6 @@
+import path from "node:path";
 import express, { type Request, type Response } from "express";
+import { put } from "@vercel/blob";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.ts";
@@ -18,7 +20,7 @@ import {
   userRoles,
   users,
 } from "../db/schema.ts";
-import { COURSE_SKILLS, type SkillId } from "../data/courseSkills";
+import { COURSE_SKILLS, type SkillId } from "../data/courseSkills.ts";
 import {
   type AuthedRequest,
   claimFirstAdmin,
@@ -69,18 +71,23 @@ export const app = express();
 
 app.use(
   express.json({
-    limit: "2mb",
+    limit: "6mb",
     verify: (req, _res, buf) => {
       (req as RawBodyRequest).rawBody = buf.toString("utf8");
     },
   })
 );
 
+function getBlobReadWriteToken(): string | undefined {
+  return process.env.AICODING_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     model: AI_MODEL_ID,
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+    blobUploadEnabled: Boolean(getBlobReadWriteToken()),
     curriculumVersion: CURRICULUM_VERSION,
   });
 });
@@ -684,12 +691,92 @@ app.post("/api/webhooks/payment", async (req: RawBodyRequest, res: Response) => 
 app.get("/api/cohorts/my", requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const view = await getLearnerCohortView(req.authContext!.user.id);
-    res.json(view);
+    res.json({
+      ...view,
+      blobUploadEnabled: Boolean(getBlobReadWriteToken()),
+    });
   } catch (err) {
     console.error("[/api/cohorts/my] error:", err);
     res.status(500).json({ error: "获取班级与里程碑信息失败。" });
   }
 });
+
+const uploadAttachmentSchema = z.object({
+  filename: z.string().trim().min(1).max(160),
+  contentType: z.string().trim().min(1).max(120),
+  contentBase64: z.string().min(4).max(4_500_000),
+});
+
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  ".md",
+  ".txt",
+  ".pdf",
+  ".json",
+  ".zip",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+]);
+
+app.post(
+  "/api/submissions/upload",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const token = getBlobReadWriteToken();
+    if (!token) {
+      res.status(503).json({
+        error: "附件上传服务尚未配置（缺少 AICODING_READ_WRITE_TOKEN），请直接粘贴 GitHub PR 或文档链接。",
+      });
+      return;
+    }
+    const parsed = uploadAttachmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "附件参数不合法或文件过大（上限 3MB）。" });
+      return;
+    }
+
+    const ext = path.extname(parsed.data.filename).toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+      res.status(400).json({
+        error: "不支持的文件格式，仅支持 .md / .txt / .pdf / .json / .zip / .png / .jpg / .webp。",
+      });
+      return;
+    }
+
+    const buffer = Buffer.from(parsed.data.contentBase64, "base64");
+    if (buffer.length === 0 || buffer.length > 3 * 1024 * 1024) {
+      res.status(400).json({ error: "附件大小需在 1B – 3MB 之间。" });
+      return;
+    }
+
+    const safeBase = path
+      .basename(parsed.data.filename, ext)
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(0, 60) || "artifact";
+
+    try {
+      const blob = await put(
+        `submissions/${req.authContext!.user.id}/${Date.now()}-${safeBase}${ext}`,
+        buffer,
+        {
+          access: "public",
+          token,
+          contentType: parsed.data.contentType,
+        }
+      );
+      res.status(201).json({
+        ok: true,
+        url: blob.url,
+        pathname: blob.pathname,
+        size: buffer.length,
+      });
+    } catch (err) {
+      console.error("[/api/submissions/upload] error:", err);
+      res.status(500).json({ error: "上传附件到对象存储失败，请稍后重试。" });
+    }
+  }
+);
 
 const submissionSchema = z.object({
   cohortId: z.number().int().positive().nullable().optional(),
