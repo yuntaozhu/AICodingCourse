@@ -1,32 +1,68 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
+import { getAuth, type Auth } from "firebase-admin/auth";
 
-function readProjectId(): string {
+let cachedAuth: Auth | null | undefined;
+
+function readProjectId(): string | null {
   const envProjectId =
     process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
   if (envProjectId) {
     return envProjectId;
   }
-  const cwdPath = path.resolve(process.cwd(), "firebase-applet-config.json");
-  const raw = fs.existsSync(cwdPath)
-    ? fs.readFileSync(cwdPath, "utf8")
-    : fs.readFileSync(
-        new URL("../../firebase-applet-config.json", import.meta.url),
-        "utf8"
+
+  const candidatePaths: Array<string | URL> = [
+    path.resolve(process.cwd(), "firebase-applet-config.json"),
+  ];
+
+  if (typeof import.meta !== "undefined" && typeof import.meta.url === "string") {
+    try {
+      candidatePaths.push(
+        new URL("../firebase-applet-config.json", import.meta.url),
+        new URL("../../firebase-applet-config.json", import.meta.url)
       );
-  const parsed = JSON.parse(raw) as { projectId?: string };
-  if (!parsed.projectId) {
-    throw new Error("Missing projectId in firebase-applet-config.json");
+    } catch {
+      // Ignore invalid URL resolution in bundled environments
+    }
   }
-  return parsed.projectId;
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const raw = fs.readFileSync(candidate, "utf8");
+        const parsed = JSON.parse(raw) as { projectId?: string };
+        if (parsed.projectId) {
+          return parsed.projectId;
+        }
+      }
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  return null;
 }
 
-if (!getApps().length) {
-  initializeApp({
-    projectId: readProjectId(),
-  });
-}
+export function getAdminAuth(): Auth | null {
+  if (cachedAuth !== undefined) {
+    return cachedAuth;
+  }
 
-export const adminAuth = getAuth();
+  try {
+    if (!getApps().length) {
+      const projectId = readProjectId();
+      if (!projectId) {
+        cachedAuth = null;
+        return null;
+      }
+      initializeApp({ projectId });
+    }
+    cachedAuth = getAuth();
+    return cachedAuth;
+  } catch (err) {
+    console.warn("[firebase-admin] Firebase Admin Auth unavailable:", err);
+    cachedAuth = null;
+    return null;
+  }
+}

@@ -7,24 +7,26 @@ declare global {
 }
 
 export function resolvePostgresPoolConfig(env: NodeJS.ProcessEnv) {
-  const connectionString =
-    env.DATABASE_URL ||
-    env.POSTGRES_URL ||
-    env.POSTGRES_PRISMA_URL ||
-    env.POSTGRES_URL_NON_POOLING;
+  if (!env.SQL_HOST) {
+    const connectionString =
+      env.DATABASE_URL ||
+      env.POSTGRES_URL ||
+      env.POSTGRES_PRISMA_URL ||
+      env.POSTGRES_URL_NON_POOLING;
 
-  if (connectionString) {
-    const isRemoteTls =
-      !connectionString.includes("localhost") &&
-      !connectionString.includes("127.0.0.1") &&
-      !connectionString.includes("socket");
+    if (connectionString) {
+      const isRemoteTls =
+        !connectionString.includes("localhost") &&
+        !connectionString.includes("127.0.0.1") &&
+        !connectionString.includes("socket");
 
-    return {
-      connectionString,
-      ...(isRemoteTls ? { ssl: { rejectUnauthorized: true } } : {}),
-      max: isRemoteTls ? 5 : 10,
-      connectionTimeoutMillis: 15000,
-    };
+      return {
+        connectionString,
+        ...(isRemoteTls ? { ssl: { rejectUnauthorized: true } } : {}),
+        max: isRemoteTls ? 5 : 10,
+        connectionTimeoutMillis: 15000,
+      };
+    }
   }
 
   const host = env.SQL_HOST || env.PGHOST || env.POSTGRES_HOST;

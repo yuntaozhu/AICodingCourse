@@ -210,4 +210,25 @@ test("resolvePostgresPoolConfig prioritizes Cloud SQL sockets without TLS and en
   assert.equal(neon.database, "neondb");
   assert.deepEqual(neon.ssl, { rejectUnauthorized: true });
   assert.equal(neon.max, 5);
+
+  const neonUrl = resolvePostgresPoolConfig({
+    DATABASE_URL:
+      "postgresql://neondb_owner:pw@ep-example-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+  });
+  assert.equal(
+    neonUrl.connectionString,
+    "postgresql://neondb_owner:pw@ep-example-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+  );
+  assert.deepEqual(neonUrl.ssl, { rejectUnauthorized: true });
+  assert.equal(neonUrl.max, 5);
+
+  const cloudSqlWins = resolvePostgresPoolConfig({
+    SQL_HOST: "/cloudsql/proj:europe-west1:inst",
+    SQL_USER: "appuser",
+    SQL_PASSWORD: "pw",
+    SQL_DB_NAME: "appdb",
+    DATABASE_URL: "postgresql://neondb_owner:pw@ep-remote.neon.tech/neondb",
+  });
+  assert.equal(cloudSqlWins.host, "/cloudsql/proj:europe-west1:inst");
+  assert.equal(cloudSqlWins.ssl, undefined);
 });

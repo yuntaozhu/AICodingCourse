@@ -1,7 +1,7 @@
 import path from "node:path";
 import express, { type Request, type Response } from "express";
 import { put } from "@vercel/blob";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.ts";
 import {
@@ -84,9 +84,20 @@ function getBlobReadWriteToken(): string | undefined {
   return process.env.AICODING_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
 }
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", async (req: Request, res: Response) => {
+  let dbOk: boolean | undefined;
+  if (req.query.db === "1") {
+    try {
+      await db.execute(sql`select 1`);
+      dbOk = true;
+    } catch (err) {
+      console.error("[/api/health] DB probe failed:", err);
+      dbOk = false;
+    }
+  }
   res.json({
     ok: true,
+    ...(dbOk !== undefined ? { dbOk } : {}),
     model: AI_MODEL_ID,
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
     blobUploadEnabled: Boolean(getBlobReadWriteToken()),
@@ -159,11 +170,12 @@ app.post("/api/auth/login-email", async (req: Request, res: Response) => {
   }
   try {
     const email = parsed.data.email.trim().toLowerCase();
+    const existing = await findUserByEmail(email);
     const dbUser = await getOrCreateUser({
-      uid: `email-${email}`,
+      uid: existing?.uid || `email-${email}`,
       email,
-      displayName: email.split("@")[0] || "学员",
-      avatarUrl: "",
+      displayName: existing?.displayName || email.split("@")[0] || "学员",
+      avatarUrl: existing?.avatarUrl || "",
     });
 
     const token = signToken({ userId: dbUser.id, email: dbUser.email });

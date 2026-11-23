@@ -3,7 +3,7 @@ import { and, eq, gt, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { cohortInstructors, entitlements, userRoles, users } from "../db/schema.ts";
 import { getOrCreateUser, getUserRoles } from "../db/users.ts";
-import { adminAuth } from "../lib/firebase-admin.ts";
+import { getAdminAuth } from "../lib/firebase-admin.ts";
 import { verifyToken } from "./services/tokenService.ts";
 
 export interface AuthContext {
@@ -52,6 +52,10 @@ export async function resolveAuthFromHeader(
 
   // 2. Fallback to Firebase ID Token verification if JWT did not match
   if (!email) {
+    const adminAuth = getAdminAuth();
+    if (!adminAuth) {
+      return null;
+    }
     try {
       const decoded = await adminAuth.verifyIdToken(token);
       email = decoded.email || `${decoded.uid}@firebase.local`;
