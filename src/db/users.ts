@@ -45,7 +45,7 @@ export async function getOrCreateUser(input: {
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
-    if (adminEmails.includes(input.email.toLowerCase())) {
+    if (adminEmails.includes(normalizedEmail)) {
       await db
         .insert(userRoles)
         .values({

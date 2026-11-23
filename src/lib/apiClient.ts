@@ -247,6 +247,22 @@ export function claimFirstAdminApi() {
   });
 }
 
+export function loginWithEmail(email: string) {
+  return apiFetch<{
+    ok: true;
+    token: string;
+    user: {
+      id: number;
+      email: string;
+      displayName: string;
+      avatarUrl: string;
+    };
+  }>("/api/auth/login-email", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function fetchAuthorizedModuleDetail(moduleId: string) {
   return apiFetch<{
     found: true;

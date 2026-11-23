@@ -4,6 +4,7 @@ import { db } from "../db/index.ts";
 import { cohortInstructors, entitlements, userRoles, users } from "../db/schema.ts";
 import { getOrCreateUser, getUserRoles } from "../db/users.ts";
 import { adminAuth } from "../lib/firebase-admin.ts";
+import { verifyToken } from "./services/tokenService.ts";
 
 export interface AuthContext {
   user: {
@@ -32,13 +33,43 @@ export async function resolveAuthFromHeader(
   const token = authHeader.slice("Bearer ".length).trim();
   if (!token) return null;
 
-  const decoded = await adminAuth.verifyIdToken(token);
-  const email = decoded.email || `${decoded.uid}@firebase.local`;
+  let email = "";
+  let uid = "";
+  let displayName = "";
+  let avatarUrl = "";
+
+  // 1. Try Vercel native email/token session verification first
+  const jwtSession = await verifyToken(token);
+  if (jwtSession) {
+    const [dbUser] = await db.select().from(users).where(eq(users.id, jwtSession.userId)).limit(1);
+    if (dbUser) {
+      email = dbUser.email;
+      uid = dbUser.uid;
+      displayName = dbUser.displayName;
+      avatarUrl = dbUser.avatarUrl;
+    }
+  }
+
+  // 2. Fallback to Firebase ID Token verification if JWT did not match
+  if (!email) {
+    try {
+      const decoded = await adminAuth.verifyIdToken(token);
+      email = decoded.email || `${decoded.uid}@firebase.local`;
+      uid = decoded.uid;
+      displayName = typeof decoded.name === "string" ? decoded.name : "";
+      avatarUrl = typeof decoded.picture === "string" ? decoded.picture : "";
+    } catch {
+      return null;
+    }
+  }
+
+  if (!email) return null;
+
   const dbUser = await getOrCreateUser({
-    uid: decoded.uid,
+    uid: uid || `email-${email}`,
     email,
-    displayName: typeof decoded.name === "string" ? decoded.name : "",
-    avatarUrl: typeof decoded.picture === "string" ? decoded.picture : "",
+    displayName,
+    avatarUrl,
   });
 
   const roles = await getUserRoles(dbUser.id);

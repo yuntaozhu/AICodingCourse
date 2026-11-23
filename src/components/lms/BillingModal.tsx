@@ -55,9 +55,13 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
   const [provider, setProvider] = useState<"wechat" | "alipay" | "stripe">("wechat");
   const [redeemInput, setRedeemInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadData = async () => {
+    setCatalogLoading(true);
+    setCatalogError(null);
     try {
       const cat = await fetchCatalog();
       setCatalog(cat);
@@ -65,8 +69,12 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
       if (firstPrice && selectedPriceId === null) {
         setSelectedPriceId(firstPrice);
       }
-    } catch {
-      // ignore catalog fetch errors cleanly
+    } catch (err) {
+      setCatalogError(
+        err instanceof Error ? err.message : "加载课程商品目录失败，请稍后重试。"
+      );
+    } finally {
+      setCatalogLoading(false);
     }
 
     if (session) {
@@ -74,7 +82,7 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
         const hist = await fetchBillingHistory();
         setHistory(hist);
       } catch {
-        // ignore
+        // ignore history error separately so catalog stays usable
       }
     }
   };
@@ -232,15 +240,18 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
           ) : (
             <div className="w-full flex flex-wrap items-center justify-between gap-3">
               <span className="text-slate-300">
-                请先使用 Google 账号登录，以保存云端学习进度、兑换激活码或下单购买。
+                请先登录账号，以保存云端学习进度、兑换激活码或下单购买。（支持国内邮箱免密/安全令牌登录）
               </span>
               <button
                 type="button"
-                onClick={() => void signInWithGoogle()}
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent("app:open-login"));
+                }}
                 className="px-4 py-2 rounded-lg bg-gemini-cyan text-slate-950 font-semibold inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Google 账号登录</span>
+                <span>立即登录账号</span>
               </button>
             </div>
           )}
@@ -279,6 +290,23 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
             <CreditCard className="w-3.5 h-3.5 text-gemini-purple" />
             <span>选择课程方案并创建订单</span>
           </div>
+
+          {catalogLoading && !catalog ? (
+            <div className="p-4 rounded-xl border border-white/10 bg-white/[0.02] text-slate-400">
+              正在加载课程套餐与价格方案...
+            </div>
+          ) : catalogError && !catalog ? (
+            <div className="p-4 rounded-xl border border-rose-400/35 bg-rose-500/10 flex flex-wrap items-center justify-between gap-3 text-rose-200">
+              <span>{catalogError}</span>
+              <button
+                type="button"
+                onClick={() => void loadData()}
+                className="px-3 py-1.5 rounded-lg border border-rose-300/40 bg-rose-500/20 text-white font-semibold cursor-pointer"
+              >
+                重新加载
+              </button>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(catalog?.products ?? []).map((prod) => (

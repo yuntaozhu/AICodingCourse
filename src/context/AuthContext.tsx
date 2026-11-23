@@ -13,9 +13,10 @@ import {
 import {
   claimFirstAdminApi,
   fetchMySession,
+  loginWithEmail as loginWithEmailApi,
   type AuthSessionData,
 } from "@/lib/apiClient";
-import { setMemoryIdToken } from "@/lib/authTokenStore";
+import { getMemoryIdToken, setMemoryIdToken } from "@/lib/authTokenStore";
 import { auth, googleAuthProvider } from "@/lib/firebase";
 import { AuthContext } from "./authContextCore";
 
@@ -48,11 +49,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onIdTokenChanged(auth, (user) => {
-      setFirebaseUser(user);
-      void loadBackendSession(user);
-    });
-    return () => unsubscribe();
+    const existingToken = getMemoryIdToken();
+    if (existingToken) {
+      void loadBackendSession(null).then(async () => {
+        try {
+          const data = await fetchMySession();
+          setSession(data);
+          setAuthError(null);
+        } catch {
+          setMemoryIdToken(null);
+          setSession(null);
+        } finally {
+          setLoading(false);
+        }
+      });
+    } else {
+      const unsubscribe = onIdTokenChanged(auth, (user) => {
+        setFirebaseUser(user);
+        void loadBackendSession(user);
+      });
+      return () => unsubscribe();
+    }
   }, [loadBackendSession]);
 
   const refreshSession = useCallback(async () => {
@@ -90,6 +107,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshSession();
   }, [refreshSession]);
 
+  const signInWithEmail = useCallback(async (email: string) => {
+    setAuthError(null);
+    setLoading(true);
+    try {
+      const res = await loginWithEmailApi(email);
+      setMemoryIdToken(res.token);
+      const data = await fetchMySession();
+      setSession(data);
+      setAuthError(null);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : "邮箱登录失败");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -102,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOutUser,
         refreshSession,
         claimInitialAdmin,
+        signInWithEmail,
       }}
     >
       {children}

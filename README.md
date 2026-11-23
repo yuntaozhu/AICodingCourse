@@ -71,7 +71,7 @@ npm install
 # 2. 启动开发服务器（Express + Vite 中间件，默认端口 3000）
 npm run dev
 
-# 3. 运行静态检查、TypeScript 校验与自动化测试（24 项用例）
+# 3. 运行静态检查、TypeScript 校验与自动化测试（25 项用例）
 npm run lint
 npx tsc --noEmit
 npm test
@@ -90,7 +90,7 @@ NODE_ENV=production npm start
   - **可选服务端增强**：`GEMINI_API_KEY`（用于需登录且受日配额限制的 `POST /api/review`、`/api/kb/synthesize`、`/api/craft-rules`）、`ADMIN_EMAIL`、`PAYMENT_WEBHOOK_SECRET`、`PORT=3000`
 - **Vercel Serverless + Neon 部署步骤**：
   1. 在 Vercel Storage 中绑定 Neon Postgres 与 Blob（如自定义前缀 `AICODING`），并配置 `ADMIN_EMAIL` / `GEMINI_API_KEY` / `PAYMENT_WEBHOOK_SECRET`。
-  2. 本地拉取 Vercel 环境变量并将 `src/db/schema.ts` 的 20 张表同步至 Neon：
+  2. `vercel.json` 已配置 `"buildCommand": "npm run vercel-build"`，在 Vercel 构建阶段检测到 `PG*` / `POSTGRES_*` 环境变量时会自动执行 `drizzle-kit push` 同步 20 张表结构；如需本地手动推送，可执行：
      ```bash
      npx vercel env pull .env.local
      npm run db:push:vercel
@@ -105,5 +105,5 @@ NODE_ENV=production npm start
 1. **新增或修改幻灯片**：在 `src/components/slides/ModuleX/` 下新增组件并在该模块 `index.ts` 注册；交互型沙盘组件须在根节点使用 `stopRevealKey` / `stopRevealWheel` 隔离 Reveal 快捷键与滚轮。
 2. **外部资料、链接与许可证规范**：严禁直接复制未确认许可证的外部项目源码或文章；`src/data/aiBooksKnowledgeBase.ts` 与 `src/data/uiReferenceSites.ts` 中部分外部条目的 `license` / `lastVerifiedAt` 元信息仍待逐条补全。
 3. **沙盘与治理边界**：`M13-Gov` / Lab 20 明确声明：「本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。」
-4. **提交前门禁**：确保 `npm run lint`、`npx tsc --noEmit`、`npm test`（24/24 通过）与 `npm run build` 全部通过。
+4. **提交前门禁**：确保 `npm run lint`、`npx tsc --noEmit`、`npm test`（25/25 通过）与 `npm run build` 全部通过。
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import CourseSystemApp, { type CourseSubView } from "@/components/course/CourseSystemApp";
 import BillingModal from "@/components/lms/BillingModal";
+import EmailLoginModal from "@/components/lms/EmailLoginModal";
 import Presentation, { type LabJumpItem, type ModuleNavItem } from "@/components/Presentation";
 import OfficialHomePage from "@/components/website/OfficialHomePage";
 import { Module1Slides } from "@/components/slides/Module1";
@@ -59,6 +60,7 @@ function App() {
   const [workspaceModuleId, setWorkspaceModuleId] = useState<string | undefined>(undefined);
   const [workspaceSubView, setWorkspaceSubView] = useState<CourseSubView | undefined>(undefined);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [emailLoginOpen, setEmailLoginOpen] = useState(false);
   const [pendingRevealTarget, setPendingRevealTarget] = useState<{
     h: number;
     v?: number;
@@ -66,6 +68,7 @@ function App() {
 
   useEffect(() => {
     const handleOpenBilling = () => setBillingOpen(true);
+    const handleOpenLogin = () => setEmailLoginOpen(true);
     const handlePopState = () => {
       if (window.location.hash.startsWith("#/")) {
         setAppMode("slides");
@@ -76,9 +79,11 @@ function App() {
       }
     };
     window.addEventListener("app:open-billing", handleOpenBilling);
+    window.addEventListener("app:open-login", handleOpenLogin);
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("app:open-billing", handleOpenBilling);
+      window.removeEventListener("app:open-login", handleOpenLogin);
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
@@ -144,6 +149,9 @@ function App() {
     labId?: string;
     slideOffset?: number;
   }) => {
+    if (typeof window !== "undefined" && !window.location.hash.startsWith("#/")) {
+      window.history.pushState(null, "", `${window.location.pathname}#/`);
+    }
     if (target.labId) {
       const lab = labs.find((l) => l.id === target.labId);
       if (lab && lab.h >= 0) {
@@ -227,6 +235,11 @@ function App() {
       <BillingModal
         open={billingOpen}
         onClose={() => setBillingOpen(false)}
+      />
+
+      <EmailLoginModal
+        open={emailLoginOpen}
+        onClose={() => setEmailLoginOpen(false)}
       />
     </main>
   );

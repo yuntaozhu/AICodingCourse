@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "../src/data/courseWorkspaceStore";
+import { resolvePostgresPoolConfig } from "../src/db/index.ts";
 import type { AuthContext } from "../src/server/auth.ts";
 import { verifyWebhookSignature } from "../src/server/services/billingService.ts";
 import {
@@ -182,4 +183,31 @@ test("verifyWebhookSignature validates HMAC-SHA256 signatures and rejects tamper
       process.env.PAYMENT_WEBHOOK_SECRET = prevSecret;
     }
   }
+});
+
+test("resolvePostgresPoolConfig prioritizes Cloud SQL sockets without TLS and enables strict TLS for remote Vercel/Neon hosts", () => {
+  const cloudSql = resolvePostgresPoolConfig({
+    SQL_HOST: "/cloudsql/proj:europe-west1:inst",
+    SQL_USER: "appuser",
+    SQL_PASSWORD: "pw",
+    SQL_DB_NAME: "appdb",
+    PGHOST: "ep-remote.neon.tech",
+  });
+  assert.equal(cloudSql.host, "/cloudsql/proj:europe-west1:inst");
+  assert.equal(cloudSql.user, "appuser");
+  assert.equal(cloudSql.database, "appdb");
+  assert.equal(cloudSql.ssl, undefined);
+  assert.equal(cloudSql.max, 10);
+
+  const neon = resolvePostgresPoolConfig({
+    PGHOST: "ep-example-pooler.ap-southeast-1.aws.neon.tech",
+    PGUSER: "neondb_owner",
+    PGPASSWORD: "pw",
+    PGDATABASE: "neondb",
+  });
+  assert.equal(neon.host, "ep-example-pooler.ap-southeast-1.aws.neon.tech");
+  assert.equal(neon.user, "neondb_owner");
+  assert.equal(neon.database, "neondb");
+  assert.deepEqual(neon.ssl, { rejectUnauthorized: true });
+  assert.equal(neon.max, 5);
 });

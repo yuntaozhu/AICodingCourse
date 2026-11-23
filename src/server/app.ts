@@ -21,6 +21,7 @@ import {
   users,
 } from "../db/schema.ts";
 import { COURSE_SKILLS, type SkillId } from "../data/courseSkills.ts";
+import { getOrCreateUser } from "../db/users.ts";
 import {
   type AuthedRequest,
   claimFirstAdmin,
@@ -33,6 +34,7 @@ import {
   requireAuth,
 } from "./auth.ts";
 import { AI_MODEL_ID, checkAndRunGuardedAiCall } from "./services/aiService.ts";
+import { signToken } from "./services/tokenService.ts";
 import {
   adminCreateRedeemCode,
   adminGrantEntitlement,
@@ -141,6 +143,43 @@ app.post("/api/inquiries", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[/api/inquiries] error:", err);
     res.status(500).json({ error: "提交咨询失败，请稍后重试。" });
+  }
+});
+
+// Vercel standalone passwordless email login for regions where Google Auth is restricted
+const emailLoginSchema = z.object({
+  email: z.string().trim().email("请填写有效的电子邮箱地址").max(120),
+});
+
+app.post("/api/auth/login-email", async (req: Request, res: Response) => {
+  const parsed = emailLoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || "邮箱格式不合法。" });
+    return;
+  }
+  try {
+    const email = parsed.data.email.trim().toLowerCase();
+    const dbUser = await getOrCreateUser({
+      uid: `email-${email}`,
+      email,
+      displayName: email.split("@")[0] || "学员",
+      avatarUrl: "",
+    });
+
+    const token = signToken({ userId: dbUser.id, email: dbUser.email });
+    res.json({
+      ok: true,
+      token,
+      user: {
+        id: dbUser.id,
+        email: dbUser.email,
+        displayName: dbUser.displayName,
+        avatarUrl: dbUser.avatarUrl,
+      },
+    });
+  } catch (err) {
+    console.error("[/api/auth/login-email] error:", err);
+    res.status(500).json({ error: "邮箱登录失败，请稍后重试。" });
   }
 });
 
@@ -707,17 +746,17 @@ const uploadAttachmentSchema = z.object({
   contentBase64: z.string().min(4).max(4_500_000),
 });
 
-const ALLOWED_UPLOAD_EXTENSIONS = new Set([
-  ".md",
-  ".txt",
-  ".pdf",
-  ".json",
-  ".zip",
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".webp",
-]);
+const ALLOWED_MIME_MAP: Record<string, string[]> = {
+  ".md": ["text/markdown", "text/plain"],
+  ".txt": ["text/plain"],
+  ".pdf": ["application/pdf"],
+  ".json": ["application/json", "text/plain"],
+  ".zip": ["application/zip", "application/x-zip-compressed", "application/octet-stream"],
+  ".png": ["image/png"],
+  ".jpg": ["image/jpeg"],
+  ".jpeg": ["image/jpeg"],
+  ".webp": ["image/webp"],
+};
 
 app.post(
   "/api/submissions/upload",
@@ -732,21 +771,31 @@ app.post(
     }
     const parsed = uploadAttachmentSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "附件参数不合法或文件过大（上限 3MB）。" });
+      res.status(400).json({ error: "附件参数不合法或文件过大（图片上限 2MB，其他附件上限 3MB）。" });
       return;
     }
 
     const ext = path.extname(parsed.data.filename).toLowerCase();
-    if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+    const contentType = parsed.data.contentType.toLowerCase();
+    const allowedMimes = ALLOWED_MIME_MAP[ext];
+
+    if (!allowedMimes || (!allowedMimes.includes(contentType) && contentType !== "application/octet-stream")) {
       res.status(400).json({
-        error: "不支持的文件格式，仅支持 .md / .txt / .pdf / .json / .zip / .png / .jpg / .webp。",
+        error: "文件扩展名与内容类型 (Content-Type) 不匹配或不在严格白名单内。符合 Vercel Blob 最优实践的格式支持：.png (image/png), .jpg/.jpeg (image/jpeg), .webp (image/webp), .pdf, .zip, .md, .txt, .json。",
       });
       return;
     }
 
     const buffer = Buffer.from(parsed.data.contentBase64, "base64");
-    if (buffer.length === 0 || buffer.length > 3 * 1024 * 1024) {
-      res.status(400).json({ error: "附件大小需在 1B – 3MB 之间。" });
+    const isImage = [".png", ".jpg", ".jpeg", ".webp"].includes(ext);
+    const maxSizeBytes = isImage ? 2 * 1024 * 1024 : 3 * 1024 * 1024; // 2MB for images (Vercel Blob best practice for edge CDN loading), 3MB for others
+
+    if (buffer.length === 0 || buffer.length > maxSizeBytes) {
+      const sizeMb = (buffer.length / (1024 * 1024)).toFixed(2);
+      const limitLabel = isImage ? "2MB (Vercel Blob 最佳实践：建议高分辨率图片控制在 2MB 以内以优化 CDN 传输与首屏加载)" : "3MB";
+      res.status(400).json({
+        error: `附件大小超出限制。当前文件大小约 ${sizeMb}MB，格式大小需在 1B – ${limitLabel} 之间。`,
+      });
       return;
     }
 

@@ -10,7 +10,8 @@
     "preview": "vite preview --port=3000 --host=0.0.0.0",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "db:push:vercel": "drizzle-kit push --config=src/db/drizzle.vercel.config.ts"
+    "db:push:vercel": "drizzle-kit push --config=src/db/drizzle.vercel.config.ts",
+    "vercel-build": "node scripts/vercel-build.mjs"
   },
   "dependencies": {
     "@google/genai": "^3.3.0",

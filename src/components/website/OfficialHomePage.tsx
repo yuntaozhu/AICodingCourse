@@ -99,7 +99,7 @@ export default function OfficialHomePage({
   onOpenInstructorCockpit,
   onOpenAdminConsole,
 }: OfficialHomePageProps) {
-  const { session, loading: authLoading, signInWithGoogle, signOutUser } = useAuth();
+  const { session, loading: authLoading, signOutUser } = useAuth();
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [selectedTrackKey, setSelectedTrackKey] = useState<"gov" | "eng">("eng");
 
@@ -269,7 +269,7 @@ export default function OfficialHomePage({
               <button
                 type="button"
                 disabled={authLoading}
-                onClick={() => void signInWithGoogle()}
+                onClick={() => window.dispatchEvent(new CustomEvent("app:open-login"))}
                 className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-medium text-white inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <LogIn className="w-3.5 h-3.5 text-gemini-cyan" />

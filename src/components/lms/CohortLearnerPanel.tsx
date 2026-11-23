@@ -35,7 +35,7 @@ export default function CohortLearnerPanel({
   onOpenBilling,
   onJumpToModule,
 }: CohortLearnerPanelProps) {
-  const { session, signInWithGoogle } = useAuth();
+  const { session } = useAuth();
   const [loading, setLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [blobUploadEnabled, setBlobUploadEnabled] = useState(false);
@@ -94,10 +94,10 @@ export default function CohortLearnerPanel({
         </p>
         <button
           type="button"
-          onClick={() => void signInWithGoogle()}
+          onClick={() => window.dispatchEvent(new CustomEvent("app:open-login"))}
           className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs cursor-pointer"
         >
-          Google 账号登录
+          立即登录账号
         </button>
       </div>
     );

@@ -77,7 +77,7 @@ export default function CourseSystemApp({
   onOpenBilling,
   onSwitchToReveal,
 }: CourseSystemAppProps) {
-  const { session, loading: authLoading, signInWithGoogle, signOutUser, refreshSession } = useAuth();
+  const { session, loading: authLoading, signOutUser, refreshSession } = useAuth();
   const isInstructorAuthorized = Boolean(session?.isAdmin || session?.isInstructorOrTa);
   const hasPaidAccess = Boolean(session?.hasPaidAccess);
 
@@ -919,7 +919,7 @@ export default function CourseSystemApp({
               <button
                 type="button"
                 disabled={authLoading}
-                onClick={() => void signInWithGoogle()}
+                onClick={() => window.dispatchEvent(new CustomEvent("app:open-login"))}
                 className="px-3 py-1.5 rounded-lg bg-gemini-purple text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <LogIn className="w-3.5 h-3.5" />

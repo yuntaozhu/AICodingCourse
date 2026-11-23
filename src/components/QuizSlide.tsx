@@ -79,7 +79,7 @@ import { useAuth } from "@/context/authContextCore";
 import { submitQuizAnswers } from "@/lib/apiClient";
 
 export default function QuizSlide({ quiz }: QuizSlideProps) {
-  const { session, signInWithGoogle } = useAuth();
+  const { session } = useAuth();
   const isFreeTrial = quiz.moduleId === "m1";
   const hasPaidAccess = Boolean(session?.hasPaidAccess);
   const canTakeQuiz = isFreeTrial || hasPaidAccess;
@@ -158,7 +158,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
             onClick={(e) => {
               e.stopPropagation();
               if (!session) {
-                void signInWithGoogle();
+                window.dispatchEvent(new CustomEvent("app:open-login"));
               } else {
                 window.dispatchEvent(new CustomEvent("app:open-billing"));
               }
