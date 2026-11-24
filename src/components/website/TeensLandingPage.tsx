@@ -262,6 +262,125 @@ export default function TeensLandingPage({
         </div>
       </section>
 
+      {/* 5 Real Student Success Stories from PRODUCT_INTRO_STUDENT.md */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-12">
+        <div className="space-y-3 max-w-3xl">
+          <div className="text-xs font-mono text-gemini-cyan">STUDENT INSPIRING SHOWCASE</div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            看看同龄同学在「造物台」里自己做出了什么真作品！
+          </h2>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            这里没有枯燥脱离生活的练习题。以下 5 个真实学生项目——涵盖国际顶尖数学建模赛、小说创作系统、家族 GEO 优化、校园会议助手与哲学分析工具，证明了只要掌握拆解与核验方法，中学生也能做出令人惊叹的系统。
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Story 1 */}
+          <article className="p-6 rounded-2xl border border-white/12 bg-[#0b101d] space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-gemini-cyan">CASE 01 · 国际数模冲刺</span>
+                <span className="text-slate-400">HiMCM Team #19243</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                打破“全才”垄断：用 WIKI 知识库冲刺国际顶尖数学建模赛
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                学生团队在备赛中把每次学到的建模模块存入团队 <strong className="text-white">WIKI 知识库</strong>。比赛时直接调用以往攒下的工程流，通过严格的 <code className="text-gemini-cyan">.cursorrules</code> 规定“代码由 AI 加速，物理公式与计算核心必须由人类把关”，最终将 42 页初稿打磨成严丝合缝的 25 页全英文正式参赛论文 <code className="text-slate-200">19243.pdf</code>。
+              </p>
+            </div>
+            <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
+              <span>核心收获：平时攒 WIKI 知识库，人主导立意与验真</span>
+              <a
+                href="https://github.com/Tommydjc/himcm.git"
+                target="_blank"
+                rel="noreferrer"
+                className="text-gemini-cyan hover:underline"
+              >
+                GitHub 源码库 →
+              </a>
+            </div>
+          </article>
+
+          {/* Story 2 */}
+          <article className="p-6 rounded-2xl border border-white/12 bg-[#0b101d] space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-gemini-purple">CASE 02 · 零基础长篇创作</span>
+                <span className="text-slate-400">AI Novel Studio</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                爱写故事的非程序员同学：4 天给自己造出百万字级小说创作系统
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                一位零基础学生痛恨通用 AI 写作时“前文记不住、草稿被改乱”，通过课程所学的分块锁死、修改前只读体检与作者拍板机制，在本地造出左边管人物大纲、中间写正文、右边带 AI 助手的桌面级软件，并随仓保留了完整的 45 份开发实录。
+              </p>
+            </div>
+            <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-purple-300 flex items-center justify-between">
+              <span>核心收获：把大想法拆成乐高模块，作者永远是主编</span>
+              <span className="text-slate-400">本地优先，隐私零泄露</span>
+            </div>
+          </article>
+
+          {/* Story 3 */}
+          <article className="p-6 rounded-2xl border border-white/12 bg-[#0b101d] space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-amber-300">CASE 03 · 解决真实商业难题</span>
+                <span className="text-slate-400">医疗公司 GEO 系统</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                帮家里生意解决真难题：独立开发生成式引擎优化（GEO）系统
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                面对大模型时代如何让家里的医疗科普和合规介绍被 AI 准确检索引用的新痛点，这位同学结合课程中“业务需求拆解 + 保留人工审核闸门”的训练，在 AI Studio 中亲手把 GEO 系统做成可运行原型。
+              </p>
+            </div>
+            <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-amber-300 flex items-center justify-between">
+              <span>核心收获：懂真实场景的学生，能做出比套模板更有价值的产品</span>
+              <span className="text-slate-400">合规红线人工把关</span>
+            </div>
+          </article>
+
+          {/* Story 4 */}
+          <article className="p-6 rounded-2xl border border-white/12 bg-[#0b101d] space-y-4 flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-emerald-300">CASE 04 · 校园治理与协作</span>
+                <span className="text-slate-400">校园 AI 会议助手</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                帮学校构建「校园 AI 会议系统」：让班级与社团讨论不再乱成一锅粥
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                针对学生会和社团开会效率低、任务无人认领的痛点，这位同学参考企业团队架构，为学校搭建了自动整理“议题结论 + 负责同学 + 截止时间”的 AI 会议助手，并严格遵守工程交接规范，方便学弟学妹一届届传承维护。
+              </p>
+            </div>
+            <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
+              <span>核心收获：用工程规范做出既省心又能一届届传承的校园系统</span>
+              <span className="text-slate-400">规范交接文档</span>
+            </div>
+          </article>
+        </div>
+
+        {/* Story 5 (Full Width) */}
+        <article className="p-6 rounded-2xl border border-gemini-purple/40 bg-[#100e1c] space-y-3">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="text-purple-300">CASE 05 · 文科与哲学破圈之作</span>
+            <span className="text-slate-400">哲学思辨与分析系统</span>
+          </div>
+          <h3 className="text-lg font-bold text-white">
+            文科生与哲学爱好者的破圈之作：打造自己的「哲学思辨与分析系统」
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            谁说学文科、爱哲学的同学就和 AI 造软件无缘？这位同学在整理康德、庄子等经典概念交叉引用时，把哲学研究中“概念界定 ➔ 核心论点 ➔ 反驳路径 ➔ 原始出处”的严密逻辑翻译成 AI 听得懂的规格清单，在 AI Studio 中亲手搭出了属于自己的专属哲学研究与辩论辅助分析平台。
+          </p>
+          <div className="pt-2 text-[11px] font-mono text-purple-200">
+            核心收获：AI 时代最怕用理科思维一刀切——把专业思考逻辑拆清楚，文科生也能做出最懂你的思辨工具！
+          </div>
+        </article>
+      </section>
+
       {/* Case & Boundary Disclosure */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
