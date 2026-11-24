@@ -54,6 +54,8 @@ export type ProjectHubTab = "workspace" | "eval" | "tutor" | "exam";
 
 interface ProjectWorkspacePanelProps {
   initialTab?: ProjectHubTab;
+  initialModuleId?: string;
+  navSeq?: number;
   onOpenBilling?: () => void;
   onOpenModule: (moduleId: string, unitId?: string) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string }) => void;
@@ -77,6 +79,8 @@ function downloadMarkdown(filename: string, markdown: string) {
 
 export default function ProjectWorkspacePanel({
   initialTab = "workspace",
+  initialModuleId,
+  navSeq = 0,
   onOpenBilling,
   onOpenModule,
   onSwitchToReveal,
@@ -133,15 +137,23 @@ export default function ProjectWorkspacePanel({
   const [evalError, setEvalError] = useState<string | null>(null);
 
   // Tutor state
-  const [tutorModuleId, setTutorModuleId] = useState<string>("");
+  const [tutorModuleId, setTutorModuleId] = useState<string>(initialModuleId || "");
   const [tutorQuestion, setTutorQuestion] = useState("");
   const [tutorAsking, setTutorAsking] = useState(false);
   const [tutorResponse, setTutorResponse] = useState<TutorAskResponse | null>(null);
   const [tutorError, setTutorError] = useState<string | null>(null);
 
   // Exam state
-  const [examModuleId, setExamModuleId] = useState<string>("m1");
+  const [examModuleId, setExamModuleId] = useState<string>(initialModuleId || "m1");
   const [examSessions, setExamSessions] = useState<ExamSessionRecord[]>([]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+    if (initialModuleId) {
+      setTutorModuleId(initialModuleId);
+      setExamModuleId(initialModuleId);
+    }
+  }, [initialTab, initialModuleId, navSeq]);
   const [activeExam, setActiveExam] = useState<{
     session: ExamSessionRecord;
     moduleTitle: string;
@@ -414,6 +426,79 @@ export default function ProjectWorkspacePanel({
         text: err instanceof Error ? err.message : "导出 Handoff 归档失败。",
       });
     }
+  };
+
+  const handleLoadViolatingDemo = () => {
+    setChangedFilesInput("rules/00-core-redlines.mdc, .env.local, src/sourceRegistry.ts");
+    setDiffSummaryInput(
+      '+ const apiKey = "sk-demo1234567890abcdef1234";\n+ test.skip("should validate URL", () => {});'
+    );
+    setWsMessage({
+      ok: false,
+      text: "已填入故意违规的演练 Diff（触碰禁改规则与明文 Key），请点击「运行服务端静态门禁」体验 HTTP 422 阻断，然后点击「修复并恢复合规 Diff」修复验证。",
+    });
+  };
+
+  const handleRestoreCleanDemo = () => {
+    setChangedFilesInput("src/sourceRegistry.ts, specs/SPEC.md, handoff/HANDOFF.md");
+    setDiffSummaryInput(
+      "+ 补充公开来源引用 URL 与版本日期字段校验\n+ 增加未证实结论自动标记待人工复核逻辑"
+    );
+    setTestCommandLogInput(
+      "npx tsc --noEmit -> 0 errors\nnpm test -> passed\n静态规则门禁 -> 待验证"
+    );
+    setWsMessage({
+      ok: true,
+      text: "已恢复合规目录白名单与干净 Diff，请重新点击「运行服务端静态门禁」完成红转绿验证。",
+    });
+  };
+
+  const handleExportFirstHourEvidence = () => {
+    const projectLabel = wsTitle || activeTemplate?.title || "Coding Everything Starter Kit";
+    const stepsText = FIRST_HOUR_DEFAULT_CHECKLIST.map((step, idx) => {
+      const done = firstHourChecked.includes(step.id);
+      return `- [${done ? "x" : " "}] 0${idx + 1}. ${step.label} — ${step.detail}`;
+    }).join("\n");
+
+    const auditSummary = latestAudit
+      ? `- 服务端静态审计：${latestAudit.passed ? "PASSED" : "BLOCKED"}（阻塞 ${latestAudit.blockingCount} · 警告 ${latestAudit.warningCount}）`
+      : "- 服务端静态审计：尚未执行";
+
+    const reportMd = [
+      `# evidence/first-hour-report.md · Coding Everything 项目学院`,
+      ``,
+      `- 项目工作区：${projectLabel}`,
+      `- 模板标识：${activeTemplate?.slug || "starter-kit"}`,
+      `- 生成时间：${new Date().toISOString()}`,
+      `- 第一小时完成度：${firstHourChecked.length}/${FIRST_HOUR_DEFAULT_CHECKLIST.length}`,
+      ``,
+      `## 1. 第一小时最小闭环检查清单`,
+      stepsText,
+      ``,
+      `## 2. 变更文件范围与 Git Diff 摘要`,
+      `- Changed Files: ${parseChangedFiles().join(", ") || "未填写"}`,
+      ``,
+      "```diff",
+      diffSummaryInput || "(暂无 Diff)",
+      "```",
+      ``,
+      `## 3. 验证命令输出与服务端静态门禁`,
+      auditSummary,
+      ``,
+      "```text",
+      testCommandLogInput || "(暂无命令输出)",
+      "```",
+      ``,
+    ].join("\n");
+
+    const filename = `first-hour-evidence-${activeWorkspace?.id ?? "preview"}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.md`;
+    downloadMarkdown(filename, reportMd);
+    setWsMessage({
+      ok: true,
+      text: `已导出首小时验证报告 ${filename}。`,
+    });
   };
 
   const handleRunEvalSuite = async () => {
@@ -877,13 +962,23 @@ export default function ProjectWorkspacePanel({
 
                   {/* First-Hour 6-Step Checklist */}
                   <div className="p-4 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="font-semibold text-white">
                         开课第一小时最小闭环核验清单（云端持久化）
                       </div>
-                      <span className="font-mono text-gemini-cyan tabular-nums">
-                        {firstHourChecked.length}/{FIRST_HOUR_DEFAULT_CHECKLIST.length} 已完成
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-gemini-cyan tabular-nums">
+                          {firstHourChecked.length}/{FIRST_HOUR_DEFAULT_CHECKLIST.length} 已完成
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleExportFirstHourEvidence}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-slate-200 inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Download className="w-3 h-3 text-gemini-cyan" />
+                          <span>导出 Evidence Report</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {FIRST_HOUR_DEFAULT_CHECKLIST.map((step) => {
@@ -990,6 +1085,22 @@ export default function ProjectWorkspacePanel({
                         />
                         <div className="text-[11px] text-slate-400 pt-1">
                           注意：若变更文件包含 rules/00-core-redlines.mdc、.env 或越界路径，服务端门禁将直接返回 HTTP 422 阻断。
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 pt-1.5">
+                          <button
+                            type="button"
+                            onClick={handleLoadViolatingDemo}
+                            className="px-2.5 py-1 rounded-lg border border-amber-400/35 bg-amber-500/10 hover:bg-amber-500/20 text-[11px] font-mono text-amber-200 cursor-pointer"
+                          >
+                            演练失败红灯 (注入越界/Key)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRestoreCleanDemo}
+                            className="px-2.5 py-1 rounded-lg border border-emerald-400/35 bg-emerald-500/10 hover:bg-emerald-500/20 text-[11px] font-mono text-emerald-200 cursor-pointer"
+                          >
+                            修复并恢复合规 Diff
+                          </button>
                         </div>
                       </div>
                     </div>

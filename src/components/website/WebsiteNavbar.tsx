@@ -8,6 +8,7 @@ interface WebsiteNavbarProps {
   hasPaidAccess: boolean;
   onNavigatePage: (page: WebsitePageRoute) => void;
   onEnterWorkspace: (moduleId?: string) => void;
+  onEnterProjects?: () => void;
   onOpenBilling: () => void;
   onOpenCohortPanel: () => void;
   onOpenInstructorCockpit: () => void;
@@ -19,6 +20,7 @@ export default function WebsiteNavbar({
   hasPaidAccess,
   onNavigatePage,
   onEnterWorkspace,
+  onEnterProjects,
   onOpenBilling,
   onOpenCohortPanel,
   onOpenInstructorCockpit,
@@ -203,6 +205,15 @@ export default function WebsiteNavbar({
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium">
+              {onEnterProjects && (
+                <button
+                  type="button"
+                  onClick={onEnterProjects}
+                  className="text-gemini-cyan hover:text-cyan-200 cursor-pointer"
+                >
+                  项目学院工作台
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onOpenBilling}

@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   FIRST_HOUR_DEFAULT_CHECKLIST,
   GEO_EVIDENCE_LAB_DISCLAIMER,
+  MODULE_STAGE_LABELS,
   PROJECT_LIFECYCLE_STAGES,
   STANDARD_STARTER_KIT_TREE,
 } from "../src/data/projectTemplatesPublic";
@@ -161,4 +162,39 @@ test("projectTemplatesPublic and starter kits expose clean structure with no lea
   );
   assert.equal(publicSrc.includes("correctIndex"), false);
   assert.equal(publicSrc.includes("teacherMaterials"), false);
+});
+
+test("module stages, staticAudit structure warnings, and Coding Everything branding remain consistent", () => {
+  const requiredStages = [
+    "viewed",
+    "practiced",
+    "submitted",
+    "auto_verified",
+    "human_reviewed",
+    "skill_granted",
+  ] as const;
+  for (const stage of requiredStages) {
+    assert.ok(MODULE_STAGE_LABELS[stage], `Missing label for stage ${stage}`);
+  }
+
+  const missingStructure = runDeterministicStaticAudit({
+    moduleId: "m13-eng",
+    codeOrArtifactText: "实现基础来源记录模块",
+    requireProjectStructure: true,
+  });
+  assert.equal(missingStructure.passed, true);
+  assert.ok(missingStructure.warningCount >= 2);
+  assert.ok(missingStructure.findings.some((f) => f.ruleId === "SPEC-001"));
+  assert.ok(missingStructure.findings.some((f) => f.ruleId === "DOD-001"));
+
+  const indexHtml = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf8");
+  assert.ok(indexHtml.includes("Coding Everything 项目学院"));
+  assert.equal(indexHtml.includes("AI Coding 学院"), false);
+
+  const navbarSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/website/WebsiteNavbar.tsx"),
+    "utf8"
+  );
+  assert.ok(navbarSrc.includes("Coding Everything 项目学院"));
+  assert.equal(navbarSrc.includes("AI Coding 学院"), false);
 });

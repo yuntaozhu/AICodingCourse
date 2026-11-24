@@ -5,15 +5,18 @@ import {
   ArrowRight,
   BookMarked,
   BookOpen,
+  Bot,
   Check,
   CheckCircle2,
   ChevronRight,
+  ClipboardCheck,
   Copy,
   Download,
   Eye,
   EyeOff,
   FileCode2,
   FlaskConical,
+  FolderGit2,
   GraduationCap,
   Layers,
   Play,
@@ -21,6 +24,10 @@ import {
   RotateCcw,
   ShieldCheck,
 } from "lucide-react";
+import {
+  MODULE_STAGE_LABELS,
+  type ModuleProgressStage,
+} from "@/data/projectTemplatesPublic";
 import { COURSE_LABS } from "@/data/courseCurriculum";
 import {
   COURSE_SKILLS,
@@ -86,6 +93,7 @@ interface ModuleLearningPageProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
   latestQuizSummary?: WorkspaceQuizScoreSummary;
+  moduleStage?: ModuleProgressStage;
   hasPaidAccess?: boolean;
   isInstructorAuthorized?: boolean;
   isSignedIn?: boolean;
@@ -102,6 +110,7 @@ interface ModuleLearningPageProps {
   onVerifySkill: (record: SkillVerificationRecord) => void;
   onToggleViewMode: () => void;
   onOpenKnowledgeBase: (moduleCode?: string, track?: KnowledgeBaseTrack) => void;
+  onOpenProjectHub?: (tab: "workspace" | "eval" | "tutor" | "exam", moduleId?: string) => void;
   onSwitchToReveal: (target: { moduleId?: string; labId?: string; slideOffset?: number }) => void;
   onScrollTop?: () => void;
 }
@@ -146,6 +155,7 @@ export default function ModuleLearningPage({
   workspaceState,
   completedLabIds,
   latestQuizSummary,
+  moduleStage,
   hasPaidAccess = false,
   isInstructorAuthorized = false,
   isSignedIn = false,
@@ -162,6 +172,7 @@ export default function ModuleLearningPage({
   onVerifySkill,
   onToggleViewMode,
   onOpenKnowledgeBase,
+  onOpenProjectHub,
   onSwitchToReveal,
   onScrollTop,
 }: ModuleLearningPageProps) {
@@ -763,6 +774,12 @@ export default function ModuleLearningPage({
               >
                 {moduleRecord.status === "needs-review" ? "部分待复核" : "已核验"}
               </span>
+              {moduleStage && moduleStage !== "not_started" && (
+                <span className="text-gemini-cyan">
+                  {" "}
+                  · 认证状态：{MODULE_STAGE_LABELS[moduleStage]}
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-1">
               {prevModule && (
@@ -823,6 +840,35 @@ export default function ModuleLearningPage({
                 <Download className="w-3.5 h-3.5 text-gemini-purple" />
                 <span>{exportingPlan ? "导出中..." : "导出备课讲义 (.md)"}</span>
               </button>
+            )}
+
+            {onOpenProjectHub && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenProjectHub("tutor", moduleRecord.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-gemini-purple/15 hover:bg-gemini-purple/25 border border-gemini-purple/40 text-xs text-purple-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>问 Tutor</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenProjectHub("exam", moduleRecord.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-xs text-emerald-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5" />
+                  <span>分步 Exam</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenProjectHub("workspace", moduleRecord.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <FolderGit2 className="w-3.5 h-3.5 text-gemini-cyan" />
+                  <span>Starter Kit</span>
+                </button>
+              </>
             )}
 
             <button

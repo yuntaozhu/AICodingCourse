@@ -258,6 +258,8 @@ export default function InstructorCockpit() {
                         type="button"
                         onClick={() => {
                           setSelectedSub(sub);
+                          setFeedbackMarkdown("");
+                          setGrantSkillId("");
                           setReviewMsg(null);
                         }}
                         className={`w-full text-left p-4 rounded-xl border space-y-1.5 cursor-pointer transition-colors ${
@@ -365,7 +367,7 @@ export default function InstructorCockpit() {
                           </div>
                         )}
                         {selectedSub.evidence && (
-                          <div className="space-y-1.5 text-[11px] font-mono text-slate-300 pt-1">
+                          <div className="space-y-2 text-[11px] font-mono text-slate-300 pt-1">
                             {selectedSub.evidence.changedFilesJson.length > 0 && (
                               <div>
                                 变更文件：{selectedSub.evidence.changedFilesJson.join(", ")}
@@ -374,10 +376,53 @@ export default function InstructorCockpit() {
                                   : ""}
                               </div>
                             )}
+                            {selectedSub.evidence.diffSummary && (
+                              <details open className="rounded-lg border border-white/10 bg-black/50 p-2">
+                                <summary className="cursor-pointer text-gemini-cyan font-semibold">
+                                  Diff 变更摘要
+                                </summary>
+                                <pre className="mt-1.5 text-slate-200 whitespace-pre-wrap max-h-40 overflow-y-auto custom-scrollbar">
+                                  {selectedSub.evidence.diffSummary}
+                                </pre>
+                              </details>
+                            )}
                             {selectedSub.evidence.testCommandLog && (
                               <pre className="p-2 rounded bg-black/50 border border-white/10 text-emerald-200 whitespace-pre-wrap">
                                 {selectedSub.evidence.testCommandLog}
                               </pre>
+                            )}
+                            {(selectedSub.evidence.specSnapshot ||
+                              selectedSub.evidence.rulesSnapshot ||
+                              selectedSub.evidence.handoffSummary) && (
+                              <details className="rounded-lg border border-white/10 bg-black/50 p-2 space-y-2">
+                                <summary className="cursor-pointer text-purple-200 font-semibold">
+                                  展开查看 SPEC.md / .cursorrules / HANDOFF.md 提交快照
+                                </summary>
+                                {selectedSub.evidence.specSnapshot && (
+                                  <div className="pt-1.5 space-y-1">
+                                    <div className="text-slate-400">specs/SPEC.md</div>
+                                    <pre className="p-2 rounded bg-black/60 border border-white/10 text-slate-200 whitespace-pre-wrap max-h-36 overflow-y-auto custom-scrollbar">
+                                      {selectedSub.evidence.specSnapshot}
+                                    </pre>
+                                  </div>
+                                )}
+                                {selectedSub.evidence.rulesSnapshot && (
+                                  <div className="space-y-1">
+                                    <div className="text-slate-400">rules/.cursorrules</div>
+                                    <pre className="p-2 rounded bg-black/60 border border-white/10 text-slate-200 whitespace-pre-wrap max-h-36 overflow-y-auto custom-scrollbar">
+                                      {selectedSub.evidence.rulesSnapshot}
+                                    </pre>
+                                  </div>
+                                )}
+                                {selectedSub.evidence.handoffSummary && (
+                                  <div className="space-y-1">
+                                    <div className="text-slate-400">handoff/HANDOFF.md</div>
+                                    <pre className="p-2 rounded bg-black/60 border border-white/10 text-slate-200 whitespace-pre-wrap max-h-36 overflow-y-auto custom-scrollbar">
+                                      {selectedSub.evidence.handoffSummary}
+                                    </pre>
+                                  </div>
+                                )}
+                              </details>
                             )}
                           </div>
                         )}
@@ -424,11 +469,41 @@ export default function InstructorCockpit() {
                         />
                       </div>
 
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <label className="block text-slate-300 font-medium inline-flex items-center gap-1.5">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>审核通过时可选授予认证技能 (SkillGrant)：</span>
+                          <span>审核通过时可选授予认证技能 (SkillGrant · 三锁门禁)：</span>
                         </label>
+                        <div className="p-2.5 rounded-lg border border-white/10 bg-black/35 font-mono text-[11px] text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <span
+                            className={
+                              selectedSub.latestAudit?.passed === false
+                                ? "text-rose-300"
+                                : "text-emerald-300"
+                            }
+                          >
+                            锁 1 静态门禁：
+                            {selectedSub.latestAudit?.passed === false ? "BLOCKED" : "PASSED"}
+                          </span>
+                          <span
+                            className={
+                              selectedSub.evidence?.testCommandLog?.trim() ||
+                              selectedSub.evidence?.evalRunId ||
+                              selectedSub.artifactText.trim().length >= 20
+                                ? "text-emerald-300"
+                                : "text-amber-300"
+                            }
+                          >
+                            锁 2 实操证据：
+                            {selectedSub.evidence?.testCommandLog?.trim() ||
+                            selectedSub.evidence?.evalRunId
+                              ? "已附命令日志/Eval"
+                              : selectedSub.artifactText.trim().length >= 20
+                              ? "已附交付正文"
+                              : "待补充"}
+                          </span>
+                          <span className="text-gemini-cyan">锁 3 人工批复：当前导师决断</span>
+                        </div>
                         <select
                           value={grantSkillId}
                           onChange={(e) => setGrantSkillId(e.target.value)}

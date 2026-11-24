@@ -24,7 +24,7 @@ import CourseKnowledgeView, {
   type KnowledgeSectionFilter,
 } from "@/components/course/CourseKnowledgeView";
 import ModuleLearningPage from "@/components/course/ModuleLearningPage";
-import ProjectWorkspacePanel from "@/components/course/ProjectWorkspacePanel";
+import ProjectWorkspacePanel, { type ProjectHubTab } from "@/components/course/ProjectWorkspacePanel";
 import AdminConsole from "@/components/lms/AdminConsole";
 import CohortLearnerPanel from "@/components/lms/CohortLearnerPanel";
 import InstructorCockpit from "@/components/lms/InstructorCockpit";
@@ -106,6 +106,9 @@ export default function CourseSystemApp({
   const [kbInitialTrack, setKbInitialTrack] = useState<KnowledgeBaseTrack | undefined>(undefined);
   const [kbNavSeq, setKbNavSeq] = useState(0);
   const [moduleNavSeq, setModuleNavSeq] = useState(0);
+  const [projectHubTab, setProjectHubTab] = useState<ProjectHubTab>("workspace");
+  const [projectHubModuleId, setProjectHubModuleId] = useState<string | undefined>(undefined);
+  const [projectHubSeq, setProjectHubSeq] = useState(0);
   const [globalQuery, setGlobalQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [highlightedIdx, setHighlightedIdx] = useState(0);
@@ -289,6 +292,14 @@ export default function CourseSystemApp({
     }
     setModuleNavSeq((seq) => seq + 1);
     setSubView("module");
+    scrollWorkspaceTop();
+  };
+
+  const handleOpenProjectHub = (tab: ProjectHubTab = "workspace", moduleId?: string) => {
+    setProjectHubTab(tab);
+    setProjectHubModuleId(moduleId);
+    setProjectHubSeq((seq) => seq + 1);
+    setSubView("projects");
     scrollWorkspaceTop();
   };
 
@@ -1016,10 +1027,7 @@ export default function CourseSystemApp({
             hasPaidAccess={hasPaidAccess}
             isInstructorAuthorized={isInstructorAuthorized}
             onOpenBilling={onOpenBilling}
-            onOpenProjects={() => {
-              setSubView("projects");
-              scrollWorkspaceTop();
-            }}
+            onOpenProjects={() => handleOpenProjectHub("workspace")}
             onOpenModule={handleOpenModule}
             onApplyPlanPresetAll={handleApplyPlanPresetAll}
             onOpenKnowledgeBase={(modCode, track) =>
@@ -1031,6 +1039,9 @@ export default function CourseSystemApp({
 
         {subView === "projects" && (
           <ProjectWorkspacePanel
+            initialTab={projectHubTab}
+            initialModuleId={projectHubModuleId}
+            navSeq={projectHubSeq}
             onOpenBilling={onOpenBilling}
             onOpenModule={handleOpenModule}
             onSwitchToReveal={onSwitchToReveal}
@@ -1045,6 +1056,7 @@ export default function CourseSystemApp({
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
             latestQuizSummary={latestQuizByModule[activeModuleRecord.id]}
+            moduleStage={moduleStageById[activeModuleRecord.id]}
             hasPaidAccess={hasPaidAccess}
             isInstructorAuthorized={isInstructorAuthorized}
             isSignedIn={Boolean(session)}
@@ -1066,6 +1078,7 @@ export default function CourseSystemApp({
             onOpenKnowledgeBase={(modCode, track) =>
               handleOpenKnowledgeBase(modCode, "", "all", track)
             }
+            onOpenProjectHub={handleOpenProjectHub}
             onSwitchToReveal={onSwitchToReveal}
             onScrollTop={scrollWorkspaceTop}
           />

@@ -127,6 +127,7 @@ export default function TeamsLandingPage({
         hasPaidAccess={hasPaidAccess}
         onNavigatePage={onNavigatePage}
         onEnterWorkspace={onEnterWorkspace}
+        onEnterProjects={onEnterProjects}
         onOpenBilling={onOpenBilling}
         onOpenCohortPanel={onOpenCohortPanel}
         onOpenInstructorCockpit={onOpenInstructorCockpit}
