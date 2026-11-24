@@ -1,10 +1,10 @@
 # AICodingCourse（造物台）— 官网 + 账号制 LMS + AI Coding → Harness → Agent 实战课程系统
 
-面向业务专家 / PM、独立开发者、高校学生（含竞赛/科创）与企业研发团队的 AI Coding 到 Agent 系统实战教学与训练营平台（基于 React 19 + TypeScript + Vite 8 + Reveal.js 6 + Express 4 + Drizzle ORM + Cloud SQL PostgreSQL + Firebase Auth）。
+面向业务专家 / PM、独立开发者、高校学生（含竞赛/科创）与企业研发团队的 AI Coding 到 Agent 系统实战教学与训练营平台（基于 React 19 + TypeScript + Vite 8 + Reveal.js 6 + Express 4 + Drizzle ORM + PostgreSQL + 邮箱 6 位验证码直连会话 / 可选 Firebase Auth）。
 
-系统现包含 **三大协作入口** 与完整的 **账号权益 / 班级带教 / 服务端评测闭环**：
-- **官方主页（`/`）**：课程价值主张、双轨学习路径与结业终点对比、商业产品对比（自主通行证 vs 深度指导小班）、讲师背景、公开目录预览与训练营/企业咨询表单（写入 Cloud SQL `lead_inquiries`）。
-- **课程学习工作台（`/app`）**：账号登录、权益解锁与兑换、三轨 14 模块工作台、单元 DoD 打卡与云端进度同步、服务端判分测验、双层先修图谱与可核验技能门禁、双链路知识库中心、学员小班任务提交（Cohort Panel）、讲师带班工作台（Instructor Cockpit）与管理员后台（Admin Console）。
+系统现包含 **四大协作入口** 与完整的 **账号权益 / 班级带教 / 服务端评测闭环**：
+- **官方主页与专项落地页（`/` · `/teens` · `/teams`）**：主站聚焦非技术创作者与独立开发者核心价值主张、M1 免费交互体验、代表性案例与学习方案对比；`/teens`（青少年营）与 `/teams`（团队内训）独立承载专项转化与咨询表单（写入 PostgreSQL `lead_inquiries`）。
+- **课程学习工作台（`/app`）**：邮箱 6 位验证码登录、权益解锁与兑换、三轨 14 模块工作台、单元 DoD 打卡与云端进度同步、服务端判分测验、双层先修图谱与可核验技能门禁、双链路知识库中心、学员小班任务提交（Cohort Panel）、讲师带班工作台（Instructor Cockpit）与教务后台（Admin Console）。
 - **Reveal.js 14 模块 · 20 沙盘全屏演示模式（`#/`）**：支持从工作台任意单元或测验错题直达对应幻灯片与交互沙盘，并在演示模式顶部一键返回工作台。
 
 ---
@@ -18,7 +18,7 @@
 2. **服务端访问控制与权威性保护**：
    - **免费试学与权益门禁**：未登录或未付费账号仅开放 `M1` 公开试学；`M2–M13-Eng` 全量内容与对应测验由服务端严格校验有效权益（无权限返回 `403 ENTITLEMENT_REQUIRED`）。
    - **教师材料物理隔离**：`teacherMaterials`（授课话术、参考答案、时间裁剪建议、隐藏踩坑提示）仅在服务端确认用户为 `instructor`（且关联对应班级/授权）或 `admin` 时下发；普通学员、游客与匿名响应均由服务端剥离。
-   - **测验与技能服务端判分**：测验公开接口不返回 `correctIndex` 与 `explanation`，提交后在服务端判分并落库 `quiz_attempts`；关键技能（如 `skill_auth_boundary`、`skill_ai_iteration_project`）仅通过服务端诊断规则验证后授予 `skill_grants`。
+   - **测验与技能服务端判分**：测验公开接口不返回 `correctIndex` 与 `explanation`，提交后在服务端判分并落库 `quiz_attempts`；M1 试学预览、单题检验、技能诊断以及讲师教案/总手册均由服务端接口校验后按权限返回，避免前端构建产物泄露答案与备课脚本。
    - **旧版迁移标记**：从早期浏览器 `localStorage` 迁入云端的历史数据标记为 `untrustedLegacy`（仅迁移进度与笔记草稿，不直接采信本地已通过技能或自造分数）。
    - **双链路知识库（物理与逻辑隔离）**：
      - **链路 A · 研发工程知识库**（`src/data/teamKnowledgeBase.ts` + `docs/knowledge-base/templates-and-checklists.md` / `failures-and-decisions.md` + 78 册 `AI-pdf-books` 备课书库）：服务开发者与 Coding Agent（M1–M10），支持云端自定义条目同步。
@@ -46,14 +46,14 @@
 
 ## 三、数据架构、接口与首任管理员初始化
 
-1. **Cloud SQL PostgreSQL（`src/db/schema.ts` 共 20 张表，运行区域 `europe-west1`）**：
-   - 身份与商业域：`users`, `user_roles`, `products`, `prices`, `orders`, `payment_events`, `redeem_codes`, `entitlements`, `lead_inquiries`
+1. **PostgreSQL（`src/db/schema.ts` 共 21 张表，兼容 Neon / Vercel Postgres 与 Cloud SQL）**：
+   - 身份与商业域：`users`, `email_otp_challenges`, `user_roles`, `products`, `prices`, `orders`, `payment_events`, `redeem_codes`, `entitlements`, `lead_inquiries`
    - 学习与证据域：`unit_progress`, `custom_kb_entries`, `quiz_attempts`, `skill_grants`, `ai_usage_logs`
    - 班级与带教域：`cohorts`, `cohort_instructors`, `cohort_enrollments`, `cohort_milestones`, `submissions`, `submission_reviews`
-2. **Firebase Auth + 首任管理员认领流程**：
-   - 前端通过 Google 登录获取 Firebase ID Token，请求同源 `/api/*` 时由 `firebase-admin` 在服务端校验身份。
-   - 若系统尚无管理员，可通过环境变量 `ADMIN_EMAIL` 自动初始化，或在登录后于工作台顶部点击「认领首个管理员」调用 `POST /api/auth/claim-admin` 完成首任管理员绑定。
-   - 管理员可在 `AdminConsole` 中签发兑换码（`POST /api/admin/redeem-codes`）、人工开通权益、分配班级讲师、报名学员与创建班级期次；未配置 `PAYMENT_WEBHOOK_SECRET` 时支付回调路由返回 `503`，推荐使用兑换码或管理员后台开通。
+2. **国内直连邮箱 OTP 登录 + 首任管理员认领流程**：
+   - 前端默认使用邮箱 6 位一次性验证码登录（`POST /api/auth/email/request-otp` + `/api/auth/email/verify-otp`），由服务端签发 HMAC-SHA256 会话令牌（优先使用 `SESSION_SECRET`）；同时保留可选 Google 登录入口作为海外兼容通道。
+   - 若系统尚无管理员，可通过环境变量 `ADMIN_EMAIL` 自动初始化，或在登录后于「权益与订单」弹窗点击「认领首个管理员权限」调用 `POST /api/auth/claim-admin` 完成首任管理员绑定。
+   - 管理员可在 `AdminConsole` 中签发兑换码（`POST /api/admin/redeem-codes`）、核销待支付订单（`POST /api/admin/orders/:id/confirm`）、人工开通/退款回收权益、增补班级里程碑、分配带班讲师、报名学员与更新官网咨询线索状态。
 
 ---
 
@@ -71,7 +71,7 @@ npm install
 # 2. 启动开发服务器（Express + Vite 中间件，默认端口 3000）
 npm run dev
 
-# 3. 运行静态检查、TypeScript 校验与自动化测试（25 项用例）
+# 3. 运行静态检查、TypeScript 校验与自动化测试（31 项用例）
 npm run lint
 npx tsc --noEmit
 npm test
@@ -83,20 +83,18 @@ NODE_ENV=production npm start
 
 ### 环境变量与部署说明
 - 参考 `.env.example` 配置（切勿把任何密钥写入 `VITE_*` 前端变量或提交至仓库）：
-  - **AI Studio Cloud SQL（默认优先）**：`SQL_HOST`, `SQL_USER`, `SQL_PASSWORD`, `SQL_DB_NAME`（通过 Unix Socket 连接）
-  - **Vercel Neon Postgres（对象参数兼容，自动启用远程 TLS）**：`PGHOST` / `POSTGRES_HOST`、`PGHOST_UNPOOLED`（建表推送使用）、`PGUSER`、`PGPASSWORD`、`PGDATABASE`
-  - **Vercel Blob 作业附件存储（可选）**：`AICODING_STORE_ID`、`AICODING_READ_WRITE_TOKEN`（启用后学员端小班面板自动开放 `≤3MB` 附件直传 `/api/submissions/upload`）
-  - **Firebase Override（可选）**：`FIREBASE_PROJECT_ID`（默认读取随 serverless 函数打包的 `firebase-applet-config.json`）
-  - **可选服务端增强**：`GEMINI_API_KEY`（用于需登录且受日配额限制的 `POST /api/review`、`/api/kb/synthesize`、`/api/craft-rules`）、`ADMIN_EMAIL`、`PAYMENT_WEBHOOK_SECRET`、`PORT=3000`
+  - **数据库连接**：Vercel / Neon 使用 `DATABASE_URL` / `POSTGRES_URL` / `PG*`（自动启用远程 TLS）；AI Studio Cloud SQL 使用 `SQL_HOST`, `SQL_USER`, `SQL_PASSWORD`, `SQL_DB_NAME`（Unix Socket）。
+  - **邮箱 OTP 与会话密钥（国内直连必备）**：`SESSION_SECRET`（建议至少 32 字节高熵随机串）、`RESEND_API_KEY`、`EMAIL_FROM`（生产环境未配置 `RESEND_API_KEY` 时不会返回预览验证码）。
+  - **Vercel Blob 作业附件存储（可选）**：`AICODING_STORE_ID`、`AICODING_READ_WRITE_TOKEN`（或 `BLOB_READ_WRITE_TOKEN`；启用后学员端小班面板开放图片 `≤2MB` / 其他文档 `≤3MB` 附件直传 `/api/submissions/upload`）。
+  - **可选服务端增强**：`GEMINI_API_KEY`（受日配额限制的 `POST /api/review`、`/api/kb/synthesize`、`/api/craft-rules`）、`ADMIN_EMAIL`、`PAYMENT_WEBHOOK_SECRET`、`PORT=3000`。
 - **Vercel Serverless + Neon 部署步骤**：
-  1. 在 Vercel Storage 中绑定 Neon Postgres 与 Blob（如自定义前缀 `AICODING`），并配置 `ADMIN_EMAIL` / `GEMINI_API_KEY` / `PAYMENT_WEBHOOK_SECRET`。
-  2. `vercel.json` 已配置 `"buildCommand": "npm run vercel-build"`，在 Vercel 构建阶段检测到 `PG*` / `POSTGRES_*` 环境变量时会自动执行 `drizzle-kit push` 同步 20 张表结构；如需本地手动推送，可执行：
+  1. 在 Vercel Storage 中绑定 Neon Postgres 与 Blob，并配置 `SESSION_SECRET` / `RESEND_API_KEY` / `EMAIL_FROM` / `ADMIN_EMAIL` / `GEMINI_API_KEY`。
+  2. `vercel.json` 已配置 `"buildCommand": "npm run vercel-build"`，在 Vercel 构建阶段检测到 `PG*` / `POSTGRES_*` / `DATABASE_URL` 环境变量时会自动执行 `drizzle-kit push` 同步 21 张表结构；如需本地手动推送，可执行：
      ```bash
      npx vercel env pull .env.local
      npm run db:push:vercel
      ```
-  3. 在 **Firebase Console → Authentication → Settings → Authorized domains** 中添加 Vercel 生产域名（如 `your-app.vercel.app`），否则 Google 登录弹窗会被拦截。
-  4. 访问部署域名 `/api/health` 确认服务与 `blobUploadEnabled` 状态正常，首次访问 `/api/catalog` 或 `/app` 将自动幂等初始化商品与默认期次 `COHORT-2026-Q4`。
+  3. 访问部署域名 `/api/health` 确认服务与 `blobUploadEnabled` 状态正常，首次访问 `/api/catalog` 或 `/app` 将自动幂等初始化商品与默认期次 `COHORT-2026-Q4`。
 
 ---
 
@@ -105,5 +103,5 @@ NODE_ENV=production npm start
 1. **新增或修改幻灯片**：在 `src/components/slides/ModuleX/` 下新增组件并在该模块 `index.ts` 注册；交互型沙盘组件须在根节点使用 `stopRevealKey` / `stopRevealWheel` 隔离 Reveal 快捷键与滚轮。
 2. **外部资料、链接与许可证规范**：严禁直接复制未确认许可证的外部项目源码或文章；`src/data/aiBooksKnowledgeBase.ts` 与 `src/data/uiReferenceSites.ts` 中部分外部条目的 `license` / `lastVerifiedAt` 元信息仍待逐条补全。
 3. **沙盘与治理边界**：`M13-Gov` / Lab 20 明确声明：「本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。」
-4. **提交前门禁**：确保 `npm run lint`、`npx tsc --noEmit`、`npm test`（25/25 通过）与 `npm run build` 全部通过。
+4. **提交前门禁**：确保 `npm run lint`、`npx tsc --noEmit`、`npm test`（31/31 通过）与 `npm run build` 全部通过。
 

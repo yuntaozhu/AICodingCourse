@@ -26,7 +26,7 @@ import {
   type RuntimeKnowledgeEntry,
 } from "./runtimeKnowledgeBase.ts";
 import { COURSE_SKILLS, type SkillId, type SkillVerificationMethod } from "./courseSkills.ts";
-import { getQuizReviewSummary, MODULE_QUIZZES } from "./moduleQuizzes.ts";
+import { MODULE_QUIZZES } from "./moduleQuizzes.ts";
 
 export const M13_GOV_SIMULATION_DISCLAIMER =
   "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";
@@ -263,9 +263,16 @@ export function getCourseOverallStats(state: CourseWorkspaceState): {
   };
 }
 
+export interface WorkspaceQuizScoreSummary {
+  correctCount: number;
+  totalCount: number;
+  scorePct: number;
+}
+
 export function buildWorkspaceMarkdownExport(
   state: CourseWorkspaceState,
-  quizAnswersByModule: Record<string, Record<string, number>> = loadAllQuizAnswers()
+  quizAnswersByModule: Record<string, Record<string, number>> = loadAllQuizAnswers(),
+  latestQuizByModule: Record<string, WorkspaceQuizScoreSummary> = {}
 ): string {
   const overall = getCourseOverallStats(state);
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -366,13 +373,22 @@ export function buildWorkspaceMarkdownExport(
   for (const mod of COURSE_MODULE_RECORDS) {
     const quiz = MODULE_QUIZZES[mod.id];
     const answers = normalizedQuizzes[mod.id] || {};
-    if (quiz && Object.keys(answers).length > 0) {
+    const serverGrade = latestQuizByModule[mod.id];
+    const answeredCount = quiz
+      ? quiz.questions.filter((q) => answers[q.id] !== undefined).length
+      : Object.keys(answers).length;
+    if (quiz && (answeredCount > 0 || serverGrade)) {
       hasQuiz = true;
       if (mod.id === "m13-gov") touchesM13Gov = true;
-      const summary = getQuizReviewSummary(quiz, answers);
-      lines.push(
-        `- ${mod.code} (${quiz.moduleTitle})：已答 ${summary.answeredCount}/${quiz.questions.length} 题，正确 ${summary.correctCount} 题（正确率 ${summary.accuracyPct}%）`
-      );
+      if (serverGrade) {
+        lines.push(
+          `- ${mod.code} (${quiz.moduleTitle})：已答 ${answeredCount}/${quiz.questions.length} 题，服务端核验正确 ${serverGrade.correctCount}/${serverGrade.totalCount} 题（正确率 ${serverGrade.scorePct}%）`
+        );
+      } else {
+        lines.push(
+          `- ${mod.code} (${quiz.moduleTitle})：已作答 ${answeredCount}/${quiz.questions.length} 题（需联网判分查看正确率）`
+        );
+      }
     }
     if (
       mod.id === "m13-gov" &&
@@ -424,110 +440,6 @@ export function buildWorkspaceMarkdownExport(
   return lines.join("\n");
 }
 
-export function buildInstructorLessonPlanMarkdown(
-  moduleRecord: CourseModuleRecord,
-  planId?: string
-): string {
-  const plan =
-    moduleRecord.deliveryPlans.find((p) => p.id === planId) || moduleRecord.deliveryPlans[0];
-  const units = getUnitsForPlan(moduleRecord, plan?.id);
-  const totalMinutes = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
-
-  const lines: string[] = [
-    `# ${moduleRecord.code} 教师备课讲义 · ${moduleRecord.title}`,
-    ``,
-    `- 所选授课方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"}`,
-    `- 适用对象：${plan?.targetAudience || moduleRecord.audience.join(" / ")}`,
-    `- 预计授课总时长：约 ${totalMinutes} 分钟（共 ${units.length} 个教学单元）`,
-    `- 先修要求：${moduleRecord.prerequisites.join("；")}`,
-    `- 边界提示：${moduleRecord.boundaryNote}`,
-    ``,
-    `## 学习目标`,
-    ...moduleRecord.learningObjectives.map((obj, idx) => `${idx + 1}. ${obj}`),
-    ``,
-    `---`,
-    ``,
-    `## 分单元备课指南与参考答案`,
-    ``,
-  ];
-
-  units.forEach((unit, idx) => {
-    lines.push(`### ${String(idx + 1).padStart(2, "0")}. ${unit.title}（约 ${unit.estimatedMinutes} 分钟）`);
-    lines.push(`- 单元目标：${unit.learningObjective}`);
-    lines.push(`- 组织提示：${unit.teacherMaterials.teachingTips}`);
-    lines.push(`- 时间裁剪建议：${unit.teacherMaterials.timeTrimNote}`);
-
-    if (unit.demoSteps && unit.demoSteps.length > 0) {
-      lines.push(`- 演示步骤：`);
-      for (const st of unit.demoSteps) {
-        lines.push(`  - **${st.phase}**：${st.action} ｜ 人类把关：${st.humanControl}`);
-      }
-    }
-
-    if (unit.teacherMaterials.referenceAnswers.length > 0) {
-      lines.push(`- 参考答案与可接受解法：`);
-      for (const ans of unit.teacherMaterials.referenceAnswers) {
-        lines.push(`  - ${ans}`);
-      }
-    }
-
-    if (unit.teacherMaterials.commonPitfalls.length > 0) {
-      lines.push(`- 课堂翻车预警：`);
-      for (const pit of unit.teacherMaterials.commonPitfalls) {
-        lines.push(`  - ${pit}`);
-      }
-    }
-
-    lines.push(``);
-  });
-
-  return lines.join("\n");
-}
-
-export function buildFullCourseInstructorHandbookMarkdown(
-  state: CourseWorkspaceState
-): string {
-  let totalCourseMinutes = 0;
-  let totalCourseUnits = 0;
-
-  const moduleSections: string[] = [];
-
-  for (const mod of COURSE_MODULE_RECORDS) {
-    const planId = state.selectedPlanByModule[mod.id];
-    const plan =
-      mod.deliveryPlans.find((p) => p.id === planId) || mod.deliveryPlans[0];
-    const units = getUnitsForPlan(mod, plan?.id);
-    const mins = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
-    totalCourseMinutes += mins;
-    totalCourseUnits += units.length;
-
-    moduleSections.push(
-      [
-        `## ${mod.code} · ${mod.title}`,
-        `- 方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"} ｜ 单元数：${units.length} ｜ 预计：${mins} 分钟`,
-        `- 先修：${mod.prerequisites.join("；")}`,
-        `- 边界：${mod.boundaryNote}`,
-        ``,
-        ...units.map(
-          (u, idx) =>
-            `${idx + 1}. **${u.title}** (${u.estimatedMinutes}m) — 组织提示：${u.teacherMaterials.teachingTips} ｜ 裁剪：${u.teacherMaterials.timeTrimNote}`
-        ),
-        ``,
-      ].join("\n")
-    );
-  }
-
-  return [
-    `# AICodingCourse 全课 ${COURSE_MODULE_RECORDS.length} 模块教师备课总手册`,
-    ``,
-    `- 生成日期：${new Date().toISOString().slice(0, 10)}`,
-    `- 覆盖模块：${COURSE_MODULE_RECORDS.length} 个模块 ｜ 合计单元：${totalCourseUnits} 个 ｜ 总预计课时：约 ${totalCourseMinutes} 分钟`,
-    ``,
-    `---`,
-    ``,
-    ...moduleSections,
-  ].join("\n");
-}
 
 export function buildKnowledgeBaseMarkdownExport(options: {
   builtInEntries: TeamKnowledgeEntry[];

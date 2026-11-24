@@ -247,7 +247,22 @@ export function claimFirstAdminApi() {
   });
 }
 
-export function loginWithEmail(email: string) {
+export interface EmailOtpRequestResponse {
+  ok: true;
+  deliveryMode: "email" | "dev_preview";
+  expiresInSeconds: number;
+  cooldownSeconds: number;
+  devPreviewCode?: string;
+}
+
+export function requestEmailOtpApi(email: string) {
+  return apiFetch<EmailOtpRequestResponse>("/api/auth/email/request-otp", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifyEmailOtpApi(email: string, code: string) {
   return apiFetch<{
     ok: true;
     token: string;
@@ -257,9 +272,9 @@ export function loginWithEmail(email: string) {
       displayName: string;
       avatarUrl: string;
     };
-  }>("/api/auth/login-email", {
+  }>("/api/auth/email/verify-otp", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, code }),
   });
 }
 
@@ -275,6 +290,23 @@ export function fetchAuthorizedModuleDetail(moduleId: string) {
   }>(`/api/curriculum/modules/${encodeURIComponent(moduleId)}`);
 }
 
+export function fetchInstructorLessonPlanMarkdownApi(moduleId: string, planId?: string) {
+  const qs = planId ? `?planId=${encodeURIComponent(planId)}` : "";
+  return apiFetch<{ ok: true; filename: string; markdown: string }>(
+    `/api/curriculum/modules/${encodeURIComponent(moduleId)}/lesson-plan${qs}`
+  );
+}
+
+export function fetchInstructorHandbookMarkdownApi(selectedPlanByModule?: Record<string, string>) {
+  const qs =
+    selectedPlanByModule && Object.keys(selectedPlanByModule).length > 0
+      ? `?plans=${encodeURIComponent(JSON.stringify(selectedPlanByModule))}`
+      : "";
+  return apiFetch<{ ok: true; filename: string; markdown: string }>(
+    `/api/curriculum/instructor-handbook${qs}`
+  );
+}
+
 export function fetchSanitizedQuiz(moduleId: string) {
   return apiFetch<{
     found: true;
@@ -288,6 +320,67 @@ export function fetchSanitizedQuiz(moduleId: string) {
       questions: SanitizedQuizQuestion[];
     };
   }>(`/api/quizzes/${encodeURIComponent(moduleId)}`);
+}
+
+export interface SingleQuestionCheckResponse {
+  ok: true;
+  moduleId: string;
+  questionId: string;
+  topic: string;
+  selectedIndex: number;
+  correctIndex: number;
+  isCorrect: boolean;
+  explanation: string;
+  reviewTarget?: {
+    label: string;
+    labId?: string;
+    moduleId?: string;
+  };
+  remediationAction: string;
+}
+
+export function checkSingleQuizQuestionApi(
+  moduleId: string,
+  questionId: string,
+  selectedIndex: number
+) {
+  return apiFetch<SingleQuestionCheckResponse>(
+    `/api/quizzes/${encodeURIComponent(moduleId)}/check-question`,
+    {
+      method: "POST",
+      body: JSON.stringify({ questionId, selectedIndex }),
+    }
+  );
+}
+
+export interface PreviewM1QuizResponse {
+  ok: true;
+  moduleId: "m1";
+  answeredCount: number;
+  correctCount: number;
+  totalCount: number;
+  scorePct: number;
+  questionResults: Array<{
+    questionId: string;
+    topic: string;
+    selectedIndex: number;
+    correctIndex: number;
+    isCorrect: boolean;
+    explanation: string;
+    reviewTarget?: {
+      label: string;
+      labId?: string;
+      moduleId?: string;
+    };
+    remediationAction: string;
+  }>;
+}
+
+export function previewM1QuizApi(answers: Record<string, number>) {
+  return apiFetch<PreviewM1QuizResponse>("/api/quizzes/m1/preview-grade", {
+    method: "POST",
+    body: JSON.stringify({ answers }),
+  });
 }
 
 export function submitQuizAnswers(moduleId: string, answers: Record<string, number>) {
@@ -417,6 +510,17 @@ export function saveCustomKbEntry(payload: {
 export function deleteCustomKbEntry(clientEntryId: string) {
   return apiFetch<{ ok: true }>(`/api/workspace/kb/${encodeURIComponent(clientEntryId)}`, {
     method: "DELETE",
+  });
+}
+
+export function previewSkillDiagnosticApi(skillId: string, answers: Record<string, number>) {
+  return apiFetch<{
+    ok: true;
+    passed: boolean;
+    results: Array<{ id: string; isCorrect: boolean; explanation: string }>;
+  }>("/api/skills/diagnostic/preview", {
+    method: "POST",
+    body: JSON.stringify({ skillId, answers }),
   });
 }
 
@@ -761,5 +865,42 @@ export function adminEnrollLearnerApi(
   return apiFetch<{ ok: true }>(`/api/admin/cohorts/${cohortId}/enroll`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function adminConfirmOrderApi(orderId: number) {
+  return apiFetch<{ ok: true }>(`/api/admin/orders/${orderId}/confirm`, {
+    method: "POST",
+  });
+}
+
+export function adminCancelOrderApi(orderId: number) {
+  return apiFetch<{ ok: true }>(`/api/admin/orders/${orderId}/cancel`, {
+    method: "POST",
+  });
+}
+
+export function adminCreateMilestoneApi(
+  cohortId: number,
+  payload: {
+    title: string;
+    moduleId: string;
+    dueDate: string;
+    sortOrder?: number;
+  }
+) {
+  return apiFetch<{ ok: true }>(`/api/admin/cohorts/${cohortId}/milestones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function adminUpdateInquiryStatusApi(
+  inquiryId: number,
+  status: "new" | "contacted" | "closed"
+) {
+  return apiFetch<{ ok: true }>(`/api/admin/inquiries/${inquiryId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
   });
 }

@@ -30,7 +30,7 @@ function formatCents(cents: number): string {
 }
 
 export default function BillingModal({ open, onClose, onEntitled }: BillingModalProps) {
-  const { session, signInWithGoogle, refreshSession, claimInitialAdmin } = useAuth();
+  const { session, refreshSession, claimInitialAdmin } = useAuth();
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [history, setHistory] = useState<{
     orders: Array<{
@@ -96,9 +96,14 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
 
   if (!open) return null;
 
+  const openEmailLogin = () => {
+    onClose();
+    window.dispatchEvent(new CustomEvent("app:open-login"));
+  };
+
   const handleCreateOrder = async () => {
     if (!session) {
-      await signInWithGoogle();
+      openEmailLogin();
       return;
     }
     if (!selectedPriceId) return;
@@ -113,9 +118,9 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
       });
       setFeedback({
         ok: true,
-        text: `已创建待支付订单 ${res.order.orderNo}（${formatCents(
+        text: `已创建待核销订单 ${res.order.orderNo}（${formatCents(
           res.order.amountCents
-        )}）。当前沙盒环境可凭管理员开通或下方激活码立即开通权益。`,
+        )}）。教务可在后台核销该订单为您开通权益，也可在上方直接兑换激活码即时开通。`,
       });
       await loadData();
     } catch (err) {
@@ -131,7 +136,7 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
   const handleRedeem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) {
-      await signInWithGoogle();
+      openEmailLogin();
       return;
     }
     if (!redeemInput.trim()) return;
@@ -240,14 +245,11 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
           ) : (
             <div className="w-full flex flex-wrap items-center justify-between gap-3">
               <span className="text-slate-300">
-                请先登录账号，以保存云端学习进度、兑换激活码或下单购买。（支持国内邮箱免密/安全令牌登录）
+                请先登录账号，以保存云端学习进度、兑换激活码或下单登记。（支持国内邮箱 6 位验证码直连登录，无需境外账号）
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  onClose();
-                  window.dispatchEvent(new CustomEvent("app:open-login"));
-                }}
+                onClick={openEmailLogin}
                 className="px-4 py-2 rounded-lg bg-gemini-cyan text-slate-950 font-semibold inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
@@ -443,7 +445,25 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
                           {ord.provider} · {formatCents(ord.amountCents)}
                         </div>
                       </div>
-                      <span className="font-mono text-gemini-cyan">{ord.status}</span>
+                      <span
+                        className={`font-mono ${
+                          ord.status === "paid"
+                            ? "text-emerald-300"
+                            : ord.status === "pending"
+                            ? "text-amber-300"
+                            : "text-slate-400"
+                        }`}
+                      >
+                        {ord.status === "paid"
+                          ? "已开通"
+                          : ord.status === "pending"
+                          ? "待核销"
+                          : ord.status === "refunded"
+                          ? "已退款"
+                          : ord.status === "cancelled"
+                          ? "已取消"
+                          : ord.status}
+                      </span>
                     </div>
                   ))}
                 </div>

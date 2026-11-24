@@ -13,7 +13,8 @@ import {
 import {
   claimFirstAdminApi,
   fetchMySession,
-  loginWithEmail as loginWithEmailApi,
+  requestEmailOtpApi,
+  verifyEmailOtpApi,
   type AuthSessionData,
 } from "@/lib/apiClient";
 import { getMemoryIdToken, setMemoryIdToken } from "@/lib/authTokenStore";
@@ -49,35 +50,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const existingToken = getMemoryIdToken();
     if (existingToken) {
-      void loadBackendSession(null).then(async () => {
-        try {
-          const data = await fetchMySession();
+      void fetchMySession()
+        .then((data) => {
+          if (cancelled) return;
           setSession(data);
           setAuthError(null);
-        } catch {
+        })
+        .catch(() => {
+          if (cancelled) return;
           setMemoryIdToken(null);
           setSession(null);
-        } finally {
-          setLoading(false);
-        }
-      });
-    } else {
-      const unsubscribe = onIdTokenChanged(auth, (user) => {
-        setFirebaseUser(user);
-        void loadBackendSession(user);
-      });
-      return () => unsubscribe();
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }
+
+    const unsubscribe = onIdTokenChanged(auth, (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        void loadBackendSession(user);
+      } else if (!getMemoryIdToken()) {
+        setSession(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [loadBackendSession]);
 
   const refreshSession = useCallback(async () => {
-    if (!auth.currentUser) {
-      setSession(null);
-      return null;
+    if (auth.currentUser) {
+      return await loadBackendSession(auth.currentUser);
     }
-    return await loadBackendSession(auth.currentUser);
+    if (getMemoryIdToken()) {
+      try {
+        const data = await fetchMySession();
+        setSession(data);
+        setAuthError(null);
+        return data;
+      } catch (err) {
+        setMemoryIdToken(null);
+        setSession(null);
+        setAuthError(err instanceof Error ? err.message : "会话已过期，请重新登录。");
+        return null;
+      }
+    }
+    setSession(null);
+    return null;
   }, [loadBackendSession]);
 
   const signInWithGoogle = useCallback(async () => {
@@ -107,17 +133,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshSession();
   }, [refreshSession]);
 
-  const signInWithEmail = useCallback(async (email: string) => {
+  const requestEmailOtp = useCallback(async (email: string) => {
+    setAuthError(null);
+    try {
+      const res = await requestEmailOtpApi(email);
+      return {
+        deliveryMode: res.deliveryMode,
+        cooldownSeconds: res.cooldownSeconds,
+        devPreviewCode: res.devPreviewCode,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "发送邮箱验证码失败";
+      setAuthError(msg);
+      throw err;
+    }
+  }, []);
+
+  const verifyEmailOtp = useCallback(async (email: string, code: string) => {
     setAuthError(null);
     setLoading(true);
     try {
-      const res = await loginWithEmailApi(email);
+      const res = await verifyEmailOtpApi(email, code);
       setMemoryIdToken(res.token);
       const data = await fetchMySession();
       setSession(data);
       setAuthError(null);
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "邮箱登录失败");
+      setMemoryIdToken(null);
+      const msg = err instanceof Error ? err.message : "验证码校验失败";
+      setAuthError(msg);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -135,7 +180,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOutUser,
         refreshSession,
         claimInitialAdmin,
-        signInWithEmail,
+        requestEmailOtp,
+        verifyEmailOtp,
       }}
     >
       {children}

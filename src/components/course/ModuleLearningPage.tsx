@@ -28,8 +28,11 @@ import {
   getSkillById,
   type SkillId,
 } from "@/data/courseSkills";
-import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
-import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
+import {
+  getModuleTeachingPackage,
+  type PublicModuleTeachingPackage,
+} from "@/data/moduleTeachingPackages";
+import { MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import {
   buildRetryWrongAnswersState,
   getQuestionRemediation,
@@ -44,7 +47,6 @@ import {
   type CourseUnit,
 } from "@/data/courseUnitsModel";
 import {
-  buildInstructorLessonPlanMarkdown,
   getModuleCompletionStats,
   M13_GOV_SIMULATION_DISCLAIMER,
   QUIZ_ANSWERS_STORAGE_KEY,
@@ -52,6 +54,7 @@ import {
   type CustomKnowledgeDraft,
   type PracticeNoteRecord,
   type SkillVerificationRecord,
+  type WorkspaceQuizScoreSummary,
 } from "@/data/courseWorkspaceStore";
 import {
   KNOWLEDGE_CATEGORY_LABELS,
@@ -64,12 +67,17 @@ import {
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 
 import {
+  checkSingleQuizQuestionApi,
   fetchAuthorizedModuleDetail,
+  fetchInstructorLessonPlanMarkdownApi,
   fetchSanitizedQuiz,
+  previewM1QuizApi,
+  previewSkillDiagnosticApi,
   submitQuizAnswers,
   submitSkillDiagnostic,
   type QuizGradeResponse,
   type SanitizedQuizQuestion,
+  type SingleQuestionCheckResponse,
 } from "@/lib/apiClient";
 
 interface ModuleLearningPageProps {
@@ -77,6 +85,7 @@ interface ModuleLearningPageProps {
   initialUnitId?: string;
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
+  latestQuizSummary?: WorkspaceQuizScoreSummary;
   hasPaidAccess?: boolean;
   isInstructorAuthorized?: boolean;
   isSignedIn?: boolean;
@@ -136,6 +145,7 @@ export default function ModuleLearningPage({
   initialUnitId,
   workspaceState,
   completedLabIds,
+  latestQuizSummary,
   hasPaidAccess = false,
   isInstructorAuthorized = false,
   isSignedIn = false,
@@ -161,16 +171,34 @@ export default function ModuleLearningPage({
   const [serverInstructorAllowed, setServerInstructorAllowed] = useState<boolean>(
     isInstructorAuthorized
   );
+  const [authorizedUnits, setAuthorizedUnits] = useState<CourseUnit[] | null>(null);
+  const [authorizedTeachingPkg, setAuthorizedTeachingPkg] =
+    useState<PublicModuleTeachingPackage | null>(null);
+  const [exportingPlan, setExportingPlan] = useState(false);
 
   useEffect(() => {
     setServerModuleAllowed(isModuleUnlocked);
     setServerInstructorAllowed(isInstructorAuthorized);
+    setAuthorizedUnits(null);
+    setAuthorizedTeachingPkg(null);
     let active = true;
     fetchAuthorizedModuleDetail(moduleRecord.id)
       .then((res) => {
         if (!active) return;
         setServerModuleAllowed(true);
         setServerInstructorAllowed(Boolean(res.instructorAuthorized));
+        if (
+          res.instructorAuthorized &&
+          res.module &&
+          Array.isArray((res.module as { units?: unknown }).units)
+        ) {
+          setAuthorizedUnits((res.module as unknown as CourseModuleRecord).units);
+        }
+        if (res.instructorAuthorized && res.teachingPackage) {
+          setAuthorizedTeachingPkg(
+            res.teachingPackage as unknown as PublicModuleTeachingPackage
+          );
+        }
       })
       .catch(() => {
         if (!active) return;
@@ -183,13 +211,18 @@ export default function ModuleLearningPage({
     };
   }, [moduleRecord.id, hasPaidAccess, isInstructorAuthorized, isFreeTrial, isModuleUnlocked]);
 
-  const activePlanId =
-    workspaceState.selectedPlanByModule[moduleRecord.id] || moduleRecord.deliveryPlans[0]?.id;
-  const activePlan =
-    moduleRecord.deliveryPlans.find((p) => p.id === activePlanId) ||
-    moduleRecord.deliveryPlans[0];
+  const effectiveModuleRecord = useMemo(
+    () => (authorizedUnits ? { ...moduleRecord, units: authorizedUnits } : moduleRecord),
+    [authorizedUnits, moduleRecord]
+  );
 
-  const defaultPlanUnits = getUnitsForPlan(moduleRecord, activePlan?.id);
+  const activePlanId =
+    workspaceState.selectedPlanByModule[moduleRecord.id] || effectiveModuleRecord.deliveryPlans[0]?.id;
+  const activePlan =
+    effectiveModuleRecord.deliveryPlans.find((p) => p.id === activePlanId) ||
+    effectiveModuleRecord.deliveryPlans[0];
+
+  const defaultPlanUnits = getUnitsForPlan(effectiveModuleRecord, activePlan?.id);
   const [showAllModuleUnits, setShowAllModuleUnits] = useState<boolean>(() =>
     Boolean(
       initialUnitId &&
@@ -199,9 +232,9 @@ export default function ModuleLearningPage({
   );
 
   const visibleUnits = useMemo(() => {
-    if (showAllModuleUnits) return moduleRecord.units;
-    return getUnitsForPlan(moduleRecord, activePlan?.id);
-  }, [moduleRecord, activePlan?.id, showAllModuleUnits]);
+    if (showAllModuleUnits) return effectiveModuleRecord.units;
+    return getUnitsForPlan(effectiveModuleRecord, activePlan?.id);
+  }, [effectiveModuleRecord, activePlan?.id, showAllModuleUnits]);
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>(() => {
     if (initialUnitId && moduleRecord.units.some((u) => u.id === initialUnitId)) {
@@ -222,6 +255,9 @@ export default function ModuleLearningPage({
   const [sanitizedQuestions, setSanitizedQuestions] = useState<SanitizedQuizQuestion[] | null>(
     null
   );
+  const [gradedByQuestionId, setGradedByQuestionId] = useState<
+    Record<string, SingleQuestionCheckResponse>
+  >({});
   const [serverQuizGrade, setServerQuizGrade] = useState<QuizGradeResponse | null>(null);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
@@ -241,6 +277,49 @@ export default function ModuleLearningPage({
     };
   }, [moduleRecord.id, isModuleUnlocked]);
 
+  useEffect(() => {
+    setGradedByQuestionId({});
+    setServerQuizGrade(null);
+    if (!isModuleUnlocked) return;
+    const modQuiz = MODULE_QUIZZES[moduleRecord.id];
+    if (!modQuiz) return;
+    const storedEntries = modQuiz.questions
+      .filter((q) => typeof quizAnswers[q.id] === "number")
+      .map((q) => [q.id, quizAnswers[q.id]] as const);
+    if (storedEntries.length === 0) return;
+
+    let active = true;
+    if (moduleRecord.id === "m1") {
+      void previewM1QuizApi(Object.fromEntries(storedEntries))
+        .then((res) => {
+          if (!active) return;
+          const next: Record<string, SingleQuestionCheckResponse> = {};
+          for (const item of res.questionResults) {
+            next[item.questionId] = { ok: true, moduleId: "m1", ...item };
+          }
+          setGradedByQuestionId(next);
+        })
+        .catch(() => {});
+    } else if (isSignedIn) {
+      void Promise.all(
+        storedEntries.map(([qId, optIdx]) =>
+          checkSingleQuizQuestionApi(moduleRecord.id, qId, optIdx).catch(() => null)
+        )
+      ).then((results) => {
+        if (!active) return;
+        const next: Record<string, SingleQuestionCheckResponse> = {};
+        for (const item of results) {
+          if (item) next[item.questionId] = item;
+        }
+        setGradedByQuestionId(next);
+      });
+    }
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleRecord.id, isModuleUnlocked, isSignedIn]);
+
   // Skill verification interactive state
   const [activeDiagSkillId, setActiveDiagSkillId] = useState<SkillId | null>(null);
   const [diagAnswersBySkill, setDiagAnswersBySkill] = useState<
@@ -258,9 +337,9 @@ export default function ModuleLearningPage({
 
   const activeUnit: CourseUnit =
     visibleUnits.find((u) => u.id === selectedUnitId) ||
-    moduleRecord.units.find((u) => u.id === selectedUnitId) ||
+    effectiveModuleRecord.units.find((u) => u.id === selectedUnitId) ||
     visibleUnits[0] ||
-    moduleRecord.units[0];
+    effectiveModuleRecord.units[0];
 
   const activeUnitId = activeUnit?.id;
   const activePlanResolvedId = activePlan?.id;
@@ -283,11 +362,11 @@ export default function ModuleLearningPage({
     serverInstructorAllowed &&
     workspaceState.viewMode === "instructor";
   const stats = getModuleCompletionStats(
-    moduleRecord,
+    effectiveModuleRecord,
     workspaceState,
     showAllModuleUnits ? undefined : activePlan?.id
   );
-  const teachingPkg = getModuleTeachingPackage(moduleRecord.id);
+  const teachingPkg = authorizedTeachingPkg ?? getModuleTeachingPackage(moduleRecord.id);
 
   const unitPractice = activeUnit ? workspaceState.practiceNotes[activeUnit.id] : undefined;
   const unitDodChecked = activeUnit ? workspaceState.dodCheckedByUnit[activeUnit.id] || [] : [];
@@ -307,7 +386,6 @@ export default function ModuleLearningPage({
     : [];
 
   const moduleQuiz = MODULE_QUIZZES[moduleRecord.id];
-  const quizSummary = moduleQuiz ? getQuizReviewSummary(moduleQuiz, quizAnswers) : null;
 
   const completedModuleIdsSet = useMemo(() => {
     const done = new Set<string>();
@@ -363,20 +441,27 @@ export default function ModuleLearningPage({
     }
   };
 
-  const handleExportInstructorPlan = () => {
-    const md = buildInstructorLessonPlanMarkdown(moduleRecord, activePlan?.id);
+  const handleExportInstructorPlan = async () => {
+    setExportingPlan(true);
     try {
-      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${moduleRecord.code}-${activePlan?.shortLabel || "备课讲义"}.md`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const res = await fetchInstructorLessonPlanMarkdownApi(moduleRecord.id, activePlan?.id);
+      try {
+        const blob = new Blob([res.markdown], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = res.filename || `${moduleRecord.code}-${activePlan?.shortLabel || "备课讲义"}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        await navigator.clipboard?.writeText(res.markdown);
+      }
     } catch {
-      void navigator.clipboard?.writeText(md);
+      // Non-fatal fallback notice avoided inside modal
+    } finally {
+      setExportingPlan(false);
     }
   };
 
@@ -388,7 +473,7 @@ export default function ModuleLearningPage({
   const handleSelectPlan = (planId: string) => {
     setShowAllModuleUnits(false);
     onSelectPlan(moduleRecord.id, planId);
-    const nextPlanUnits = getUnitsForPlan(moduleRecord, planId);
+    const nextPlanUnits = getUnitsForPlan(effectiveModuleRecord, planId);
     if (nextPlanUnits.length > 0 && !nextPlanUnits.some((u) => u.id === activeUnit?.id)) {
       setSelectedUnitId(nextPlanUnits[0].id);
     }
@@ -409,6 +494,11 @@ export default function ModuleLearningPage({
     setQuizAnswers(next);
     setQuizError(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, next);
+    void checkSingleQuizQuestionApi(moduleRecord.id, questionId, optionIdx)
+      .then((res) => {
+        setGradedByQuestionId((prev) => ({ ...prev, [questionId]: res }));
+      })
+      .catch(() => {});
   };
 
   const handleServerQuizSubmit = async () => {
@@ -418,6 +508,22 @@ export default function ModuleLearningPage({
     try {
       const result = await submitQuizAnswers(moduleRecord.id, quizAnswers);
       setServerQuizGrade(result);
+      const nextGraded: Record<string, SingleQuestionCheckResponse> = {};
+      for (const r of result.questionResults) {
+        nextGraded[r.questionId] = {
+          ok: true,
+          moduleId: moduleRecord.id,
+          questionId: r.questionId,
+          topic: r.topic,
+          selectedIndex: r.selectedIndex ?? quizAnswers[r.questionId] ?? 0,
+          correctIndex: r.correctIndex,
+          isCorrect: r.isCorrect,
+          explanation: r.explanation,
+          reviewTarget: r.reviewTarget,
+          remediationAction: r.remediationAction,
+        };
+      }
+      setGradedByQuestionId((prev) => ({ ...prev, ...nextGraded }));
       onRefreshCloudState?.();
     } catch (err) {
       setQuizError(err instanceof Error ? err.message : "提交判分失败，请确认已登录。");
@@ -428,14 +534,30 @@ export default function ModuleLearningPage({
 
   const handleRetryWrongQuiz = () => {
     if (!moduleQuiz) return;
-    const retryState = buildRetryWrongAnswersState(moduleQuiz.questions, quizAnswers);
+    const correctIds = new Set<string>();
+    for (const q of moduleQuiz.questions) {
+      const serverQ = serverQuizGrade?.questionResults.find((r) => r.questionId === q.id);
+      const grade = serverQ ?? gradedByQuestionId[q.id];
+      if (grade?.isCorrect) {
+        correctIds.add(q.id);
+      }
+    }
+    const retryState = buildRetryWrongAnswersState(moduleQuiz.questions, quizAnswers, correctIds);
     setQuizAnswers(retryState.keptAnswers);
+    setGradedByQuestionId((prev) => {
+      const next: Record<string, SingleQuestionCheckResponse> = {};
+      for (const qId of Object.keys(retryState.keptAnswers)) {
+        if (prev[qId]) next[qId] = prev[qId];
+      }
+      return next;
+    });
     setServerQuizGrade(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, retryState.keptAnswers);
   };
 
   const handleResetQuiz = () => {
     setQuizAnswers({});
+    setGradedByQuestionId({});
     setServerQuizGrade(null);
     setQuizError(null);
     saveQuizAnswers(moduleRecord.id, moduleRecord.order, {});
@@ -488,25 +610,33 @@ export default function ModuleLearningPage({
       }
     }
 
-    const correctCount = sk.diagnosticQuestions.filter((q) => ans[q.id] === q.correctIndex).length;
-    if (correctCount < sk.diagnosticQuestions.length) {
+    try {
+      const res = await previewSkillDiagnosticApi(skillId, ans);
+      const correctCount = res.results.filter((r) => r.isCorrect).length;
+      if (!res.passed) {
+        setDiagFeedbackBySkill((prev) => ({
+          ...prev,
+          [skillId]: `诊断得分 ${correctCount}/${res.results.length}，须全部答对才可通过；请核对解析后重选。`,
+        }));
+        return;
+      }
+      onVerifySkill({
+        skillId,
+        method: "diagnostic-check",
+        evidenceSummary: `通过 ${correctCount}/${res.results.length} 能力诊断测评（本地体验）`,
+        verifiedAt: new Date().toISOString().slice(0, 10),
+      });
       setDiagFeedbackBySkill((prev) => ({
         ...prev,
-        [skillId]: `诊断得分 ${correctCount}/${sk.diagnosticQuestions.length}，须全部答对才可通过；请核对解析后重选。`,
+        [skillId]: "能力诊断通过，已暂存到本地（登录后可进行服务端认证同步）。",
       }));
-      return;
+      setActiveDiagSkillId(null);
+    } catch (err) {
+      setDiagFeedbackBySkill((prev) => ({
+        ...prev,
+        [skillId]: err instanceof Error ? err.message : "诊断验证失败，请稍后重试。",
+      }));
     }
-    onVerifySkill({
-      skillId,
-      method: "diagnostic-check",
-      evidenceSummary: `通过 ${correctCount}/${sk.diagnosticQuestions.length} 能力诊断测评（本地体验）`,
-      verifiedAt: new Date().toISOString().slice(0, 10),
-    });
-    setDiagFeedbackBySkill((prev) => ({
-      ...prev,
-      [skillId]: "能力诊断通过，已暂存到本地（登录后可进行服务端认证同步）。",
-    }));
-    setActiveDiagSkillId(null);
   };
 
   const handleSubmitStarterEvidence = (skillId: SkillId) => {
@@ -685,12 +815,13 @@ export default function ModuleLearningPage({
             {isInstructorView && (
               <button
                 type="button"
-                onClick={handleExportInstructorPlan}
-                className="px-3 py-1.5 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                disabled={exportingPlan}
+                onClick={() => void handleExportInstructorPlan()}
+                className="px-3 py-1.5 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
                 title="按当前选定的授课方案导出本模块教师备课讲义（含教学提示、示范与参考答案）"
               >
                 <Download className="w-3.5 h-3.5 text-gemini-purple" />
-                <span>导出备课讲义 (.md)</span>
+                <span>{exportingPlan ? "导出中..." : "导出备课讲义 (.md)"}</span>
               </button>
             )}
 
@@ -1447,8 +1578,30 @@ export default function ModuleLearningPage({
                 </div>
               )}
 
-              {/* Inline Quiz Runner (Server-sanitized & server-graded when signed in) */}
-              {activeUnit.type === "quiz" && moduleQuiz && (
+              {/* Inline Quiz Runner (Server-sanitized & server-graded) */}
+              {activeUnit.type === "quiz" && moduleQuiz && (() => {
+                const totalQ = moduleQuiz.questions.length;
+                const answeredQ = moduleQuiz.questions.filter(
+                  (q) => typeof quizAnswers[q.id] === "number"
+                ).length;
+                const gradedCorrectQ = moduleQuiz.questions.filter((q) => {
+                  const sr = serverQuizGrade?.questionResults.find((r) => r.questionId === q.id);
+                  return Boolean(sr ? sr.isCorrect : gradedByQuestionId[q.id]?.isCorrect);
+                }).length;
+                const gradedWrongQ = moduleQuiz.questions.filter((q) => {
+                  const sr = serverQuizGrade?.questionResults.find((r) => r.questionId === q.id);
+                  const g = sr ?? gradedByQuestionId[q.id];
+                  return Boolean(g && !g.isCorrect);
+                }).length;
+                const gradedCount = moduleQuiz.questions.filter((q) =>
+                  Boolean(
+                    serverQuizGrade?.questionResults.find((r) => r.questionId === q.id) ??
+                      gradedByQuestionId[q.id]
+                  )
+                ).length;
+                const pct = totalQ > 0 ? Math.round((gradedCorrectQ / totalQ) * 100) : 0;
+
+                return (
                 <div className="p-4 rounded-xl bg-[#070b14] border border-white/15 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-bold text-white">
@@ -1461,20 +1614,28 @@ export default function ModuleLearningPage({
                           {serverQuizGrade.scorePct}%) ·{" "}
                           {serverQuizGrade.passed ? "通过" : "建议巩固错题"}
                         </span>
-                      ) : !isSignedIn && quizSummary ? (
+                      ) : isSignedIn && latestQuizSummary ? (
                         <span className="text-xs font-mono text-gemini-cyan tabular-nums">
-                          已答 {quizSummary.answeredCount}/{moduleQuiz.questions.length} · 正确{" "}
-                          {quizSummary.correctCount} ({quizSummary.accuracyPct}%)
+                          云端记录：{latestQuizSummary.correctCount}/{latestQuizSummary.totalCount} (
+                          {latestQuizSummary.scorePct}%)
+                        </span>
+                      ) : gradedCount > 0 ? (
+                        <span className="text-xs font-mono text-gemini-cyan tabular-nums">
+                          已答 {answeredQ}/{totalQ} · 正确 {gradedCorrectQ} ({pct}%)
+                        </span>
+                      ) : answeredQ > 0 ? (
+                        <span className="text-xs font-mono text-gemini-cyan tabular-nums">
+                          已答 {answeredQ}/{totalQ}
                         </span>
                       ) : null}
 
-                      {!isSignedIn && quizSummary && quizSummary.missedQuestions.length > 0 && (
+                      {gradedWrongQ > 0 && (
                         <button
                           type="button"
                           onClick={handleRetryWrongQuiz}
                           className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-[11px] font-mono text-amber-200 cursor-pointer"
                         >
-                          只重做错题 ({quizSummary.missedQuestions.length})
+                          只重做错题 ({gradedWrongQ})
                         </button>
                       )}
                       {Object.keys(quizAnswers).length > 0 && (
@@ -1501,22 +1662,15 @@ export default function ModuleLearningPage({
                       }))
                     ).map((q, qIdx) => {
                       const picked = quizAnswers[q.id];
-                      const answered = typeof picked === "number";
                       const serverQ = serverQuizGrade?.questionResults.find(
                         (r) => r.questionId === q.id
                       );
-                      const fallbackFullQ = !isSignedIn
-                        ? moduleQuiz.questions.find((mq) => mq.id === q.id)
-                        : undefined;
-                      const showGraded = isSignedIn ? Boolean(serverQ) : answered;
-                      const correctIdx = serverQ
-                        ? serverQ.correctIndex
-                        : fallbackFullQ?.correctIndex;
-                      const isCorrect = serverQ
-                        ? serverQ.isCorrect
-                        : typeof correctIdx === "number" && picked === correctIdx;
-                      const explanation =
-                        serverQ?.explanation ?? fallbackFullQ?.explanation ?? "";
+                      const singleQ = gradedByQuestionId[q.id];
+                      const activeGrade = serverQ ?? singleQ;
+                      const showGraded = Boolean(activeGrade);
+                      const correctIdx = activeGrade?.correctIndex;
+                      const isCorrect = Boolean(activeGrade?.isCorrect);
+                      const explanation = activeGrade?.explanation ?? "";
                       const rem = getQuestionRemediation(q.id, moduleRecord.id);
 
                       return (
@@ -1579,7 +1733,7 @@ export default function ModuleLearningPage({
                               {!isCorrect && (
                                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-slate-200">
                                   <span>
-                                    补救建议：{serverQ?.remediationAction ?? rem.reviewAction}
+                                    补救建议：{activeGrade?.remediationAction ?? rem.reviewAction}
                                   </span>
                                   {rem.labId && (
                                     <button
@@ -1627,7 +1781,8 @@ export default function ModuleLearningPage({
 
                   {quizError && <div className="text-xs text-rose-300">{quizError}</div>}
                 </div>
-              )}
+                );
+              })()}
 
               {/* 3-Tier Transfer Tasks Selector */}
               {(activeUnit.type === "transfer-task" || activeUnit.afterClassNote) && teachingPkg && (

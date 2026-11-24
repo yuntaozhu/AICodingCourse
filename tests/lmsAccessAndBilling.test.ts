@@ -232,3 +232,170 @@ test("resolvePostgresPoolConfig prioritizes Cloud SQL sockets without TLS and en
   assert.equal(cloudSqlWins.host, "/cloudsql/proj:europe-west1:inst");
   assert.equal(cloudSqlWins.ssl, undefined);
 });
+
+test("emailOtpService hashes/verifies 6-digit codes safely and enforces 60s cooldown", async () => {
+  const {
+    hashEmailOtpCode,
+    isOtpCooldownActive,
+    normalizeEmailAddress,
+    verifyEmailOtpHash,
+  } = await import("../src/server/services/emailOtpService.ts");
+
+  assert.equal(normalizeEmailAddress("  User@Example.COM "), "user@example.com");
+
+  const storedHash = hashEmailOtpCode("User@Example.com", "482913", "salt-abc-123");
+  assert.equal(verifyEmailOtpHash("user@example.com", "482913", storedHash), true);
+  assert.equal(verifyEmailOtpHash("other@example.com", "482913", storedHash), false);
+  assert.equal(verifyEmailOtpHash("user@example.com", "000000", storedHash), false);
+  assert.equal(verifyEmailOtpHash("user@example.com", "482913", "badhashformat"), false);
+  assert.equal(
+    verifyEmailOtpHash("user@example.com", "482913", `${storedHash.slice(0, -1)}0`),
+    false
+  );
+
+  const baseTime = new Date("2026-11-23T12:00:00.000Z");
+  const duringCooldown = isOtpCooldownActive(baseTime, new Date("2026-11-23T12:00:45.000Z"));
+  assert.equal(duringCooldown.active, true);
+  assert.equal(duringCooldown.retryAfterSeconds, 15);
+
+  const afterCooldown = isOtpCooldownActive(baseTime, new Date("2026-11-23T12:01:01.000Z"));
+  assert.equal(afterCooldown.active, false);
+  assert.equal(afterCooldown.retryAfterSeconds, 0);
+});
+
+test("tokenService uses non-hardcoded secret and rejects tampered session tokens", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { getSessionSigningSecret, signToken } = await import(
+    "../src/server/services/tokenService.ts"
+  );
+
+  const tokenSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/server/services/tokenService.ts"),
+    "utf8"
+  );
+  assert.equal(
+    tokenSrc.includes("aicoding-dev-secret"),
+    false,
+    "tokenService must never contain hardcoded fallback literal secret"
+  );
+  assert.ok(getSessionSigningSecret().length >= 32);
+
+  const token = signToken({ userId: 42, email: "student@example.com" });
+  const parts = token.split(".");
+  assert.equal(parts.length, 3);
+  const decoded = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+    userId: number;
+    email: string;
+    exp: number;
+  };
+  assert.equal(decoded.userId, 42);
+  assert.equal(decoded.email, "student@example.com");
+  assert.ok(decoded.exp > Math.floor(Date.now() / 1000));
+});
+
+test("server grading endpoints gate M2+ single-question checks and return M1/skill previews", async () => {
+  const {
+    buildFullCourseInstructorHandbookMarkdown,
+    buildInstructorLessonPlanMarkdown,
+    gradePreviewM1Quiz,
+    gradePreviewSkillDiagnostic,
+    gradeSingleQuizQuestion,
+  } = await import("../src/server/services/curriculumService.ts");
+  const { MODULE_QUIZZES } = await import("../src/server/data/privateQuizBank.ts");
+  const { COURSE_SKILLS } = await import("../src/server/data/privateSkills.ts");
+
+  const m1FirstQ = MODULE_QUIZZES.m1.questions[0];
+  const m1Preview = gradePreviewM1Quiz({ [m1FirstQ.id]: m1FirstQ.correctIndex });
+  assert.equal(m1Preview.moduleId, "m1");
+  assert.equal(m1Preview.correctCount, 1);
+  assert.equal(m1Preview.questionResults[0].isCorrect, true);
+
+  const m2SingleUnpaid = gradeSingleQuizQuestion({
+    moduleId: "m2",
+    questionId: MODULE_QUIZZES.m2.questions[0].id,
+    selectedIndex: 0,
+    hasPaidAccess: false,
+  });
+  assert.equal(m2SingleUnpaid.ok, false);
+  if (!m2SingleUnpaid.ok) {
+    assert.equal(m2SingleUnpaid.status, 403);
+  }
+
+  const m2Q = MODULE_QUIZZES.m2.questions[0];
+  const m2SinglePaid = gradeSingleQuizQuestion({
+    moduleId: "m2",
+    questionId: m2Q.id,
+    selectedIndex: m2Q.correctIndex,
+    hasPaidAccess: true,
+  });
+  assert.equal(m2SinglePaid.ok, true);
+  if (m2SinglePaid.ok) {
+    assert.equal(m2SinglePaid.isCorrect, true);
+    assert.ok(m2SinglePaid.explanation.length > 5);
+  }
+
+  const skill = COURSE_SKILLS.find((s) => s.diagnosticQuestions.length > 0)!;
+  const diagRight = gradePreviewSkillDiagnostic({
+    skillId: skill.id,
+    answers: Object.fromEntries(skill.diagnosticQuestions.map((dq) => [dq.id, dq.correctIndex])),
+  });
+  assert.equal(diagRight.ok, true);
+  if (diagRight.ok) {
+    assert.equal(diagRight.passed, true);
+  }
+
+  const m1PlanMd = buildInstructorLessonPlanMarkdown("m1", "m1-plan-short");
+  assert.ok(m1PlanMd && m1PlanMd.includes("分单元备课指南与参考答案"));
+  const handbookMd = buildFullCourseInstructorHandbookMarkdown({});
+  assert.ok(handbookMd.includes("AICodingCourse 全课 14 模块教师备课总手册"));
+});
+
+test("client src/data modules strip quiz answers, skill answers, and instructor materials", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+
+  const clientFiles = [
+    "src/data/moduleQuizzes.ts",
+    "src/data/moduleTeachingPackages.ts",
+    "src/data/courseUnitsModel.ts",
+    "src/data/courseSkills.ts",
+    "src/data/courseWorkspaceStore.ts",
+  ];
+  const forbiddenPatterns = [
+    /\bcorrectIndex\s*:/,
+    /\breferenceAnswers\s*:\s*\[[^\]]+/,
+    /\bstuckStudentPrompts\s*:\s*\[[^\]]+/,
+    /\bacceptableAlternatives\s*:\s*\[[^\]]+/,
+    /\bnoKeyOfflineFallback\s*:\s*"[^"]+/,
+    /\bteachingTips\s*:\s*"[^"]+/,
+    /\btrimAndMergeNote\s*:\s*"[^"]+/,
+  ];
+
+  for (const relPath of clientFiles) {
+    const content = fs.readFileSync(path.resolve(process.cwd(), relPath), "utf8");
+    for (const pattern of forbiddenPatterns) {
+      assert.equal(
+        pattern.test(content),
+        false,
+        `${relPath} must not contain secret pattern ${pattern}`
+      );
+    }
+  }
+});
+
+test("domestic access readiness: index.html avoids Google Fonts CDN and BillingModal routes to email OTP", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+
+  const html = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf8");
+  assert.equal(html.includes("fonts.googleapis.com"), false);
+  assert.equal(html.includes("fonts.gstatic.com"), false);
+
+  const billingModal = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/lms/BillingModal.tsx"),
+    "utf8"
+  );
+  assert.equal(billingModal.includes("signInWithGoogle"), false);
+  assert.equal(billingModal.includes("app:open-login"), true);
+});

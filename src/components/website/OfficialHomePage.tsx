@@ -4,31 +4,36 @@ import {
   BookOpen,
   Check,
   CheckCircle2,
-  CreditCard,
+  ChevronDown,
+  FlaskConical,
   GraduationCap,
   Layers,
   Lock,
-  LogIn,
-  LogOut,
   Presentation as PresentationIcon,
   Send,
   ShieldCheck,
-  Sparkles,
   Users,
 } from "lucide-react";
 import heroImg from "@/assets/images/hero_ai_workshop_1795338779605.jpg";
 import govTrackImg from "@/assets/images/track_governance_blueprint_1795338778462.jpg";
 import engTrackImg from "@/assets/images/track_engineering_harness_1795338777589.jpg";
+import PlanPromptSandbox from "@/components/sandboxes/PlanPromptSandbox";
 import { useAuth } from "@/context/authContextCore";
-import { COURSE_LABS, COURSE_MODULES, COURSE_TRACKS } from "@/data/courseCurriculum";
+import { COURSE_MODULES, COURSE_TRACKS } from "@/data/courseCurriculum";
+import { getFreeTrialModulePreview, getPublicCourseMetrics } from "@/data/courseMetrics";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "@/data/courseWorkspaceStore";
+import { MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import {
   fetchCatalog,
+  previewM1QuizApi,
   submitInquiry,
   type CatalogResponse,
+  type PreviewM1QuizResponse,
 } from "@/lib/apiClient";
+import WebsiteNavbar, { type WebsitePageRoute } from "./WebsiteNavbar";
 
 interface OfficialHomePageProps {
+  onNavigatePage: (page: WebsitePageRoute) => void;
   onEnterWorkspace: (moduleId?: string) => void;
   onEnterSlides: (moduleId?: string) => void;
   onOpenBilling: () => void;
@@ -37,51 +42,176 @@ interface OfficialHomePageProps {
   onOpenAdminConsole: () => void;
 }
 
-const VERIFIED_CASE_STUDIES = [
+const PAIN_POINTS = [
   {
-    id: "himcm",
-    code: "CASE 01",
-    title: "HiMCM #19243 数模实战",
-    domain: "竞赛建模与可验证推理",
-    summary:
-      "将问题拆解、参数敏感性脚本与论文图表核验串联为 SDD（Spec-Driven）工作流，以可复跑脚本替代一次性问答拼凑。",
-    modulesUsed: "M1 · M2 · M5 · M11",
+    index: "01",
+    title: "改动越改越乱，修好 A 页面却搞崩 B 接口",
+    detail:
+      "缺少范围边界与文件护栏，每次让 AI 重写都连带修改无关模块，项目很快退化成无法维护的拼凑代码。",
   },
   {
+    index: "02",
+    title: "AI 编造结果，甚至修改断言“凑绿灯”",
+    detail:
+      "模型遇到报错时会倾向于静默降级、硬编码假数据或跳过失败测试用例，表面看似跑通，实际埋下线上故障。",
+  },
+  {
+    index: "03",
+    title: "报错不会定位，只能把红色日志反复贴给模型",
+    detail:
+      "分不清问题出在前端请求、服务端鉴权、数据库 Schema 还是环境变量缺失，陷入无休止的盲目重试。",
+  },
+  {
+    index: "04",
+    title: "换个新对话就失忆，经验无法复用到下一个项目",
+    detail:
+      "规范与踩坑记录全部留在零散聊天窗口里，没有沉淀为仓库规则（.mdc）、验证清单与可核验交接物。",
+  },
+];
+
+const FIVE_STEP_METHOD = [
+  {
+    step: "01",
+    title: "提出目标",
+    action: "澄清场景与最终可运行产物",
+    artifact: "结构化 Intent 声明",
+    modules: "M1",
+  },
+  {
+    step: "02",
+    title: "写清边界",
+    action: "锁定数据契约、鉴权与禁改目录",
+    artifact: "Plan 蓝图与 .mdc 规则",
+    modules: "M2 · M4 · M9",
+  },
+  {
+    step: "03",
+    title: "指挥 AI",
+    action: "按最小切片调度 Plan / Agent",
+    artifact: "受控上下文切片清单",
+    modules: "M3 · M8",
+  },
+  {
+    step: "04",
+    title: "运行验证",
+    action: "用退出码、单测与安全检查说话",
+    artifact: "DoD 检查清单与自愈闭环",
+    modules: "M5 · M6 · M12",
+  },
+  {
+    step: "05",
+    title: "沉淀经验",
+    action: "导出复盘文档与可复用规则资产",
+    artifact: "Markdown 归档与双轨结课",
+    modules: "M7 · M13",
+  },
+];
+
+const VERIFIED_CASE_STUDIES = [
+  {
     id: "novel",
-    code: "CASE 02",
+    code: "CASE 01",
     title: "AI Novel Studio",
-    domain: "长程创作状态机与上下文工程",
-    summary:
-      "用长程 Harness 与结构化状态文件追踪人物设定、章节冲突与版本回滚，解决长文本生成中的上下文漂移与遗忘。",
+    background: "个人创作者 · 长程创作工具开发",
+    scope: "多章节状态机、人物设定追踪与版本回滚面板",
+    aiBoundary: "Cursor Agent 生成组件与状态逻辑 · 长程 Harness（M2/M4/M8）约束文件隔离",
+    humanVerified: "创作者亲自核验章节状态回滚一致性、数据持久化与前端交互边界",
     modulesUsed: "M2 · M4 · M8 · M12",
   },
   {
     id: "medical-geo",
-    code: "CASE 03",
+    code: "CASE 02",
     title: "医疗公司 GEO 系统",
-    domain: "强合规领域知识库与权限隔离",
-    summary:
-      "采用 Pre-filter 元数据鉴权 + 来源可溯引用机制，严格约束医学科普与营销内容的知识边界与人工复核门禁。",
+    background: "业务合规团队 · 领域知识库检索原型",
+    scope: "受限医学资料检索与内容生成工作台（含引用溯源锚点）",
+    aiBoundary: "检索前强制 Pre-filter 元数据鉴权 · 仅引用活跃版本文档（M11/M12/M13-Gov）",
+    humanVerified: "合规专员人工抽检越权拒绝、过期文档拦截与每条引文原始出处",
     modulesUsed: "M4 · M11 · M12 · M13-Gov",
   },
   {
-    id: "ece-brain",
-    code: "CASE 04",
-    title: "ECE-Brain-Meeting",
-    domain: "科研团队多模态会议与协作工作流",
-    summary:
-      "沉淀团队 .cursor/rules 与 MCP 工具链，把实验室周会录音、文献笔记与待办实验自动结构化为可检索知识包。",
-    modulesUsed: "M4 · M6 · M9 · M12",
+    id: "philosophy",
+    code: "CASE 03",
+    title: "哲学研究平台",
+    background: "非传统工程背景学者 · 原典文献索引工作台",
+    scope: "跨语种文献整理、段落对照与防幻觉引文校验界面",
+    aiBoundary: "M2 上下文降噪 + M10 组件规范 + M12 引用锚点检索框架",
+    humanVerified: "研究者本人核对原典译名、卷次出处及无证据时的安全拒答行为",
+    modulesUsed: "M2 · M10 · M12 · M13-Eng",
   },
   {
-    id: "philosophy",
+    id: "himcm",
+    code: "CASE 04",
+    title: "HiMCM #19243 数模工作流",
+    background: "竞赛与 STEM 实践 · 参数敏感性脚本整理",
+    scope: "将数学建模拆解为可复跑数据脚本与论文图表核验流程",
+    aiBoundary: "AI 辅助生成清洗与绘图脚本 · 禁止代写论证或编造实验结论",
+    humanVerified: "参赛学生核验数学假设、原始数据集口径与复跑输出图表一致",
+    modulesUsed: "M1 · M2 · M5 · M11",
+  },
+  {
+    id: "ece-brain",
     code: "CASE 05",
-    title: "哲学研究平台",
-    domain: "人文文献索引与引文核验工作台",
-    summary:
-      "针对跨语种一手原典构建分级 KB 与反幻觉引用检查，确保生成论点均附带章节出处与版本核验标记。",
-    modulesUsed: "M2 · M10 · M12 · M13-Eng",
+    title: "ECE-Brain-Meeting",
+    background: "高校科研协作组 · 多模态组会纪要沉淀",
+    scope: "会议纪要结构化、文献卡片索引与实验待办归档工作流",
+    aiBoundary: "仓库共享 .cursor/rules 规范（M4）+ 检索前隔离（M12）",
+    humanVerified: "团队成员确认实验参数与未发表敏感数据不进入公共索引",
+    modulesUsed: "M4 · M6 · M9 · M12",
+  },
+];
+
+const COMPARISON_ROWS = [
+  {
+    label: "适合人群",
+    selfPaced: "时间碎片化、具备一定自驱力、希望按自己节奏系统学习并随时查资料的创作者与开发者",
+    cohort: "希望在 4～6 周内有固定节奏、做出可展示作品并获得指导老师逐项点评与纠偏的学员",
+  },
+  {
+    label: "核心内容与沙盘",
+    selfPaced: "解锁全部 14 模块单元、20 个内置交互沙盘、测验判分与 Markdown 成果导出",
+    cohort: "包含「自主畅学卡」全部内容与 AI 配额权限",
+  },
+  {
+    label: "直播与班级节奏",
+    selfPaced: "无固定开班周期，随时开通即刻按建议路径学习",
+    cohort: "固定期次小班课表（如 COHORT-2026-Q4），含直播串讲与里程碑打卡节奏",
+  },
+  {
+    label: "作业点评与认证",
+    selfPaced: "依赖沙盘实时审计与服务端测验反馈，不含人工批改",
+    cohort: "提交阶段作业与自检快照，教师分班人工审校，支持打回修改、重交与 SkillGrant 认证",
+  },
+  {
+    label: "有效期与开班/退款",
+    selfPaced: "月卡（30 天）/ 季卡（90 天）/ 年卡（365 天）可选，支持兑换码或订单结算",
+    cohort: "按对应期次服务周期履约（当前支持入班码激活或提交预约咨询，名额满额即停招）",
+  },
+];
+
+const HOME_FAQ_ITEMS = [
+  {
+    q: "零基础或非技术创作者能学会吗，需要什么前置基础？",
+    a: "可以。本课程专门设计了「非技术创作者 / 产品架构线（M1 → M9 → M3 → M10 → M11 → M13-Gov）」，你不需要手写复杂后端框架，但需要具备基本电脑文件操作习惯，并愿意按照规则把需求边界写清楚、亲自核验运行结果。",
+  },
+  {
+    q: "学习需要准备什么设备和 AI 订阅费用？",
+    a: "一台能正常联网运行现代浏览器的电脑即可体验全部 14 模块讲义与 20 个交互沙盘。若在本地同步开发自己的真实项目，建议安装 Cursor（有免费额度，按需选择官方订阅）与 Node.js 环境。",
+  },
+  {
+    q: "站内的 AI 辅助评测（如 Bugbot 演示）有配额或次数限制吗？",
+    a: "有。为保障平台稳定性与公平使用，服务端 AI 辅助接口设置了按账号的每日调用配额防护；所有核心交互沙盘（如 Lab 01 提示词装配、Lab 03 MCP 审计等）也全部内置本地确定性规则引擎，无外部模型额度时依然可以完整演练。",
+  },
+  {
+    q: "我上传的作业、笔记和附件如何处理，会有隐私风险吗？",
+    a: "课程严格要求学员在提交作业截图、片段或模板时提前清理真实密钥（如 sk-/ghp_ 等）与敏感业务数据；小班作业按学员账号与所属期次分班隔离，只有授权的带班教师与管理员可查看审校，不会公开展示未获授权的学员仓库。",
+  },
+  {
+    q: "会员有效期怎么算？目前如何开通与退换？",
+    a: "自主畅学卡按所选周期（30 / 90 / 365 天）自激活当日起计算；当前平台支持邮箱账号登录后提交订单确认、或使用教务发放的兑换码即时激活。若在 7 日内未完成超过 2 个付费模块或未参与小班批改前对课程不满意，可通过页面底部咨询通道联系教务协助处理。",
+  },
+  {
+    q: "我是家长（关注青少年科创）或研发团队负责人，应该如何查看对应方案？",
+    a: "为保证主站聚焦创作者与独立开发者体验，我们已拆出独立专题页：家长与青少年同学请访问「青少年营」专题页；研发团队与高校实验室请访问「团队内训」专题页。",
   },
 ];
 
@@ -92,6 +222,7 @@ function formatCents(cents: number): string {
 }
 
 export default function OfficialHomePage({
+  onNavigatePage,
   onEnterWorkspace,
   onEnterSlides,
   onOpenBilling,
@@ -99,9 +230,16 @@ export default function OfficialHomePage({
   onOpenInstructorCockpit,
   onOpenAdminConsole,
 }: OfficialHomePageProps) {
-  const { session, loading: authLoading, signOutUser } = useAuth();
+  const { session } = useAuth();
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
-  const [selectedTrackKey, setSelectedTrackKey] = useState<"gov" | "eng">("eng");
+  const [selectedTrackKey, setSelectedTrackKey] = useState<"eng" | "gov">("eng");
+  const [experienceTab, setExperienceTab] = useState<"sandbox" | "units" | "quiz">("sandbox");
+  const [previewAnswers, setPreviewAnswers] = useState<Record<string, number>>({});
+  const [previewGrades, setPreviewGrades] = useState<
+    Record<string, PreviewM1QuizResponse["questionResults"][number]>
+  >({});
+  const [previewQuizError, setPreviewQuizError] = useState<string | null>(null);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
   // Lead Inquiry form state
   const [inqName, setInqName] = useState("");
@@ -119,12 +257,16 @@ export default function OfficialHomePage({
         if (active) setCatalog(res);
       })
       .catch(() => {
-        // Fallback to static curriculum definitions cleanly if server offline
+        // Fallback to static curriculum definitions cleanly when offline
       });
     return () => {
       active = false;
     };
   }, [session?.hasPaidAccess]);
+
+  const metrics = getPublicCourseMetrics();
+  const m1Preview = getFreeTrialModulePreview();
+  const m1SampleQuestions = MODULE_QUIZZES.m1.questions.slice(0, 2);
 
   const selfPacedProduct = catalog?.products.find((p) => p.productType === "self_paced");
   const cohortProduct = catalog?.products.find((p) => p.productType === "cohort_mentored");
@@ -171,532 +313,651 @@ export default function OfficialHomePage({
 
   return (
     <div className="min-h-screen bg-[#020205] text-slate-200 selection:bg-gemini-cyan/30 selection:text-white">
-      {/* 3-Zone Single-Row Sticky Navigation */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070e]/92 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          {/* Left Zone: Brand */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gemini-cyan to-gemini-purple flex items-center justify-center text-slate-950 font-mono font-bold text-sm shrink-0">
-              AI
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-white tracking-tight truncate">
-                AI Coding 确定性研发学院
-              </div>
-              <div className="text-[11px] font-mono text-slate-400 truncate hidden sm:block">
-                AI-First Engineering · 14 Modules · 20 Labs
-              </div>
-            </div>
-          </div>
+      <WebsiteNavbar
+        currentPage="home"
+        hasPaidAccess={hasPaidAccess}
+        onNavigatePage={onNavigatePage}
+        onEnterWorkspace={onEnterWorkspace}
+        onOpenBilling={onOpenBilling}
+        onOpenCohortPanel={onOpenCohortPanel}
+        onOpenInstructorCockpit={onOpenInstructorCockpit}
+        onOpenAdminConsole={onOpenAdminConsole}
+      />
 
-          {/* Center Zone: Section Anchors */}
-          <nav className="hidden lg:flex items-center gap-6 text-xs font-medium text-slate-300">
-            <a href="#paradigm" className="hover:text-gemini-cyan transition-colors">
-              范式对比
-            </a>
-            <a href="#dual-track" className="hover:text-gemini-cyan transition-colors">
-              双轨路径
-            </a>
-            <a href="#curriculum" className="hover:text-gemini-cyan transition-colors">
-              课程大纲
-            </a>
-            <a href="#cases" className="hover:text-gemini-cyan transition-colors">
-              实战案例
-            </a>
-            <a href="#pricing" className="hover:text-gemini-cyan transition-colors">
-              订阅与带班
-            </a>
-            <a href="#inquiry" className="hover:text-gemini-cyan transition-colors">
-              咨询报名
-            </a>
-          </nav>
-
-          {/* Right Zone: Auth + Workspace CTAs */}
-          <div className="flex items-center gap-2 shrink-0">
-            {session ? (
-              <>
-                {session.isAdmin && (
-                  <button
-                    type="button"
-                    onClick={onOpenAdminConsole}
-                    className="hidden md:inline-flex px-2.5 py-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 text-amber-200 text-xs font-medium hover:bg-amber-500/20 cursor-pointer"
-                  >
-                    教务后台
-                  </button>
-                )}
-                {(session.isInstructorOrTa || session.isAdmin) && (
-                  <button
-                    type="button"
-                    onClick={onOpenInstructorCockpit}
-                    className="hidden md:inline-flex px-2.5 py-1.5 rounded-lg border border-gemini-purple/50 bg-gemini-purple/15 text-purple-100 text-xs font-medium hover:bg-gemini-purple/25 cursor-pointer"
-                  >
-                    教师批改台
-                  </button>
-                )}
-                {session.cohortEnrolled && (
-                  <button
-                    type="button"
-                    onClick={onOpenCohortPanel}
-                    className="hidden sm:inline-flex px-2.5 py-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 text-emerald-200 text-xs font-medium hover:bg-emerald-500/20 cursor-pointer"
-                  >
-                    我的班级
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onOpenBilling}
-                  className="px-2.5 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs text-slate-200 inline-flex items-center gap-1.5 cursor-pointer"
-                  title={`已登录：${session.user.email}`}
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-gemini-cyan" />
-                  <span className="max-w-[110px] truncate hidden sm:inline">
-                    {session.user.displayName || session.user.email}
-                  </span>
-                  <span className="font-mono text-[10px] text-gemini-cyan">
-                    {hasPaidAccess ? "已开通" : "免费体验"}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void signOutUser()}
-                  aria-label="退出登录"
-                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                disabled={authLoading}
-                onClick={() => window.dispatchEvent(new CustomEvent("app:open-login"))}
-                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-medium text-white inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <LogIn className="w-3.5 h-3.5 text-gemini-cyan" />
-                <span>账号登录</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => onEnterWorkspace("m1")}
-              className="px-3.5 py-1.5 rounded-lg bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 transition-opacity inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <span>{hasPaidAccess ? "进入课程工作台" : "M1 免费试学"}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero Section (Split Editorial + Visual Asset) */}
+      {/* 1. Hero: Outcome-focused positioning for non-tech creators & indie developers */}
       <section className="relative overflow-hidden border-b border-white/10 cyber-grid">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-6 space-y-6">
-            <div className="text-xs font-mono text-gemini-cyan tracking-wide">
-              AI-FIRST ENGINEERING ACADEMY · CURRICULUM 2026.11
-            </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.15]">
-              从“靠手感写代码”
-              <br />
-              走向<span className="text-gemini-cyan">可验证的 AI 研发体系</span>
-            </h1>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-              面向希望真正驾驭 AI 工程化交付的独立开发者、产品经理、研发团队与高校学员。通过
-              14 个递进模块、20 个内置交互沙盘与能力证据门禁，打通{" "}
-              <span className="text-white font-medium">
-                上下文工程 · 规则契约 · 自动化自愈 · 双轨 Capstone 验收
-              </span>{" "}
-              全链路，提供自助学习账号与深度小班实战两种培养路径。
-            </p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
+          <div className="lg:col-span-6 flex flex-col justify-between gap-6">
+            <div className="space-y-5">
+              <div className="text-xs font-mono text-gemini-cyan tracking-wide">
+                面向非技术创作者与独立开发者 · AI CODING 实战工作台
+              </div>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.14] [text-wrap:balance]">
+                教你用 AI 把想法做成
+                <span className="text-gemini-cyan">可运行、可验证</span>的软件
+              </h1>
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+                不再停留在一次性的对话框拼凑。系统训练{" "}
+                <strong className="text-white font-semibold">
+                  需求拆解 · AI Coding 协同 · 测试与安全验收
+                </strong>{" "}
+                核心能力，支持按自己节奏自学，也可选择教师小班逐阶段批改交付。
+              </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => onEnterWorkspace("m1")}
-                className="px-5 py-3 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2 cursor-pointer"
-              >
-                <span>立即免费试学 M1 完整样板</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <a
-                href="#pricing"
-                className="px-5 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white inline-flex items-center gap-2"
-              >
-                <GraduationCap className="w-4 h-4 text-gemini-purple" />
-                <span>对比自助订阅与老师带班</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => onEnterSlides("m1")}
-                className="px-4 py-3 rounded-xl border border-white/10 text-xs font-mono text-slate-300 hover:text-white hover:bg-white/5 inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <PresentationIcon className="w-4 h-4 text-gemini-cyan" />
-                <span>课堂幻灯片模式</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onEnterWorkspace("m1")}
+                  className="px-5 py-3 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <span>免费体验 M1 课程</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <a
+                  href="#pricing"
+                  className="px-5 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white inline-flex items-center gap-2"
+                >
+                  <GraduationCap className="w-4 h-4 text-gemini-purple" />
+                  <span>查看学习方案</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onEnterSlides("m1")}
+                  className="px-4 py-3 rounded-xl border border-white/10 text-xs font-mono text-slate-300 hover:text-white hover:bg-white/5 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <PresentationIcon className="w-4 h-4 text-gemini-cyan" />
+                  <span>课件演示模式</span>
+                </button>
+              </div>
             </div>
 
-            <dl className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10 max-w-xl">
+            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 border-t border-white/10">
               <div>
                 <dt className="text-[11px] font-mono text-slate-400">结构化模块</dt>
-                <dd className="text-xl font-bold font-mono text-white tabular-nums mt-0.5">
-                  14 Modules
+                <dd className="text-lg sm:text-xl font-bold font-mono text-white tabular-nums mt-0.5">
+                  {metrics.moduleCount} 模块
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">实时交互沙盘</dt>
-                <dd className="text-xl font-bold font-mono text-gemini-cyan tabular-nums mt-0.5">
-                  20 Labs
+                <dt className="text-[11px] font-mono text-slate-400">交互式沙盘</dt>
+                <dd className="text-lg sm:text-xl font-bold font-mono text-gemini-cyan tabular-nums mt-0.5">
+                  {metrics.labCount} 个实验
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">结课验证分支</dt>
-                <dd className="text-xl font-bold font-mono text-purple-300 tabular-nums mt-0.5">
-                  Gov / Eng
+                <dt className="text-[11px] font-mono text-slate-400">课程学习单元</dt>
+                <dd className="text-lg sm:text-xl font-bold font-mono text-white tabular-nums mt-0.5">
+                  {metrics.unitCount} 单元
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-mono text-slate-400">巩固自测题</dt>
+                <dd className="text-lg sm:text-xl font-bold font-mono text-purple-300 tabular-nums mt-0.5">
+                  {metrics.quizQuestionCount} 题
                 </dd>
               </div>
             </dl>
           </div>
 
-          <div className="lg:col-span-6">
-            <div className="rounded-2xl overflow-hidden border border-white/15 bg-[#090d18] shadow-2xl">
-              <div className="aspect-video w-full overflow-hidden bg-gradient-to-br from-[#0b1120] to-[#130d24]">
+          <div className="lg:col-span-6 flex">
+            <div className="w-full rounded-2xl overflow-hidden border border-white/15 bg-[#090d18] shadow-2xl flex flex-col justify-between">
+              <div className="flex-1 min-h-[240px] w-full overflow-hidden bg-gradient-to-br from-[#0b1120] to-[#130d24]">
                 <img
                   src={heroImg}
-                  alt="AI Coding 确定性研发工程工作台全景图"
+                  alt="AI Coding 实战工作台：从需求拆解到测试验收"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="px-4 py-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-                <span>课程交互体系：Plan Mode · .cursor/rules · MCP · DoD · Dual Eval</span>
-                <span className="text-gemini-cyan">支持云端进度同步与作业验收</span>
+                <span>核心训练：Plan 蓝图 · .mdc 规则 · DoD 验收 · 安全边界</span>
+                <span className="text-gemini-cyan">M1 模块免登录开放试学</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Paradigm Shift Comparison */}
-      <section id="paradigm" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
+      {/* 2. Pain Points */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
         <div className="space-y-2 max-w-3xl">
-          <div className="text-xs font-mono text-gemini-cyan">PARADIGM SHIFT</div>
+          <div className="text-xs font-mono text-gemini-cyan">WHY PROJECTS STALL</div>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            为什么大多数人用 AI 写代码越写越乱，而工程团队能用它稳定交付？
+            自己用 AI 写项目时，为什么总在第 70% 卡住？
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            差距不在提示词花哨与否，而在于是否把一次性聊天升级为“先契约、再上下文切片、用规则约束、靠 DoD 验收”的工程闭环。
+            工具本身已经足够快，真正拖慢交付的往往是下面四个工程失控现场。
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-6 rounded-2xl border border-white/10 bg-[#090c14] space-y-4">
-            <div className="text-xs font-mono text-slate-400">
-              传统试错式（Vibe Chat）· 高返工路径
-            </div>
-            <h3 className="text-lg font-bold text-white">无约束对话拼凑，复杂度一上升即失控</h3>
-            <ul className="space-y-2.5 text-sm text-slate-300">
-              <li className="flex items-start gap-2.5">
-                <span className="font-mono text-rose-400 mt-0.5">01</span>
-                <span>跳过需求澄清与边界契约，直接让模型“全量生成”，前后端字段频繁对不上。</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="font-mono text-rose-400 mt-0.5">02</span>
-                <span>缺乏项目级 Rules 与 DoD 门禁，AI 容易用静默降级、跳过断言来“凑绿灯”。</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="font-mono text-rose-400 mt-0.5">03</span>
-                <span>知识散落在聊天窗口里，换新对话就重复踩坑，无法沉淀为团队资产。</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="p-6 rounded-2xl border border-gemini-cyan/40 bg-[#0a1220] space-y-4">
-            <div className="text-xs font-mono text-gemini-cyan">
-              AI-FIRST ENGINEERING · 本课程确定性交付路径
-            </div>
-            <h3 className="text-lg font-bold text-white">四层闭环体系，让 AI 产出具备可审计证据</h3>
-            <ul className="space-y-2.5 text-sm text-slate-200">
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-white">Spec &amp; Context First</strong>：Plan Mode 先行对齐 Schema 与鉴权边界，精确管理 Token 切片。
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-white">Rules + MCP + DoD</strong>：把团队规范固化成 `.mdc` 规则与终端自愈命令，拒绝虚假通过。
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-white">Dual Capstone 能力验收</strong>：通过阶段测验、技能诊断与指导老师人工评审，发放可验证技能档案。
-                </span>
-              </li>
-            </ul>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {PAIN_POINTS.map((item) => (
+            <article
+              key={item.index}
+              className="p-6 rounded-2xl border border-white/10 bg-[#090c14] space-y-2.5"
+            >
+              <div className="text-xs font-mono text-rose-400 tabular-nums">
+                痛点 {item.index}
+              </div>
+              <h3 className="text-lg font-bold text-white leading-snug">{item.title}</h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{item.detail}</p>
+            </article>
+          ))}
         </div>
       </section>
 
-      {/* Interactive Dual-Track Persona Router */}
-      <section id="dual-track" className="border-y border-white/10 bg-[#060912]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-2 max-w-2xl">
-              <div className="text-xs font-mono text-gemini-purple">DUAL-TRACK ARCHITECTURE</div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                两条主线，匹配不同背景学习者的真实交付目标
-              </h2>
-            </div>
-
-            <div className="inline-flex p-1 rounded-xl bg-[#0d1322] border border-white/15">
-              <button
-                type="button"
-                onClick={() => setSelectedTrackKey("eng")}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  selectedTrackKey === "eng"
-                    ? "bg-gemini-cyan text-slate-950"
-                    : "text-slate-300 hover:text-white"
-                }`}
-              >
-                工程与全栈开发线 (M13-Eng)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedTrackKey("gov")}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  selectedTrackKey === "gov"
-                    ? "bg-amber-400 text-slate-950"
-                    : "text-slate-300 hover:text-white"
-                }`}
-              >
-                产品与无代码治理线 (M13-Gov)
-              </button>
-            </div>
-          </div>
-
-          {selectedTrackKey === "eng" ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 rounded-2xl border border-emerald-400/30 bg-[#0b101d]">
-              <div className="lg:col-span-5 aspect-[4/3] rounded-xl overflow-hidden border border-white/10 bg-[#090d16]">
-                <img
-                  src={engTrackImg}
-                  alt="M13-Eng 生产级工程与 Agent Harness 主线示意图"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="lg:col-span-7 space-y-4">
-                <div className="text-xs font-mono text-emerald-300">
-                  M1 → M3 → M4 → M5 → M8 长程 Harness → M12 运行时 KB → M13-Eng Capstone
-                </div>
-                <h3 className="text-2xl font-bold text-white">
-                  独立开发者 / 研发团队 / 计算机专业学生：生产级 Agent 与全栈工程交付
-                </h3>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  围绕前后端鉴权隔离、PostgreSQL Schema 演进、长程 Coding Harness（Initializer + Coding Loop + Worktree）、运行时 ACL Pre-filter 检索隔离与自动化测试门禁，完整交付可上线运行的 AI 应用。
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-xs">
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-                    <div className="font-mono text-gemini-cyan">核心能力门禁</div>
-                    <div className="text-slate-200 mt-1">后端鉴权与 Webhook 验签证据</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-                    <div className="font-mono text-gemini-cyan">核心沙盘演练</div>
-                    <div className="text-slate-200 mt-1">Bugbot · Worktree · ACL RAG</div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10">
-                    <div className="font-mono text-gemini-cyan">结课产物</div>
-                    <div className="text-slate-200 mt-1">带 Dual Eval 报告的可部署仓库</div>
-                  </div>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => onEnterWorkspace("m1")}
-                    className="px-4 py-2 rounded-xl bg-emerald-400 text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5"
-                  >
-                    <span>从 M1 开始工程路径试学</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 rounded-2xl border border-amber-400/35 bg-[#12101a]">
-              <div className="lg:col-span-5 aspect-[4/3] rounded-xl overflow-hidden border border-white/10 bg-[#0d0b14]">
-                <img
-                  src={govTrackImg}
-                  alt="M13-Gov 无代码 Agent 产品与治理主线示意图"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="lg:col-span-7 space-y-4">
-                <div className="text-xs font-mono text-amber-300">
-                  M1 → M2 → M4 规则规范 → M11 Agent 蓝图与 PRD → M13-Gov 治理 Capstone
-                </div>
-                <h3 className="text-2xl font-bold text-white">
-                  产品经理 / 非技术背景创始人：AI 产品架构、需求契约与治理评审
-                </h3>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  不强求手写后端代码，重点培养“把模糊需求写成可执行双 PRD、划定人工审批阈值、识别工具调用越权、审阅 Agent 运行轨迹并做上线把关”的核心产品架构师能力。
-                </p>
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/35 text-xs text-amber-100 leading-relaxed">
-                  {M13_GOV_SIMULATION_DISCLAIMER}
-                </div>
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => onEnterWorkspace("m1")}
-                    className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5"
-                  >
-                    <span>从 M1 开始产品架构试学</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Curriculum Blueprint (14 Modules × 20 Labs) */}
-      <section id="curriculum" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-2 max-w-2xl">
-            <div className="text-xs font-mono text-gemini-cyan">CURRICULUM ARCHITECTURE</div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              三阶段 14 模块完整课程体系（M1 开放免费试学）
-            </h2>
-          </div>
-          <div className="text-xs font-mono text-slate-400 tabular-nums">
-            共 {modulesList.length} 模块 · {COURSE_LABS.length} 交互沙盘 · 双层能力先修 DAG
-          </div>
-        </div>
-
-        <div className="space-y-8">
-          {COURSE_TRACKS.map((track) => {
-            const trackMods = modulesList.filter((m) => m.trackId === track.id);
-            return (
-              <div key={track.id} className="space-y-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 pb-2 border-b border-white/10">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-gemini-cyan" />
-                    <span>{track.title}</span>
-                  </h3>
-                  <span className="text-xs text-slate-400">{track.subtitle}</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {trackMods.map((mod) => {
-                    const isFree = mod.isFreeTrial || mod.id === "m1";
-                    const canOpen = isFree || hasPaidAccess;
-                    return (
-                      <article
-                        key={mod.id}
-                        className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
-                          isFree
-                            ? "border-gemini-cyan/50 bg-[#0c1424]"
-                            : "border-white/10 bg-[#090d16]"
-                        }`}
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2 text-[11px] font-mono tabular-nums">
-                            <span className="text-gemini-cyan font-semibold">{mod.code}</span>
-                            <span className="text-slate-400">
-                              {mod.estimatedMinutes} 分钟 · {mod.slideCount} 屏 ·{" "}
-                              {isFree ? (
-                                <span className="text-emerald-300 font-semibold">免费试学</span>
-                              ) : canOpen ? (
-                                <span className="text-emerald-300">已解锁</span>
-                              ) : (
-                                <span className="text-slate-400 inline-flex items-center gap-1">
-                                  <Lock className="w-3 h-3" /> 会员解锁
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-white leading-snug">
-                            {mod.title.replace(/^Module\s+[\w-]+:\s*/i, "")}
-                          </h4>
-                          <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
-                            {mod.learningObjectives[0]}
-                          </p>
-                        </div>
-
-                        <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
-                          <span className="text-slate-400 truncate">{mod.audience}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              canOpen ? onEnterWorkspace(mod.id) : onOpenBilling()
-                            }
-                            className={`font-mono font-semibold shrink-0 cursor-pointer ${
-                              canOpen
-                                ? "text-gemini-cyan hover:underline"
-                                : "text-purple-300 hover:text-white"
-                            }`}
-                          >
-                            {isFree ? "立即试学 →" : canOpen ? "进入学习 →" : "开通解锁 →"}
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 5 Verified Case Studies */}
-      <section id="cases" className="border-y border-white/10 bg-[#060912]">
+      {/* 3. 5-Step Methodology Flow */}
+      <section className="border-y border-white/10 bg-[#060912]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
           <div className="space-y-2 max-w-3xl">
-            <div className="text-xs font-mono text-gemini-cyan">VERIFIED CASE STUDIES</div>
+            <div className="text-xs font-mono text-gemini-purple">METHODOLOGY FLOW</div>
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              源自真实科研、竞赛与产业实践的 5 个代表性案例
+              课程的五步确定性交付路径：先锁边界，再让 AI 动手
             </h2>
             <p className="text-sm text-slate-300">
-              课程方法论直接提炼自一线交付场景，而非抽象概念空谈。
+              把原本靠运气试错的聊天开发，拆成可检查、可复跑的五步动作。
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {VERIFIED_CASE_STUDIES.map((cs) => (
-              <article
-                key={cs.id}
-                className="p-5 rounded-xl border border-white/10 bg-[#0b101d] flex flex-col justify-between gap-3"
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {FIVE_STEP_METHOD.map((item) => (
+              <div
+                key={item.step}
+                className="p-5 rounded-xl border border-white/10 bg-[#0b101d] flex flex-col justify-between gap-4"
               >
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-gemini-cyan">{cs.code}</span>
-                    <span className="text-slate-400">{cs.domain}</span>
+                  <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                    <span className="text-gemini-cyan font-bold">STEP {item.step}</span>
+                    <span className="text-slate-500">{item.modules}</span>
                   </div>
-                  <h3 className="text-base font-bold text-white">{cs.title}</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">{cs.summary}</p>
+                  <h3 className="text-base font-bold text-white">{item.title}</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">{item.action}</p>
                 </div>
-                <div className="pt-2 border-t border-white/10 text-[11px] font-mono text-purple-200">
-                  对应课程链路：{cs.modulesUsed}
+                <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-emerald-300">
+                  产出：{item.artifact}
                 </div>
-              </article>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing & Delivery Plans: Self-Serve vs Mentored Cohort */}
-      <section id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
+      {/* 4. Live No-Login Experience Showcase */}
+      <section id="experience" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="text-xs font-mono text-gemini-cyan">LIVE INTERACTIVE PREVIEW</div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              不用先注册，直接体验真实课程沙盘、单元结构与测验反馈
+            </h2>
+            <p className="text-sm text-slate-300">
+              下方即课程 M1 实际运行的提示词装配沙盘与诊断题，先动手试试看是否符合你的学习习惯。
+            </p>
+          </div>
+
+          <div
+            className="inline-flex p-1 rounded-xl bg-[#0b101d] border border-white/15 self-start"
+            role="tablist"
+            aria-label="免费体验内容切换"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={experienceTab === "sandbox"}
+              onClick={() => setExperienceTab("sandbox")}
+              className={`px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                experienceTab === "sandbox"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              1. 交互式 Lab 01 沙盘
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={experienceTab === "units"}
+              onClick={() => setExperienceTab("units")}
+              className={`px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                experienceTab === "units"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              2. M1 单元与作品导出
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={experienceTab === "quiz"}
+              onClick={() => setExperienceTab("quiz")}
+              className={`px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                experienceTab === "quiz"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              3. 即时测验与解析体验
+            </button>
+          </div>
+        </div>
+
+        {experienceTab === "sandbox" && (
+          <div className="space-y-4">
+            <PlanPromptSandbox />
+          </div>
+        )}
+
+        {experienceTab === "units" && (
+          <div className="p-6 rounded-2xl border border-white/12 bg-[#090d16] space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+              <div>
+                <div className="text-xs font-mono text-gemini-cyan">
+                  M1 开放样板 · 共 {m1Preview.units.length} 个完整教学单元
+                </div>
+                <h3 className="text-lg font-bold text-white mt-0.5">
+                  {m1Preview.moduleMeta.title}
+                </h3>
+              </div>
+              <span className="text-xs font-mono text-emerald-300">
+                可导出产物：{m1Preview.moduleMeta.deliverables[0]}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {m1Preview.units.map((u, idx) => (
+                <div
+                  key={u.id}
+                  className="p-3.5 rounded-xl border border-white/10 bg-black/30 flex items-start justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-mono text-slate-400 tabular-nums">
+                      单元 {String(idx + 1).padStart(2, "0")} · {u.estimatedMinutes} 分钟
+                    </div>
+                    <div className="text-sm font-semibold text-white">{u.title}</div>
+                    <p className="text-xs text-slate-400 line-clamp-2">{u.learningObjective}</p>
+                  </div>
+                  {u.artifactFilename && (
+                    <span className="text-[11px] font-mono text-gemini-cyan shrink-0">
+                      产出模板
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {experienceTab === "quiz" && (
+          <div className="p-6 rounded-2xl border border-white/12 bg-[#090d16] space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+              <div>
+                <div className="text-xs font-mono text-gemini-cyan">
+                  即时自测样本 · 源自 M1 诊断题库（无需登录直接作答）
+                </div>
+                <h3 className="text-lg font-bold text-white mt-0.5">
+                  检验你对“意图拆解与验证闭环”的判断
+                </h3>
+              </div>
+              <span className="text-xs font-mono text-slate-400">
+                选择选项即可查看解析与复盘位置
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {m1SampleQuestions.map((q, qIdx) => {
+                const picked = previewAnswers[q.id];
+                const grade = previewGrades[q.id];
+                const answered = Boolean(grade);
+                const isCorrect = Boolean(grade?.isCorrect);
+                return (
+                  <div
+                    key={q.id}
+                    className="p-4 rounded-xl border border-white/10 bg-black/30 space-y-3"
+                  >
+                    <div className="text-[11px] font-mono text-gemini-cyan">
+                      Q{qIdx + 1} · {q.topic}
+                    </div>
+                    <h4 className="text-sm font-bold text-white leading-snug">{q.question}</h4>
+                    <div className="space-y-2">
+                      {q.options.map((opt, oIdx) => {
+                        const isSelected = picked === oIdx;
+                        const isRightOpt = answered && grade && oIdx === grade.correctIndex;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              setPreviewAnswers((prev) => ({ ...prev, [q.id]: oIdx }));
+                              setPreviewQuizError(null);
+                              void previewM1QuizApi({ [q.id]: oIdx })
+                                .then((res) => {
+                                  const hit = res.questionResults.find((r) => r.questionId === q.id);
+                                  if (hit) {
+                                    setPreviewGrades((prev) => ({ ...prev, [q.id]: hit }));
+                                  }
+                                })
+                                .catch(() => {
+                                  setPreviewQuizError("服务端体验判分暂不可用，请稍后再试。");
+                                });
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg border text-xs transition-colors cursor-pointer ${
+                              isRightOpt
+                                ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+                                : isSelected
+                                ? answered
+                                  ? "border-rose-400/60 bg-rose-500/15 text-rose-100"
+                                  : "border-gemini-cyan/60 bg-gemini-cyan/15 text-white"
+                                : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {answered && grade ? (
+                      <div className="pt-2 border-t border-white/10 text-xs space-y-1">
+                        <div
+                          className={
+                            isCorrect
+                              ? "text-emerald-300 font-semibold"
+                              : "text-amber-300 font-semibold"
+                          }
+                        >
+                          {isCorrect ? "判断准确" : "可继续核对思路"}
+                        </div>
+                        <p className="text-slate-300 leading-relaxed">{grade.explanation}</p>
+                      </div>
+                    ) : picked !== undefined ? (
+                      <div className="pt-2 border-t border-white/10 text-xs text-slate-400">
+                        {previewQuizError ?? "正在请求服务端判定与解析..."}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 rounded-xl border border-gemini-cyan/25 bg-[#09121e] flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-xs sm:text-sm text-slate-200">
+            <FlaskConical className="w-4 h-4 text-gemini-cyan shrink-0" />
+            <span>
+              M1 全 10 单元、Lab 01 练习检查、笔记导出与课件幻灯片均已开放，无需先登录或绑定银行卡。
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onEnterWorkspace("m1")}
+              className="px-4 py-2 rounded-lg bg-gemini-cyan text-slate-950 font-semibold text-xs hover:opacity-90 cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <span>进入完整 M1 学习工作台</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onEnterSlides("m1")}
+              className="px-4 py-2 rounded-lg border border-white/15 text-xs text-slate-200 hover:bg-white/5 cursor-pointer"
+            >
+              打开课堂幻灯片
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Dual-Track Path & Curriculum + Verified Case Evidence */}
+      <section id="curriculum" className="border-y border-white/10 bg-[#060912]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-12">
+          {/* Dual Track Selector */}
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="space-y-2 max-w-2xl">
+                <div className="text-xs font-mono text-gemini-purple">CURRICULUM &amp; TRACKS</div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                  两条清晰路线，覆盖创作者与独立开发者核心目标
+                </h2>
+              </div>
+
+              <div className="inline-flex p-1 rounded-xl bg-[#0d1322] border border-white/15 self-start">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrackKey("eng")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    selectedTrackKey === "eng"
+                      ? "bg-gemini-cyan text-slate-950"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  独立开发者 / 全栈工程线 (M13-Eng)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrackKey("gov")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    selectedTrackKey === "gov"
+                      ? "bg-amber-400 text-slate-950"
+                      : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  非技术创作者 / 产品治理线 (M13-Gov)
+                </button>
+              </div>
+            </div>
+
+            {selectedTrackKey === "eng" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 rounded-2xl border border-emerald-400/30 bg-[#0b101d]">
+                <div className="lg:col-span-5 aspect-[4/3] rounded-xl overflow-hidden border border-white/10 bg-[#090d16]">
+                  <img
+                    src={engTrackImg}
+                    alt="M13-Eng 独立开发者全栈与工程交付主线示意图"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="text-xs font-mono text-emerald-300">
+                    M1 → M3 → M4 → M5 → M8 长程 Harness → M12 运行时 KB → M13-Eng Capstone
+                  </div>
+                  <h3 className="text-2xl font-bold text-white">
+                    独立开发者：安全全栈 MVP、长程 Harness 与可部署项目交付
+                  </h3>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    聚焦前后端鉴权隔离、数据库 Schema 演进、Worktree 多 Agent 协同、ACL Pre-filter 检索与自动化测试门禁，真正做出能上线、能迭代的独立软件。
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300 pt-1">
+                    <div>
+                      <span className="font-mono text-gemini-cyan block">能力门禁</span>
+                      <span className="mt-1 block">服务端鉴权与 Webhook 验签证据</span>
+                    </div>
+                    <div>
+                      <span className="font-mono text-gemini-cyan block">代表沙盘</span>
+                      <span className="mt-1 block">Bugbot · Worktree · ACL RAG</span>
+                    </div>
+                    <div>
+                      <span className="font-mono text-gemini-cyan block">结课成果</span>
+                      <span className="mt-1 block">含测试退出码的可部署应用</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 rounded-2xl border border-amber-400/35 bg-[#12101a]">
+                <div className="lg:col-span-5 aspect-[4/3] rounded-xl overflow-hidden border border-white/10 bg-[#0d0b14]">
+                  <img
+                    src={govTrackImg}
+                    alt="M13-Gov 非技术创作者产品与治理评审主线示意图"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="text-xs font-mono text-amber-300">
+                    M1 → M9 三层边界 → M3 产品切片 → M10 审美规范 → M11 蓝图 → M13-Gov 治理评审
+                  </div>
+                  <h3 className="text-2xl font-bold text-white">
+                    非技术创作者 / 产品设计者：需求契约、三层排错与产品验收
+                  </h3>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    不要求硬写底层并发算法，重在让你读懂前后端边界、用结构化蓝图与视觉规范指挥 AI 做出可用原型，并具备审查 AI 风险与把关交付的能力。
+                  </p>
+                  <div className="text-xs text-amber-200/90 leading-relaxed border-t border-amber-400/20 pt-3">
+                    边界说明：{M13_GOV_SIMULATION_DISCLAIMER}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3-Track 14 Modules Matrix */}
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold text-white">
+                  全课 {metrics.trackCount} 阶段 {metrics.moduleCount} 模块完整目录
+                </h3>
+                <p className="text-xs text-slate-400">
+                  共 {metrics.unitCount} 个结构化单元 · {metrics.labCount} 个交互沙盘 · {metrics.slideCount} 屏课堂演示
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              {COURSE_TRACKS.map((track) => {
+                const trackMods = modulesList.filter((m) => m.trackId === track.id);
+                return (
+                  <div key={track.id} className="space-y-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 pb-2 border-b border-white/10">
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-gemini-cyan" />
+                        <span>{track.title}</span>
+                      </h4>
+                      <span className="text-xs text-slate-400">{track.subtitle}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {trackMods.map((mod) => {
+                        const isFree = mod.isFreeTrial || mod.id === "m1";
+                        const canOpen = isFree || hasPaidAccess;
+                        return (
+                          <article
+                            key={mod.id}
+                            className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+                              isFree
+                                ? "border-gemini-cyan/50 bg-[#0c1424]"
+                                : "border-white/10 bg-[#090d16]"
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2 text-[11px] font-mono tabular-nums">
+                                <span className="text-gemini-cyan font-semibold">{mod.code}</span>
+                                <span className="text-slate-400">
+                                  {mod.estimatedMinutes} 分钟 · {mod.slideCount} 屏 ·{" "}
+                                  {isFree ? (
+                                    <span className="text-emerald-300 font-semibold">免费试学</span>
+                                  ) : canOpen ? (
+                                    <span className="text-emerald-300">已解锁</span>
+                                  ) : (
+                                    <span className="text-slate-400 inline-flex items-center gap-1">
+                                      <Lock className="w-3 h-3" /> 会员解锁
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <h5 className="text-sm font-bold text-white leading-snug">
+                                {mod.title.replace(/^Module\s+[\w-]+:\s*/i, "")}
+                              </h5>
+                              <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
+                                {mod.learningObjectives[0]}
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
+                              <span className="text-slate-400 truncate">{mod.audience}</span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  canOpen ? onEnterWorkspace(mod.id) : onOpenBilling()
+                                }
+                                className={`font-mono font-semibold shrink-0 cursor-pointer ${
+                                  canOpen
+                                    ? "text-gemini-cyan hover:underline"
+                                    : "text-purple-300 hover:text-white"
+                                }`}
+                              >
+                                {isFree ? "立即试学 →" : canOpen ? "进入学习 →" : "开通解锁 →"}
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Evidence-Based Case Studies */}
+          <div id="cases" className="space-y-6 pt-4">
+            <div className="space-y-2 max-w-3xl">
+              <div className="text-xs font-mono text-gemini-cyan">VERIFIED WORK &amp; BOUNDARIES</div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                代表性实战案例与“AI 辅助 vs 人工核验”边界
+              </h2>
+              <p className="text-sm text-slate-300">
+                我们明确展示每个项目的实际背景、项目范围与人工验收环节，不以个案作为普适效果或就业结果承诺。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {VERIFIED_CASE_STUDIES.map((cs) => (
+                <article
+                  key={cs.id}
+                  className="p-5 rounded-xl border border-white/10 bg-[#0b101d] flex flex-col justify-between gap-4"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-gemini-cyan">{cs.code}</span>
+                      <span className="text-slate-400">{cs.background}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-white">{cs.title}</h3>
+                    <dl className="space-y-2 text-xs">
+                      <div>
+                        <dt className="text-slate-400 font-mono">项目范围</dt>
+                        <dd className="text-slate-200 mt-0.5">{cs.scope}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400 font-mono">AI 工具链边界</dt>
+                        <dd className="text-slate-300 mt-0.5">{cs.aiBoundary}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-emerald-300 font-mono">人工核验内容</dt>
+                        <dd className="text-slate-200 mt-0.5">{cs.humanVerified}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="pt-2.5 border-t border-white/10 text-[11px] font-mono text-purple-200">
+                    对应模块：{cs.modulesUsed}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Two Product Lines: Self-Serve vs Mentored Cohort */}
+      <section id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-10">
         <div className="space-y-2 max-w-3xl">
-          <div className="text-xs font-mono text-gemini-purple">ACCOUNTS &amp; COHORT PLANS</div>
+          <div className="text-xs font-mono text-gemini-purple">LEARNING PLANS</div>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            两类账号服务模式：自主按节奏精进，或加入小班由老师批改带教
+            两种学习服务：按自己节奏自主学习，或加入小班由老师批改带教
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            所有账号均可在工作台免费体验 M1 完整模块；付费权益在角色（Learner / Instructor）、商品与班级报名（Cohort）上彻底解耦。
+            支持先免登录免费体验 M1，确认课程节奏后再决定开通完整自学权益或预约小班席位。
           </p>
         </div>
 
@@ -706,7 +967,7 @@ export default function OfficialHomePage({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-gemini-cyan">
-                  SELF-PACED PASS · 账号自助学习
+                  SELF-SERVE · 自主学习会员
                 </span>
                 <BookOpen className="w-4 h-4 text-gemini-cyan" />
               </div>
@@ -716,16 +977,16 @@ export default function OfficialHomePage({
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {selfPacedProduct?.description ||
-                    "解锁 M1–M13-Eng 全部 14 模块课程单元、20 个内置交互沙盘、服务端测验判分、云端进度同步与个人知识库沉淀。"}
+                    "适合想自主安排学习时间的创作者与开发者，解锁全 14 模块、20 交互沙盘、测验反馈与成果导出。"}
                 </p>
               </div>
 
               <div className="grid grid-cols-3 gap-2.5 pt-1">
                 {(
                   selfPacedProduct?.prices ?? [
-                    { id: 1, label: "月卡体验", amountCents: 12900, durationDays: 30 },
-                    { id: 2, label: "季卡进阶", amountCents: 32900, durationDays: 90 },
-                    { id: 3, label: "年卡完整版", amountCents: 69900, durationDays: 365 },
+                    { id: 1, label: "月卡 30 天", amountCents: 12900, durationDays: 30 },
+                    { id: 2, label: "季卡 90 天", amountCents: 32900, durationDays: 90 },
+                    { id: 3, label: "年卡 365 天", amountCents: 69900, durationDays: 365 },
                   ]
                 ).map((pr) => (
                   <div
@@ -743,30 +1004,37 @@ export default function OfficialHomePage({
               <ul className="space-y-2 text-xs text-slate-200 pt-2">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>解锁全部 14 模块（含 M11–M13-Gov/Eng）与 20 个交互沙盘</span>
+                  <span>
+                    解锁全 {metrics.moduleCount} 模块（含 M13-Gov / M13-Eng 双线）与 {metrics.labCount} 交互沙盘
+                  </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>云端进度同步（unit_progress）、服务端测验判分与薄弱点定位</span>
+                  <span>云端单元进度同步、{metrics.quizQuestionCount} 题巩固自测与 Markdown 笔记导出</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>服务端 AI Bugbot 评审与知识库备课助手（按日配额防护）</span>
-                </li>
-                <li className="flex items-center gap-2 text-slate-400">
-                  <Sparkles className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span>不包含人工逐份作业批改与固定期次小班督学</span>
+                  <span>站内 AI 辅助评测与备课工具（按账号每日配额保护）</span>
                 </li>
               </ul>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenBilling}
-              className="w-full py-3 rounded-xl bg-white text-slate-950 font-semibold text-sm hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-              {hasPaidAccess ? "查看账号权益 / 兑换码升级" : "立即订阅 / 兑换激活码"}
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => onEnterWorkspace("m1")}
+                className="py-3 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-white font-medium text-xs sm:text-sm cursor-pointer"
+              >
+                先免费体验 M1
+              </button>
+              <button
+                type="button"
+                onClick={onOpenBilling}
+                className="py-3 rounded-xl bg-white text-slate-950 font-semibold text-xs sm:text-sm hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                {hasPaidAccess ? "查看权益 / 升级" : "开通学习 / 兑换码"}
+              </button>
+            </div>
           </div>
 
           {/* Mentored Cohort Card */}
@@ -774,7 +1042,7 @@ export default function OfficialHomePage({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-purple-200">
-                  MENTORED COHORT · 教师深度指导小班
+                  MENTORED COHORT · 教师小班带教
                 </span>
                 <Users className="w-4 h-4 text-gemini-purple" />
               </div>
@@ -784,19 +1052,21 @@ export default function OfficialHomePage({
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {cohortProduct?.description ||
-                    "含全课自助权限 + 专属期次小班课表、里程碑打卡、指导老师与助教人工代码/PRD 批改、退回重交与技能核验认证。"}
+                    "适合希望有人带节奏、批改项目蓝图与代码、并在结课前完成一次完整验收交付的学员。"}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl border border-gemini-purple/35 bg-white/[0.04] flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs text-purple-200 font-semibold">
-                    {activeCohort ? `${activeCohort.title} (${activeCohort.code})` : "深度小班期次"}
+                    {activeCohort
+                      ? `${activeCohort.title} (${activeCohort.code})`
+                      : "小班期次 · COHORT-2026-Q4"}
                   </div>
                   <div className="text-[11px] font-mono text-slate-400 mt-0.5 tabular-nums">
                     {activeCohort
                       ? `周期 ${activeCohort.startDate} 至 ${activeCohort.endDate} · 限 ${activeCohort.maxSeats} 席`
-                      : "4~6 周实战节奏 · 里程碑作业人工审校"}
+                      : "4～6 周带班周期 · 阶段里程碑点评与结课评审"}
                   </div>
                 </div>
                 <div className="text-2xl font-bold font-mono text-white tabular-nums">
@@ -809,19 +1079,15 @@ export default function OfficialHomePage({
               <ul className="space-y-2 text-xs text-slate-200 pt-1">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>包含「自助畅学版」全部 14 模块、沙盘与服务端 AI 评测配额</span>
+                  <span>含自主学习全部 {metrics.moduleCount} 模块与沙盘权益</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>里程碑作业提交（自动附带静态自检快照），教师严格分班人工审校</span>
+                  <span>定期直播串讲 + 阶段里程碑作业人工审校与反馈</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>支持「打回修改 → 重交复审 → 授予可验证 SkillGrant 能力认证」</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-gemini-cyan shrink-0" />
-                  <span>支持高阶产品/治理分支（M13-Gov）与全栈工程分支（M13-Eng）双轨结课</span>
+                  <span>支持打回修改重交与结课评审（通过后授予可验证技能记录）</span>
                 </li>
               </ul>
             </div>
@@ -832,16 +1098,143 @@ export default function OfficialHomePage({
                 onClick={onOpenBilling}
                 className="py-3 rounded-xl bg-gemini-purple text-white font-semibold text-xs sm:text-sm hover:opacity-90 transition-opacity cursor-pointer"
               >
-                预约席位 / 激活入班码
+                激活入班码 / 查看班期
               </button>
               <a
                 href="#inquiry"
                 className="py-3 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 text-center text-white font-medium text-xs sm:text-sm"
               >
-                咨询企业内训 / 班期详情
+                预约候补 / 咨询报名
               </a>
             </div>
           </div>
+        </div>
+
+        {/* Comparison Table */}
+        <div className="rounded-2xl border border-white/10 bg-[#080c15] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/[0.03] text-slate-300 font-mono">
+                  <th className="py-3.5 px-4 w-1/5">服务对比维度</th>
+                  <th className="py-3.5 px-4 w-2/5 text-gemini-cyan">自主学习会员</th>
+                  <th className="py-3.5 px-4 w-2/5 text-purple-300">教师小班带教</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10 text-slate-300">
+                {COMPARISON_ROWS.map((row) => (
+                  <tr key={row.label}>
+                    <td className="py-3.5 px-4 font-semibold text-white align-top">
+                      {row.label}
+                    </td>
+                    <td className="py-3.5 px-4 leading-relaxed align-top">{row.selfPaced}</td>
+                    <td className="py-3.5 px-4 leading-relaxed align-top">{row.cohort}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-3 border-t border-white/10 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              当前开通说明：支持邮箱验证码登录后下单登记并由教务核销开通，或使用激活码即时兑换；线上三方直付网关将在后续版本开放。
+            </span>
+            <div className="flex items-center gap-4 font-mono">
+              <button
+                type="button"
+                onClick={() => onNavigatePage("teens")}
+                className="text-gemini-cyan hover:underline cursor-pointer"
+              >
+                查看青少年营 →
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigatePage("teams")}
+                className="text-purple-300 hover:underline cursor-pointer"
+              >
+                查看团队内训 →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Instructor Workflow & Trust Disclosures */}
+      <section className="border-y border-white/10 bg-[#060912]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 space-y-6">
+          <div className="space-y-2 max-w-3xl">
+            <div className="text-xs font-mono text-emerald-300">TEACHING &amp; TRUST BOUNDARIES</div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">
+              教学如何指导、作业如何评阅，以及教学模拟的边界说明
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs sm:text-sm">
+            <div className="p-5 rounded-xl border border-white/10 bg-[#0b101d] space-y-2">
+              <div className="flex items-center gap-2 font-mono text-xs text-gemini-cyan">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>教师如何批改与带班</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                小班作业需附带自检快照与交付说明，由所属期次教师分班查看，给出具体修改批注并支持退回重交，直至达到结课标准。
+              </p>
+            </div>
+
+            <div className="p-5 rounded-xl border border-white/10 bg-[#0b101d] space-y-2">
+              <div className="flex items-center gap-2 font-mono text-xs text-gemini-purple">
+                <ShieldCheck className="w-4 h-4" />
+                <span>个人作品与附件处理</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                作业附件仅限指定图片及工程文档格式且限定体积上限，禁止上传含真实线上密钥的配置文件，个人练习记录始终仅限本人与带班导师查阅。
+              </p>
+            </div>
+
+            <div className="p-5 rounded-xl border border-amber-400/30 bg-[#12101a] space-y-2">
+              <div className="flex items-center gap-2 font-mono text-xs text-amber-300">
+                <ShieldCheck className="w-4 h-4" />
+                <span>模拟演练 vs 生产验证</span>
+              </div>
+              <p className="text-slate-200 leading-relaxed">
+                {M13_GOV_SIMULATION_DISCLAIMER} 涉及真实上线部署的系统，仍需按 M13-Eng 规范补齐真实环境集成与安全测试。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. FAQ & Lead Inquiry */}
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16 space-y-8">
+        <div className="space-y-2 text-center">
+          <div className="text-xs font-mono text-gemini-cyan">FAQ</div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">常见问题</h2>
+        </div>
+
+        <div className="divide-y divide-white/10 rounded-2xl border border-white/10 bg-[#090d16]">
+          {HOME_FAQ_ITEMS.map((item, idx) => {
+            const isOpen = openFaqIndex === idx;
+            return (
+              <div key={item.q} className="px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                  aria-expanded={isOpen}
+                  className="w-full flex items-center justify-between gap-4 text-left text-sm font-semibold text-white cursor-pointer"
+                >
+                  <span>{item.q}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                      isOpen ? "rotate-180 text-gemini-cyan" : ""
+                    }`}
+                  />
+                </button>
+                {isOpen && (
+                  <p className="mt-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed pr-6">
+                    {item.a}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -849,12 +1242,12 @@ export default function OfficialHomePage({
       <section id="inquiry" className="border-t border-white/10 bg-[#060912]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 space-y-6">
           <div className="space-y-2 text-center">
-            <div className="text-xs font-mono text-gemini-cyan">COHORT &amp; TEAM INQUIRY</div>
+            <div className="text-xs font-mono text-gemini-cyan">ENROLLMENT &amp; WAITLIST</div>
             <h2 className="text-2xl font-bold text-white">
-              预约下一期深度指导班，或申请团队 / 高校合作试点
+              预约小班带教 / 候补名额，或咨询订单与入班问题
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              留言将实时写入后端咨询队列，由负责教务管理员统一跟进。
+              如果您还在对比自主学习与小班节奏，也可以留下背景信息，教务老师将在 1 个工作日内回复。
             </p>
           </div>
 
@@ -870,7 +1263,7 @@ export default function OfficialHomePage({
                   required
                   value={inqName}
                   onChange={(e) => setInqName(e.target.value)}
-                  placeholder="例如：张同学 / 李架构师"
+                  placeholder="例如：张同学 / 陈产品"
                   className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:outline-none focus:border-gemini-cyan"
                 />
               </div>
@@ -881,7 +1274,7 @@ export default function OfficialHomePage({
                   required
                   value={inqContact}
                   onChange={(e) => setInqContact(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="name@example.com"
                   className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:outline-none focus:border-gemini-cyan"
                 />
               </div>
@@ -894,32 +1287,32 @@ export default function OfficialHomePage({
                   }
                   className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:outline-none focus:border-gemini-cyan"
                 >
-                  <option value="cohort">个人报名深度指导小班</option>
-                  <option value="enterprise">企业研发团队内训定制</option>
-                  <option value="school">高校实验室 / 课程合作</option>
+                  <option value="cohort">个人报名小班带教 / 候补</option>
+                  <option value="enterprise">团队研发内训（可看 /teams 专页）</option>
+                  <option value="school">青少年 / 校园试点（可看 /teens 专页）</option>
                 </select>
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">所在团队 / 学校（选填）</label>
+              <label className="block text-slate-300 font-medium">当前角色或关注项目（选填）</label>
               <input
                 type="text"
                 value={inqOrg}
                 onChange={(e) => setInqOrg(e.target.value)}
-                placeholder="公司名称、独立工作室或高校院系"
+                placeholder="例如：独立开发者、运营创作者、产品经理"
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:outline-none focus:border-gemini-cyan"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="block text-slate-300 font-medium">需求与目标说明 *</label>
+              <label className="block text-slate-300 font-medium">想做出的产品或解决的问题 *</label>
               <textarea
                 rows={3}
                 required
                 value={inqMessage}
                 onChange={(e) => setInqMessage(e.target.value)}
-                placeholder="请简述您当前背景、期望达到的项目交付目标或团队人数..."
+                placeholder="请简述您当前的背景与期望完成的小项目方向..."
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white focus:outline-none focus:border-gemini-cyan"
               />
             </div>
@@ -954,24 +1347,38 @@ export default function OfficialHomePage({
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-slate-300 font-medium">
-              AI Coding 确定性研发学院 · 课程版本 2026.11
+              AI Coding 学院 · 教你用 AI 把想法做成可运行、可验证的软件
             </div>
             <div>{M13_GOV_SIMULATION_DISCLAIMER}</div>
           </div>
-          <div className="flex items-center gap-4 font-mono">
+          <div className="flex flex-wrap items-center gap-5 font-mono">
+            <button
+              type="button"
+              onClick={() => onNavigatePage("teens")}
+              className="hover:text-gemini-cyan cursor-pointer"
+            >
+              青少年营 (/teens)
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigatePage("teams")}
+              className="hover:text-gemini-cyan cursor-pointer"
+            >
+              团队内训 (/teams)
+            </button>
             <button
               type="button"
               onClick={() => onEnterWorkspace("m1")}
               className="hover:text-gemini-cyan cursor-pointer"
             >
-              进入学习工作台
+              学习工作台
             </button>
             <button
               type="button"
               onClick={() => onEnterSlides("m1")}
               className="hover:text-gemini-cyan cursor-pointer"
             >
-              Reveal 课件模式
+              Reveal 课件
             </button>
           </div>
         </div>

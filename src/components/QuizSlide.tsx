@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type MouseEvent, type WheelEvent } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent, type WheelEvent } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import Slide from "@/components/Slide";
 import {
-  getQuizReviewSummary,
   type ModuleQuiz,
   type QuizReviewTarget,
 } from "@/data/moduleQuizzes";
@@ -76,7 +75,12 @@ function saveStoredModuleAnswers(
 }
 
 import { useAuth } from "@/context/authContextCore";
-import { submitQuizAnswers } from "@/lib/apiClient";
+import {
+  checkSingleQuizQuestionApi,
+  previewM1QuizApi,
+  submitQuizAnswers,
+  type SingleQuestionCheckResponse,
+} from "@/lib/apiClient";
 
 export default function QuizSlide({ quiz }: QuizSlideProps) {
   const { session } = useAuth();
@@ -88,18 +92,92 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const [answers, setAnswers] = useState<Record<string, number>>(() =>
     loadStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber)
   );
+  const [gradedById, setGradedById] = useState<Record<string, SingleQuestionCheckResponse>>({});
+  const [gradingQuestionId, setGradingQuestionId] = useState<string | null>(null);
+  const [gradeError, setGradeError] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
 
   const questions = quiz.questions;
   const totalCount = questions.length;
   const currentQuestion = questions[currentIndex];
 
+  useEffect(() => {
+    if (!canTakeQuiz) return;
+    const storedEntries = questions
+      .filter((q) => typeof answers[q.id] === "number" && !gradedById[q.id])
+      .map((q) => [q.id, answers[q.id]] as const);
+    if (storedEntries.length === 0) return;
+
+    let active = true;
+    if (quiz.moduleId === "m1") {
+      const payload = Object.fromEntries(storedEntries);
+      void previewM1QuizApi(payload)
+        .then((res) => {
+          if (!active) return;
+          setGradedById((prev) => {
+            const next = { ...prev };
+            for (const item of res.questionResults) {
+              next[item.questionId] = {
+                ok: true,
+                moduleId: "m1",
+                ...item,
+              };
+            }
+            return next;
+          });
+        })
+        .catch(() => {
+          // Non-fatal offline hydration skip
+        });
+    } else {
+      void Promise.all(
+        storedEntries.map(([qId, optIdx]) =>
+          checkSingleQuizQuestionApi(quiz.moduleId, qId, optIdx).catch(() => null)
+        )
+      ).then((results) => {
+        if (!active) return;
+        setGradedById((prev) => {
+          const next = { ...prev };
+          for (const item of results) {
+            if (item) next[item.questionId] = item;
+          }
+          return next;
+        });
+      });
+    }
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quiz.moduleId, canTakeQuiz]);
+
   const selectedOption = answers[currentQuestion.id];
   const isAnswered = selectedOption !== undefined;
-  const isCurrentCorrect = isAnswered && selectedOption === currentQuestion.correctIndex;
+  const currentGrade = gradedById[currentQuestion.id];
+  const isCurrentCorrect = Boolean(isAnswered && currentGrade?.isCorrect);
 
-  const summary = getQuizReviewSummary(quiz, answers);
-  const { answeredCount, correctCount, accuracyPct } = summary;
+  const answeredCount = questions.filter((q) => answers[q.id] !== undefined).length;
+  const correctCount = questions.filter((q) => gradedById[q.id]?.isCorrect).length;
+  const accuracyPct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+  const missedQuestions = questions.filter(
+    (q) => answers[q.id] !== undefined && gradedById[q.id] && !gradedById[q.id].isCorrect
+  );
+  const recommendedTargetMap = new Map<string, QuizReviewTarget>();
+  for (const mq of missedQuestions) {
+    const target = mq.reviewTarget ?? gradedById[mq.id]?.reviewTarget;
+    if (!target) continue;
+    const key = `${target.labId ?? ""}:${target.moduleId ?? ""}:${target.label}`;
+    if (!recommendedTargetMap.has(key)) {
+      recommendedTargetMap.set(key, target);
+    }
+  }
+  const summary = {
+    answeredCount,
+    correctCount,
+    accuracyPct,
+    missedQuestions,
+    recommendedTargets: Array.from(recommendedTargetMap.values()),
+  };
   const allAnswered = answeredCount === totalCount;
 
   const handleJumpToReviewTarget = (target: QuizReviewTarget, e: MouseEvent) => {
@@ -126,17 +204,30 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const handleSelectOption = (optionIndex: number, e?: MouseEvent) => {
     e?.stopPropagation();
     if (!canTakeQuiz || isAnswered) return;
-    setAnswers((prev) => {
-      const next = {
-        ...prev,
-        [currentQuestion.id]: optionIndex,
-      };
-      saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, next);
-      if (session && Object.keys(next).length === totalCount) {
-        void submitQuizAnswers(quiz.moduleId, next).catch(() => {});
-      }
-      return next;
-    });
+    const qId = currentQuestion.id;
+    const next = {
+      ...answers,
+      [qId]: optionIndex,
+    };
+    setAnswers(next);
+    setGradeError(null);
+    setGradingQuestionId(qId);
+    saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, next);
+
+    void checkSingleQuizQuestionApi(quiz.moduleId, qId, optionIndex)
+      .then((res) => {
+        setGradedById((prev) => ({ ...prev, [qId]: res }));
+      })
+      .catch((err) => {
+        setGradeError(err instanceof Error ? err.message : "服务端判分校验失败，请重试。");
+      })
+      .finally(() => {
+        setGradingQuestionId((prev) => (prev === qId ? null : prev));
+      });
+
+    if (session && Object.keys(next).length === totalCount) {
+      void submitQuizAnswers(quiz.moduleId, next).catch(() => {});
+    }
   };
 
   if (!canTakeQuiz) {
@@ -200,6 +291,8 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
   const handleReset = (e: MouseEvent) => {
     e.stopPropagation();
     setAnswers({});
+    setGradedById({});
+    setGradeError(null);
     saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, {});
     setCurrentIndex(0);
     setShowSummary(false);
@@ -207,8 +300,23 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
 
   const handleRetryWrongOnly = (e: MouseEvent) => {
     e.stopPropagation();
-    const { keptAnswers, firstWrongIndex } = buildRetryWrongAnswersState(questions, answers);
+    const correctIds = new Set(
+      questions.filter((q) => gradedById[q.id]?.isCorrect).map((q) => q.id)
+    );
+    const { keptAnswers, firstWrongIndex } = buildRetryWrongAnswersState(
+      questions,
+      answers,
+      correctIds
+    );
     setAnswers(keptAnswers);
+    setGradedById((prev) => {
+      const next: Record<string, SingleQuestionCheckResponse> = {};
+      for (const qId of Object.keys(keptAnswers)) {
+        if (prev[qId]) next[qId] = prev[qId];
+      }
+      return next;
+    });
+    setGradeError(null);
     saveStoredModuleAnswers(quiz.moduleId, quiz.moduleNumber, keptAnswers);
     setCurrentIndex(firstWrongIndex);
     setShowSummary(false);
@@ -325,26 +433,34 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                     第 {currentIndex + 1} 题 · {currentQuestion.topic}
                   </span>
                   {isAnswered ? (
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 text-xs font-medium",
-                        isCurrentCorrect ? "text-emerald-400" : "text-rose-400"
-                      )}
-                    >
-                      {isCurrentCorrect ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>回答正确</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-4 h-4" />
-                          <span>
-                            回答有误 · 正确答案 {OPTION_LABELS[currentQuestion.correctIndex]}
-                          </span>
-                        </>
-                      )}
-                    </span>
+                    currentGrade ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 text-xs font-medium",
+                          isCurrentCorrect ? "text-emerald-400" : "text-rose-400"
+                        )}
+                      >
+                        {isCurrentCorrect ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>回答正确</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4" />
+                            <span>
+                              回答有误 · 正确答案 {OPTION_LABELS[currentGrade.correctIndex]}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gemini-cyan font-mono">
+                        {gradingQuestionId === currentQuestion.id
+                          ? "服务端判分校验中..."
+                          : gradeError ?? "已记录选项"}
+                      </span>
+                    )
                   ) : (
                     <span className="text-xs text-white/45">
                       点击选项或按数字键 1-4 作答
@@ -363,13 +479,15 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                 <div className="space-y-2.5">
                   {currentQuestion.options.map((optionText, idx) => {
                     const isSelected = selectedOption === idx;
-                    const isCorrectOption = currentQuestion.correctIndex === idx;
+                    const isCorrectOption = Boolean(
+                      currentGrade && currentGrade.correctIndex === idx
+                    );
 
                     let cardStyle =
                       "bg-white/[0.03] border-white/10 text-white/85 hover:bg-white/[0.07] hover:border-gemini-cyan/50";
                     let keyBadgeStyle = "bg-white/10 text-white/70 border-white/15";
 
-                    if (isAnswered) {
+                    if (isAnswered && currentGrade) {
                       if (isCorrectOption) {
                         cardStyle =
                           "bg-emerald-500/12 border-emerald-500/60 text-white";
@@ -432,14 +550,14 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
               <div
                 className={cn(
                   "mt-4 rounded-xl border px-4 py-3 transition-colors",
-                  isAnswered
+                  isAnswered && currentGrade
                     ? isCurrentCorrect
                       ? "bg-emerald-950/25 border-emerald-500/30"
                       : "bg-gemini-purple/10 border-gemini-purple/35"
                     : "bg-white/[0.02] border-white/10"
                 )}
               >
-                {isAnswered ? (
+                {isAnswered && currentGrade ? (
                   <div className="space-y-2.5">
                     <div className="flex items-start gap-2.5">
                       <BookOpenCheck className="w-4 h-4 text-gemini-cyan shrink-0 mt-0.5" />
@@ -447,7 +565,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                         <span className="font-semibold text-gemini-cyan mr-1.5">
                           核心解析：
                         </span>
-                        {currentQuestion.explanation}
+                        {currentGrade.explanation}
                       </div>
                     </div>
 
@@ -455,7 +573,7 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                       <span className="text-[11px] font-mono text-white/65">
                         {isCurrentCorrect ? "关联巩固：" : "复习建议："}
                         <span className="text-slate-300 font-sans ml-1">
-                          {currentRemediation.reviewAction}
+                          {currentGrade.remediationAction || currentRemediation.reviewAction}
                         </span>
                       </span>
                       <button
@@ -505,7 +623,8 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                   {questions.map((q, idx) => {
                     const ans = answers[q.id];
                     const answered = ans !== undefined;
-                    const correct = answered && ans === q.correctIndex;
+                    const grade = gradedById[q.id];
+                    const correct = Boolean(answered && grade?.isCorrect);
                     const active = idx === currentIndex;
 
                     return (
@@ -718,7 +837,8 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                   {questions.map((q, idx) => {
                     const userChoice = answers[q.id];
                     const isAnsweredItem = userChoice !== undefined;
-                    const isRight = isAnsweredItem && userChoice === q.correctIndex;
+                    const grade = gradedById[q.id];
+                    const isRight = Boolean(isAnsweredItem && grade?.isCorrect);
 
                     return (
                       <button
@@ -740,8 +860,8 @@ export default function QuizSlide({ quiz }: QuizSlideProps) {
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-400">
                               <XCircle className="w-4 h-4" />
                               <span>
-                                选了 {OPTION_LABELS[userChoice]} · 正解{" "}
-                                {OPTION_LABELS[q.correctIndex]}
+                                选了 {OPTION_LABELS[userChoice]}
+                                {grade ? ` · 正解 ${OPTION_LABELS[grade.correctIndex]}` : " · 待核对"}
                               </span>
                             </span>
                           ) : (

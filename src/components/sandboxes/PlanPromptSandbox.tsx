@@ -164,9 +164,9 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
           auditTitle="Plan 蓝图确定性审计"
         />
       ) : (
-        <div className="grid grid-cols-12 gap-4 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
         {/* Left 60% Controls */}
-        <div className="col-span-7 flex flex-col gap-2.5">
+        <div className="lg:col-span-7 flex flex-col gap-2.5">
           {/* Scenario Preset Selector */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-mono text-slate-400 mr-1">产品场景:</span>
@@ -187,7 +187,7 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
           </div>
 
           {/* Cursor Mode Selector */}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {(["Plan", "Agent", "Ask", "Debug"] as CursorMode[]).map((m) => (
               <button
                 key={m}
@@ -224,7 +224,7 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
           </div>
 
           {/* @ Context & DoD Checkboxes */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-2.5 rounded-xl bg-black/30 border border-white/10">
               <div className="text-[11px] font-mono text-gemini-cyan mb-1.5 flex items-center gap-1">
                 <Layers className="w-3 h-3" />
@@ -281,7 +281,7 @@ ${dodLines.length > 0 ? dodLines.join("\n") : "- [ ] 确保构建与基础类型
         </div>
 
         {/* Right 40% Compiled Output */}
-        <div className="col-span-5 flex flex-col rounded-xl bg-black/60 border border-white/10 overflow-hidden">
+        <div className="lg:col-span-5 flex flex-col rounded-xl bg-black/60 border border-white/10 overflow-hidden">
           <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center justify-between text-[11px] font-mono">
             <span className="text-gemini-cyan">Cmd+I · 编译后可执行指令</span>
             <span className="text-slate-400 tabular-nums">{selectedTags.length} 个上下文</span>

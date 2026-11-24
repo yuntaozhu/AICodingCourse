@@ -4,6 +4,9 @@ import BillingModal from "@/components/lms/BillingModal";
 import EmailLoginModal from "@/components/lms/EmailLoginModal";
 import Presentation, { type LabJumpItem, type ModuleNavItem } from "@/components/Presentation";
 import OfficialHomePage from "@/components/website/OfficialHomePage";
+import TeensLandingPage from "@/components/website/TeensLandingPage";
+import TeamsLandingPage from "@/components/website/TeamsLandingPage";
+import type { WebsitePageRoute } from "@/components/website/WebsiteNavbar";
 import { Module1Slides } from "@/components/slides/Module1";
 import { Module2Slides } from "@/components/slides/Module2";
 import { Module3Slides } from "@/components/slides/Module3";
@@ -42,7 +45,7 @@ import AgentLoopSlide from "@/components/slides/Module12/AgentLoopSlide";
 import GovEvalSlide from "@/components/slides/Module13Gov/GovEvalSlide";
 import { AI_BOOKS_KNOWLEDGE_BASE } from "@/data/aiBooksKnowledgeBase";
 
-type AppViewMode = "website" | "workspace" | "slides";
+type AppViewMode = "website" | "teens" | "teams" | "workspace" | "slides";
 
 function detectInitialView(): AppViewMode {
   if (typeof window === "undefined") return "website";
@@ -51,6 +54,12 @@ function detectInitialView(): AppViewMode {
   }
   if (window.location.pathname.startsWith("/app")) {
     return "workspace";
+  }
+  if (window.location.pathname.startsWith("/teens")) {
+    return "teens";
+  }
+  if (window.location.pathname.startsWith("/teams")) {
+    return "teams";
   }
   return "website";
 }
@@ -70,13 +79,7 @@ function App() {
     const handleOpenBilling = () => setBillingOpen(true);
     const handleOpenLogin = () => setEmailLoginOpen(true);
     const handlePopState = () => {
-      if (window.location.hash.startsWith("#/")) {
-        setAppMode("slides");
-      } else if (window.location.pathname.startsWith("/app")) {
-        setAppMode("workspace");
-      } else {
-        setAppMode("website");
-      }
+      setAppMode(detectInitialView());
     };
     window.addEventListener("app:open-billing", handleOpenBilling);
     window.addEventListener("app:open-login", handleOpenLogin);
@@ -179,15 +182,25 @@ function App() {
       if (window.location.hash.startsWith("#/") || window.location.pathname !== "/app") {
         window.history.pushState(null, "", "/app");
       }
+      window.scrollTo({ top: 0 });
     }
     setAppMode("workspace");
   };
 
-  const handleGoOfficialHome = () => {
-    if (typeof window !== "undefined" && window.location.pathname !== "/") {
-      window.history.pushState(null, "", "/");
+  const handleNavigateWebsitePage = (page: WebsitePageRoute) => {
+    const targetPath = page === "teens" ? "/teens" : page === "teams" ? "/teams" : "/";
+    const nextMode: AppViewMode = page === "home" ? "website" : page;
+    if (typeof window !== "undefined") {
+      if (window.location.hash.startsWith("#/") || window.location.pathname !== targetPath) {
+        window.history.pushState(null, "", targetPath);
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    setAppMode("website");
+    setAppMode(nextMode);
+  };
+
+  const handleGoOfficialHome = () => {
+    handleNavigateWebsitePage("home");
   };
 
   return (
@@ -200,6 +213,31 @@ function App() {
     >
       {appMode === "website" && (
         <OfficialHomePage
+          onNavigatePage={handleNavigateWebsitePage}
+          onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
+          onOpenBilling={() => setBillingOpen(true)}
+          onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}
+          onOpenInstructorCockpit={() => handleOpenCourseSystem(undefined, "instructor")}
+          onOpenAdminConsole={() => handleOpenCourseSystem(undefined, "admin")}
+        />
+      )}
+
+      {appMode === "teens" && (
+        <TeensLandingPage
+          onNavigatePage={handleNavigateWebsitePage}
+          onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
+          onOpenBilling={() => setBillingOpen(true)}
+          onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}
+          onOpenInstructorCockpit={() => handleOpenCourseSystem(undefined, "instructor")}
+          onOpenAdminConsole={() => handleOpenCourseSystem(undefined, "admin")}
+        />
+      )}
+
+      {appMode === "teams" && (
+        <TeamsLandingPage
+          onNavigatePage={handleNavigateWebsitePage}
           onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
           onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
           onOpenBilling={() => setBillingOpen(true)}

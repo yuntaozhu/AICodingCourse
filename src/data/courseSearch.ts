@@ -191,14 +191,6 @@ export function searchCourseWorkspace(
         ...(unit.learnerArtifact
           ? [unit.learnerArtifact.title, unit.learnerArtifact.filename, unit.learnerArtifact.templateContent]
           : []),
-        ...(includeInstructor
-          ? [
-              unit.teacherMaterials.teachingTips,
-              unit.teacherMaterials.timeTrimNote,
-              ...unit.teacherMaterials.referenceAnswers,
-              ...unit.teacherMaterials.commonPitfalls,
-            ]
-          : []),
       ];
 
       const unitScore = scoreMatch(

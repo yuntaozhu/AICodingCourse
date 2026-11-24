@@ -20,8 +20,7 @@ import {
   userRoles,
   users,
 } from "../db/schema.ts";
-import { COURSE_SKILLS, type SkillId } from "../data/courseSkills.ts";
-import { getOrCreateUser } from "../db/users.ts";
+import { COURSE_SKILLS as PRIVATE_COURSE_SKILLS, type SkillId } from "./data/privateSkills.ts";
 import {
   type AuthedRequest,
   claimFirstAdmin,
@@ -34,8 +33,13 @@ import {
   requireAuth,
 } from "./auth.ts";
 import { AI_MODEL_ID, checkAndRunGuardedAiCall } from "./services/aiService.ts";
-import { signToken } from "./services/tokenService.ts";
 import {
+  requestEmailOtp,
+  verifyEmailOtpAndLogin,
+} from "./services/emailOtpService.ts";
+import {
+  adminCancelOrder,
+  adminConfirmOrderPayment,
   adminCreateRedeemCode,
   adminGrantEntitlement,
   adminRevokeEntitlement,
@@ -57,11 +61,17 @@ import {
 } from "./services/cohortService.ts";
 import {
   CURRICULUM_VERSION,
+  buildFullCourseInstructorHandbookMarkdown,
+  buildInstructorLessonPlanMarkdown,
+  canViewInstructorMaterials,
   getAuthorizedModuleDetail,
   getPublicCurriculumOverview,
   getSanitizedModuleQuiz,
   getUserWorkspaceCloudState,
   gradeAndRecordQuizAttempt,
+  gradePreviewM1Quiz,
+  gradePreviewSkillDiagnostic,
+  gradeSingleQuizQuestion,
   gradeSkillDiagnosticAndGrant,
 } from "./services/curriculumService.ts";
 
@@ -157,42 +167,62 @@ app.post("/api/inquiries", async (req: Request, res: Response) => {
   }
 });
 
-// Vercel standalone passwordless email login for regions where Google Auth is restricted
-const emailLoginSchema = z.object({
+// Email 6-digit OTP authentication (replaces unverified passwordless login-email)
+const emailOtpRequestSchema = z.object({
   email: z.string().trim().email("请填写有效的电子邮箱地址").max(120),
 });
 
-app.post("/api/auth/login-email", async (req: Request, res: Response) => {
-  const parsed = emailLoginSchema.safeParse(req.body);
+app.post("/api/auth/email/request-otp", async (req: Request, res: Response) => {
+  const parsed = emailOtpRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message || "邮箱格式不合法。" });
     return;
   }
   try {
-    const email = parsed.data.email.trim().toLowerCase();
-    const existing = await findUserByEmail(email);
-    const dbUser = await getOrCreateUser({
-      uid: existing?.uid || `email-${email}`,
-      email,
-      displayName: existing?.displayName || email.split("@")[0] || "学员",
-      avatarUrl: existing?.avatarUrl || "",
-    });
-
-    const token = signToken({ userId: dbUser.id, email: dbUser.email });
-    res.json({
-      ok: true,
-      token,
-      user: {
-        id: dbUser.id,
-        email: dbUser.email,
-        displayName: dbUser.displayName,
-        avatarUrl: dbUser.avatarUrl,
-      },
-    });
+    const result = await requestEmailOtp(parsed.data.email);
+    if (!result.ok) {
+      res.status(result.status).json({
+        error: result.error,
+        ...(result.retryAfterSeconds ? { retryAfterSeconds: result.retryAfterSeconds } : {}),
+      });
+      return;
+    }
+    res.json(result);
   } catch (err) {
-    console.error("[/api/auth/login-email] error:", err);
-    res.status(500).json({ error: "邮箱登录失败，请稍后重试。" });
+    console.error("[/api/auth/email/request-otp] error:", err);
+    res.status(500).json({ error: "发送邮箱验证码失败，请稍后重试。" });
   }
+});
+
+const emailOtpVerifySchema = z.object({
+  email: z.string().trim().email("请填写有效的电子邮箱地址").max(120),
+  code: z.string().trim().regex(/^\d{6}$/, "请输入 6 位数字验证码"),
+});
+
+app.post("/api/auth/email/verify-otp", async (req: Request, res: Response) => {
+  const parsed = emailOtpVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || "验证码格式不合法。" });
+    return;
+  }
+  try {
+    const result = await verifyEmailOtpAndLogin(parsed.data.email, parsed.data.code);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[/api/auth/email/verify-otp] error:", err);
+    res.status(500).json({ error: "验证码核验失败，请稍后重试。" });
+  }
+});
+
+// Legacy passwordless endpoint permanently disabled
+app.post("/api/auth/login-email", (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "邮箱直连登录已升级为 6 位验证码校验，请通过 /api/auth/email/request-otp 获取验证码完成登录。",
+  });
 });
 
 // Current authenticated user session, roles, entitlements & initial admin claim eligibility
@@ -268,6 +298,59 @@ app.get(
   }
 );
 
+// Instructor-only lesson plan Markdown export
+app.get(
+  "/api/curriculum/modules/:moduleId/lesson-plan",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    if (!canViewInstructorMaterials(req.authContext)) {
+      res.status(403).json({ error: "仅授权讲师、助教或教务管理员可导出教师备课讲义。" });
+      return;
+    }
+    const moduleId = String(req.params.moduleId || "").trim();
+    const planId = typeof req.query.planId === "string" ? req.query.planId.trim() : undefined;
+    const markdown = buildInstructorLessonPlanMarkdown(moduleId, planId);
+    if (!markdown) {
+      res.status(404).json({ error: "未找到对应课程模块。" });
+      return;
+    }
+    res.json({
+      ok: true,
+      filename: `${moduleId}-instructor-prep.md`,
+      markdown,
+    });
+  }
+);
+
+// Instructor-only full 14-module handbook Markdown export
+app.get(
+  "/api/curriculum/instructor-handbook",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    if (!canViewInstructorMaterials(req.authContext)) {
+      res.status(403).json({ error: "仅授权讲师、助教或教务管理员可导出全课备课手册。" });
+      return;
+    }
+    let selectedPlanByModule: Record<string, string> = {};
+    if (typeof req.query.plans === "string" && req.query.plans.trim()) {
+      try {
+        const parsed = JSON.parse(req.query.plans);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          selectedPlanByModule = parsed as Record<string, string>;
+        }
+      } catch {
+        // Ignore malformed optional plans query and use default plan per module
+      }
+    }
+    const markdown = buildFullCourseInstructorHandbookMarkdown(selectedPlanByModule);
+    res.json({
+      ok: true,
+      filename: `aicodingcourse-instructor-handbook-${new Date().toISOString().slice(0, 10)}.md`,
+      markdown,
+    });
+  }
+);
+
 // Sanitized quiz questions (no correctIndex or explanation sent prior to submission)
 app.get(
   "/api/quizzes/:moduleId",
@@ -299,6 +382,53 @@ app.get(
 const quizSubmitSchema = z.object({
   answers: z.record(z.string(), z.number().int().min(0).max(3)),
 });
+
+const singleQuestionCheckSchema = z.object({
+  questionId: z.string().trim().min(1).max(60),
+  selectedIndex: z.number().int().min(0).max(3),
+});
+
+app.post(
+  "/api/quizzes/m1/preview-grade",
+  async (req: Request, res: Response) => {
+    const parsed = quizSubmitSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "体验测验作答格式不正确。" });
+      return;
+    }
+    res.json(gradePreviewM1Quiz(parsed.data.answers));
+  }
+);
+
+app.post(
+  "/api/quizzes/:moduleId/check-question",
+  optionalAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const parsed = singleQuestionCheckSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "单题校验参数不正确。" });
+      return;
+    }
+    try {
+      const moduleId = String(req.params.moduleId || "").trim();
+      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+      const result = gradeSingleQuizQuestion({
+        moduleId,
+        questionId: parsed.data.questionId,
+        selectedIndex: parsed.data.selectedIndex,
+        hasPaidAccess,
+      });
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/quizzes/:moduleId/check-question] error:", err);
+      res.status(500).json({ error: "服务端单题判分失败。" });
+    }
+  }
+);
 
 app.post(
   "/api/quizzes/:moduleId/submit",
@@ -602,6 +732,31 @@ const skillDiagSchema = z.object({
 });
 
 app.post(
+  "/api/skills/diagnostic/preview",
+  async (req: Request, res: Response) => {
+    const parsed = skillDiagSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "诊断答卷格式不正确。" });
+      return;
+    }
+    const validSkill = PRIVATE_COURSE_SKILLS.find((s) => s.id === parsed.data.skillId);
+    if (!validSkill) {
+      res.status(404).json({ error: "技能 ID 不存在。" });
+      return;
+    }
+    const result = gradePreviewSkillDiagnostic({
+      skillId: validSkill.id as SkillId,
+      answers: parsed.data.answers,
+    });
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json(result);
+  }
+);
+
+app.post(
   "/api/skills/diagnostic",
   requireAuth,
   async (req: AuthedRequest, res: Response) => {
@@ -610,7 +765,7 @@ app.post(
       res.status(400).json({ error: "诊断答卷格式不正确。" });
       return;
     }
-    const validSkill = COURSE_SKILLS.find((s) => s.id === parsed.data.skillId);
+    const validSkill = PRIVATE_COURSE_SKILLS.find((s) => s.id === parsed.data.skillId);
     if (!validSkill) {
       res.status(404).json({ error: "技能 ID 不存在。" });
       return;
@@ -1287,6 +1442,137 @@ app.post(
     } catch (err) {
       console.error("[/api/admin/cohorts/:id/enroll] error:", err);
       res.status(500).json({ error: "学员分班失败。" });
+    }
+  }
+);
+
+app.post(
+  "/api/admin/orders/:orderId/confirm",
+  requireAuth,
+  requireAdmin,
+  async (req: AuthedRequest, res: Response) => {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      res.status(400).json({ error: "订单 ID 无效。" });
+      return;
+    }
+    try {
+      const result = await adminConfirmOrderPayment(orderId);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/admin/orders/:id/confirm] error:", err);
+      res.status(500).json({ error: "订单核销开通失败。" });
+    }
+  }
+);
+
+app.post(
+  "/api/admin/orders/:orderId/cancel",
+  requireAuth,
+  requireAdmin,
+  async (req: AuthedRequest, res: Response) => {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      res.status(400).json({ error: "订单 ID 无效。" });
+      return;
+    }
+    try {
+      const result = await adminCancelOrder(orderId);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/admin/orders/:id/cancel] error:", err);
+      res.status(500).json({ error: "取消订单失败。" });
+    }
+  }
+);
+
+const createMilestoneSchema = z.object({
+  title: z.string().trim().min(3, "请填写里程碑标题").max(160),
+  moduleId: z.string().trim().min(2).max(30),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "截止日期格式需为 YYYY-MM-DD"),
+  sortOrder: z.number().int().min(1).max(50).optional(),
+});
+
+app.post(
+  "/api/admin/cohorts/:cohortId/milestones",
+  requireAuth,
+  requireAdmin,
+  async (req: AuthedRequest, res: Response) => {
+    const cohortId = Number(req.params.cohortId);
+    const parsed = createMilestoneSchema.safeParse(req.body);
+    if (!Number.isInteger(cohortId) || cohortId <= 0 || !parsed.success) {
+      res.status(400).json({ error: parsed.error?.issues[0]?.message || "里程碑参数无效。" });
+      return;
+    }
+    try {
+      const [cohort] = await db
+        .select()
+        .from(cohorts)
+        .where(eq(cohorts.id, cohortId))
+        .limit(1);
+      if (!cohort) {
+        res.status(404).json({ error: "目标班期不存在。" });
+        return;
+      }
+      const existing = await db
+        .select()
+        .from(cohortMilestones)
+        .where(eq(cohortMilestones.cohortId, cohortId));
+      const [created] = await db
+        .insert(cohortMilestones)
+        .values({
+          cohortId,
+          title: parsed.data.title,
+          moduleId: parsed.data.moduleId,
+          dueDate: parsed.data.dueDate,
+          sortOrder: parsed.data.sortOrder ?? existing.length + 1,
+        })
+        .returning();
+      res.status(201).json({ ok: true, milestone: created });
+    } catch (err) {
+      console.error("[/api/admin/cohorts/:id/milestones] error:", err);
+      res.status(500).json({ error: "创建班级里程碑失败。" });
+    }
+  }
+);
+
+const updateInquiryStatusSchema = z.object({
+  status: z.enum(["new", "contacted", "closed"]),
+});
+
+app.patch(
+  "/api/admin/inquiries/:inquiryId",
+  requireAuth,
+  requireAdmin,
+  async (req: AuthedRequest, res: Response) => {
+    const inquiryId = Number(req.params.inquiryId);
+    const parsed = updateInquiryStatusSchema.safeParse(req.body);
+    if (!Number.isInteger(inquiryId) || inquiryId <= 0 || !parsed.success) {
+      res.status(400).json({ error: "咨询状态参数无效。" });
+      return;
+    }
+    try {
+      const updated = await db
+        .update(leadInquiries)
+        .set({ status: parsed.data.status })
+        .where(eq(leadInquiries.id, inquiryId))
+        .returning();
+      if (updated.length === 0) {
+        res.status(404).json({ error: "咨询记录不存在。" });
+        return;
+      }
+      res.json({ ok: true, inquiry: updated[0] });
+    } catch (err) {
+      console.error("[/api/admin/inquiries/:id] error:", err);
+      res.status(500).json({ error: "更新咨询状态失败。" });
     }
   }
 );

@@ -1,4 +1,3 @@
-import type { QuizQuestion } from "./moduleQuizzes.ts";
 
 export const VALID_LAB_IDS = [
   "plan-prompt",
@@ -490,8 +489,9 @@ export function getQuestionRemediation(
 }
 
 export function buildRetryWrongAnswersState(
-  questions: QuizQuestion[],
-  currentAnswers: Record<string, number>
+  questions: Array<{ id: string }>,
+  currentAnswers: Record<string, number>,
+  correctQuestionIds: Set<string>
 ): {
   keptAnswers: Record<string, number>;
   firstWrongIndex: number;
@@ -503,7 +503,7 @@ export function buildRetryWrongAnswersState(
 
   questions.forEach((q, idx) => {
     const chosen = currentAnswers[q.id];
-    if (chosen === q.correctIndex) {
+    if (chosen !== undefined && correctQuestionIds.has(q.id)) {
       keptAnswers[q.id] = chosen;
     } else {
       wrongCount += 1;

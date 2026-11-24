@@ -568,9 +568,6 @@ export default function CourseNavSidebar({
                             <div className="text-[10px] font-mono text-slate-300 leading-relaxed">
                               {teachingPkg.deliveryModes.map((dm) => `${dm.label}`).join(" · ")}
                             </div>
-                            <div className="text-[10px] text-slate-400 leading-relaxed">
-                              裁剪建议：{teachingPkg.trimAndMergeNote}
-                            </div>
                           </div>
                         )}
 

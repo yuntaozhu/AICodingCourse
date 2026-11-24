@@ -9,9 +9,19 @@ import {
 } from "./courseCurriculum.ts";
 import type { SkillId } from "./courseSkills.ts";
 import { MODULE_QUIZZES } from "./moduleQuizzes.ts";
-import { MODULE_TEACHING_PACKAGES, type ModuleTeachingPackage } from "./moduleTeachingPackages.ts";
+import {
+  MODULE_TEACHING_PACKAGES,
+  type PublicModuleTeachingPackage,
+} from "./moduleTeachingPackages.ts";
 import { TEAM_KNOWLEDGE_BASE } from "./teamKnowledgeBase.ts";
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "./runtimeKnowledgeBase.ts";
+
+const EMPTY_TEACHER_MATERIALS: UnitTeacherMaterials = {
+  teachingTips: "",
+  referenceAnswers: [],
+  commonPitfalls: [],
+  timeTrimNote: "",
+};
 
 const M13_GOV_DISCLAIMER_TEXT =
   "本验收基于预制轨迹与固定评测集进行模拟治理评审，不构成对生产运行系统的实测验证。";
@@ -157,19 +167,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "对应知识库模板《Plan → Agent 四段式需求蓝图模板》(v1.2)。",
-    teacherMaterials: {
-      teachingTips:
-        "开场用 2 分钟提问学员最近一次 AI 改坏代码的原因，把讨论引导至“指令没写禁区与验证命令”。",
-      referenceAnswers: [
-        "适用边界参考：改单个组件按钮文案 -> 直接局部改；加带数据库/限流的匿名反馈箱 -> 必须先 Plan。",
-        "四要素缺一不可中，实战返工率最高的是缺少 Guardrails（没声明不准改什么）和 DoD（没给出退出自检命令）。",
-      ],
-      commonPitfalls: [
-        "误把所有小改动都强制套用冗长表单，反而拖慢开发节奏。",
-        "只在 Context 里写“@Codebase 看着办”，未锁定具体入口文件。",
-      ],
-      timeTrimNote: "短讲模式可把本单元压缩为 5 分钟，直接拿四段模板卡片切入演示。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
     revealJump: { slideOffset: 1, label: "查看 M1 概念幻灯片" },
@@ -198,16 +196,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "将对比发现的返工高发区直接作为团队蓝图模板的重点审核栏。",
-    teacherMaterials: {
-      teachingTips:
-        "强调“AI 写得很快 != 需求已经想清楚”。鼓励学员把精力从背语法转移到写边界与读 Diff。",
-      referenceAnswers: [
-        "瓶颈转移：起草编码时间下降 60%+，但若无范围锁和 DoD，清理 AI 过度改动的返工时间会翻倍。",
-        "不可委托决策：功能优先级取舍、数据库不可逆迁移、生产权限与对外 API 破坏性变更。",
-      ],
-      commonPitfalls: ["部分零基础学员误以为“以后不需要懂边界和测试，全让 AI 看一眼就行”。"],
-      timeTrimNote: "研讨课可仅展示对照表 3 分钟，直接让有开发经验的学员补充各自痛点。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
     revealJump: { slideOffset: 3, label: "对比 Reveal 范式演进" },
@@ -257,16 +246,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "演示产生的指令骨架即 `PLAN_SPEC_TEMPLATE.md` 的标准源模板。",
-    teacherMaterials: {
-      teachingTips:
-        "如果现场演示环境无外网 API Key，可直接使用本地预设对比代码 Diff + 课程内 P7b 正反对比动画完成演示。",
-      referenceAnswers: [
-        "关键演示转折点：在 Step 1 不要急着修复报错，直接对比 diff 说明“如果此时不断追问，只会越补越乱，正确做法是回退并先出 Plan”。",
-        "多元可接受做法：若改动仅限于单函数纯逻辑重构，可直接让 AI 给局部 Plan 摘要而无需完整重文档。",
-      ],
-      commonPitfalls: ["讲师为了省时间跳过“故意翻车”直接放完美提示词，导致学员感受不到为什么一定要写 Guardrails。"],
-      timeTrimNote: "30 分钟研讨模式可只看 Step 1 和 Step 2 的前后 Diff 对比（约 6 分钟）。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
     revealJump: { slideOffset: 8, label: "在 Reveal 打开 P7b 闭环对照" },
@@ -306,14 +286,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "将自己项目中曾踩过的“虚假 Plan 扩展重构”记录补入团队反例清单。",
-    teacherMaterials: {
-      teachingTips: "先让学员自己找出上面这段“看似不错”的 Plan 哪里有坑，再揭示答案。",
-      referenceAnswers: [
-        "参考纠偏答复：1) 缺少目标与禁改文件路径；2) “确保功能正常”不是可检验标准，应改为明确 HTTP 状态码单测和构建退出码为 0。",
-      ],
-      commonPitfalls: ["学员把“界面更好看”“代码更优雅”当成约束条件写进 Guardrails。"],
-      timeTrimNote: "自主学习与工作坊可将该案例作为进入练习前的 5 分钟热身自测。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
   },
@@ -382,19 +355,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "验证好用的边界禁令句式建议同步保存到团队知识库模板区。",
-    teacherMaterials: {
-      teachingTips:
-        "巡场时重点看学员有没有写“禁止新增重型依赖”和“不修改 Auth”；若学员写的全是功能清单，提醒其砍掉一半当二期。",
-      referenceAnswers: [
-        "参考高分关键点：能主动把“权限、数据校验、CSV 注入转义、空状态”写进 Guardrails/DoD，且明确声明不改登录路由。",
-        "可接受替代写法：如果学员使用 Issue Checklist 格式或简明四行表代替长 Markdown，只要 4 要素齐备均算满分通过。",
-      ],
-      commonPitfalls: [
-        "把 5 个页面一起写进同一张 Plan 蓝图。",
-        "忘记在导出场景声明服务端权限验证或敏感字段脱敏。",
-      ],
-      timeTrimNote: "工作坊模式建议把本练习延长至 20 分钟并留 5 分钟两人交叉挑刺。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
   },
@@ -420,14 +381,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "Lab 01 中保存的提示词可随全局「工程交付包 (.md)」一键导出。",
-    teacherMaterials: {
-      teachingTips: "鼓励学员故意试一次把模式切回 Agent 并清空 @ 标签，亲眼观察审计分暴跌的原因。",
-      referenceAnswers: [
-        "满分组合：需求描述 >= 12 字且无空泛词 + 模式=Plan + 选中 1~4 个 @ 标签 + 勾选 >= 2 项 DoD + 无 sk-/ghp_ 字样。",
-      ],
-      commonPitfalls: ["部分学员在沙盘里一次性点亮全部 6 个 @ 标签，触发上下文过载警告。"],
-      timeTrimNote: "短讲模式可跳过课堂现场操作沙盘，留作自主练习环节。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
     revealJump: { labId: "plan-prompt", label: "前往 Reveal 打开 Lab 01 沙盘" },
@@ -454,14 +408,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "研讨中达成共识的场景边界可沉淀为团队内部简版准入准则。",
-    teacherMaterials: {
-      teachingTips: "避免只讲正确大道理，请 2 位有不同背景（如 PM 与后端开发）的学员分享各自对范围边界的看法。",
-      referenceAnswers: [
-        "典型共识：只要改动涉及公共状态、数据持久层、外部接口契约或跨 2 个以上文件，哪怕代码量不大，也值得花 2 分钟过一遍 Plan 范围确认。",
-      ],
-      commonPitfalls: ["把讨论变成工具功能对比大会，偏离“人何时做控制与验收决策”。"],
-      timeTrimNote: "双课时建议保留 8 分钟完整圆桌讨论；短讲课可改为课后思考题。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
   },
@@ -486,14 +433,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "错题暴露出的认知盲区建议补充进个人复盘日志。",
-    teacherMaterials: {
-      teachingTips: "建议讲师关注第 3 题（SDD 与 DoD 分工）和第 4 题（阶段权衡），常有学员混淆设计契约与退出验收门禁。",
-      referenceAnswers: [
-        "可在学员作答全部结束后展示解析，切勿在学员答题前提前念出正确选项字母。",
-      ],
-      commonPitfalls: ["只看答案对错，不点开对应的 Lab 补救动作验证。"],
-      timeTrimNote: "工作坊模式可跳过当堂集中测验，改为课后自主自查。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
     revealJump: { slideOffset: 12, label: "跳转 Reveal Module1Quiz" },
@@ -520,14 +460,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "支持直接在下方知识沉淀卡片新增条目并同步保存在本地浏览器。",
-    teacherMaterials: {
-      teachingTips: "现场展示仓库真实文件路径 `docs/knowledge-base/templates-and-checklists.md`，证明模板不是死 PPT。",
-      referenceAnswers: [
-        "沉淀示范：如“团队订单系统专用 Guardrails：禁止 AI 修改 priceCalculation.ts 的小数舍入规则，新增字段必须附带旧数据兼容默认值”。",
-      ],
-      commonPitfalls: ["直接整段复制默认模板不替换占位路径，导致拿到项目里没法直接用。"],
-      timeTrimNote: "短讲与自主学习均建议保留至少 3 分钟完成这一步沉淀，避免学完空手离开。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
   },
@@ -553,14 +486,7 @@ const M1_FULL_UNITS: CourseUnit[] = [
     ],
     knowledgeEntryIds: ["kb-m1-plan-blueprint"],
     knowledgeSedimentNote: "完成后将真实踩坑反馈写回个人/团队知识库。",
-    teacherMaterials: {
-      teachingTips: "建议零基础或工作繁忙学员首周只选 30 分钟档“改写一次历史返工需求的启动蓝图”，降低起步阻力。",
-      referenceAnswers: [
-        "三档任务差异在于影响半径：个人历史复盘 -> 单分支真实垂直切片 -> 多人 PR 准入契约。",
-      ],
-      commonPitfalls: ["贪多直接挑团队级任务却没留校验回访时间，最终烂尾。"],
-      timeTrimNote: "双课时结课用 5 分钟布置即可；自主学习者直接标记所选档位并记入复盘。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: "verified",
     updatedAt: "2026-11-19",
   },
@@ -801,7 +727,7 @@ alwaysApply: false
 
 function buildCompatibleUnitsForModule(
   mod: CourseModule,
-  pkg: ModuleTeachingPackage
+  pkg: PublicModuleTeachingPackage
 ): { units: CourseUnit[]; deliveryPlans: DeliveryPlan[] } {
   const modKbEntries = [
     ...TEAM_KNOWLEDGE_BASE,
@@ -824,7 +750,6 @@ function buildCompatibleUnitsForModule(
     contentBlocks: [
       ...mod.learningObjectives.map((obj, idx) => `目标 ${idx + 1}：${obj}`),
       `边界红线：${mod.boundaryNote}`,
-      `可压缩说明：${pkg.trimAndMergeNote}`,
     ],
     relatedResourceIds: mod.resourceIds,
     estimatedMinutes: 8,
@@ -835,12 +760,7 @@ function buildCompatibleUnitsForModule(
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "对应团队知识库条目可在「知识库沉淀」单元直接查看与复制。",
-    teacherMaterials: {
-      teachingTips: `授课裁剪提示：${pkg.trimAndMergeNote}`,
-      referenceAnswers: pkg.instructorDemo.acceptableAlternatives,
-      commonPitfalls: [pkg.failureModesDeepDive.classicError],
-      timeTrimNote: pkg.trimAndMergeNote,
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
     revealJump: { slideOffset: 0, label: `进入 Reveal ${mod.code} 幻灯片` },
@@ -870,12 +790,7 @@ function buildCompatibleUnitsForModule(
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "将人机分工与禁区条款纳入团队日常评审 Checklist。",
-    teacherMaterials: {
-      teachingTips: "对比表建议用具体业务后果说明为什么不能把决策权限交出。",
-      referenceAnswers: pkg.traditionalVsAi.nonDelegableCases,
-      commonPitfalls: [pkg.failureModesDeepDive.looksRightButWrong],
-      timeTrimNote: "短讲模式重点强调瓶颈转移与不可委托事项。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };
@@ -886,12 +801,10 @@ function buildCompatibleUnitsForModule(
     title: "03 教师演示：暴露缺陷 → 加约束 → 命令验真",
     type: "instructor-demo",
     learningObjective: `能观察并复述 ${mod.code} 演示中从首轮缺陷暴露到补齐约束并验真的完整控制流。`,
-    summary: pkg.instructorDemo.targetOutcome,
+    summary: `围绕「${pkg.coreQuestion}」对照观察首轮缺陷暴露、补充边界约束与命令行验真三步控制流。`,
     contentBlocks: [
-      `课前环境准备：${pkg.instructorDemo.prepAndEnv}`,
-      `无密钥离线替代：${pkg.instructorDemo.noKeyOfflineFallback}`,
+      "课堂演示聚焦“暴露缺陷 → 补充范围锁与约束 → 命令验真”三段控制流；讲师备课话术与环境脚本仅向已授权讲师加载。",
     ],
-    demoSteps: pkg.instructorDemo.steps,
     relatedResourceIds: mod.resourceIds.slice(0, 2),
     estimatedMinutes: 12,
     completionCriteria: [
@@ -900,15 +813,8 @@ function buildCompatibleUnitsForModule(
       "能说出除默认示范外的 1 种可接受替代工程方案",
     ],
     knowledgeEntryIds: kbIds,
-    knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
-    teacherMaterials: {
-      teachingTips: `卡住引导话术：${pkg.instructorDemo.stuckStudentPrompts.join(" ｜ ")}`,
-      referenceAnswers: pkg.instructorDemo.acceptableAlternatives,
-      commonPitfalls: [
-        `无 API Key 离线替代方案：${pkg.instructorDemo.noKeyOfflineFallback}`,
-      ],
-      timeTrimNote: "研讨或短讲可直接切入 Step 1 与 Step 2 前后对照。",
-    },
+    knowledgeSedimentNote: pkg.failureModesPublic.remediationRule,
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
     revealJump: { slideOffset: demoSlideOffset, label: `查看 Reveal ${mod.code} 示范页` },
@@ -920,17 +826,17 @@ function buildCompatibleUnitsForModule(
     title: "04 常见错误与失败案例剖析",
     type: "failure-case",
     learningObjective: `能辨识 ${mod.code} 中“看起来对但实际错”的高频陷阱与工具失效根因，并写出纠偏规则。`,
-    summary: pkg.failureModesDeepDive.classicError,
+    summary: pkg.failureModesPublic.classicError,
     contentBlocks: [
-      `典型翻车模式：${pkg.failureModesDeepDive.classicError}`,
-      `隐蔽失效特征：${pkg.failureModesDeepDive.looksRightButWrong}`,
-      `工具/上下文故障源：${pkg.failureModesDeepDive.contextOrToolFailure}`,
+      `典型翻车模式：${pkg.failureModesPublic.classicError}`,
+      `隐蔽失效特征：${pkg.failureModesPublic.looksRightButWrong}`,
+      `工具/上下文故障源：${pkg.failureModesPublic.contextOrToolFailure}`,
     ],
     failureAnalysis: {
-      mistakeScenario: pkg.failureModesDeepDive.classicError,
-      rootCause: `${pkg.failureModesDeepDive.looksRightButWrong}（工具/上下文因素：${pkg.failureModesDeepDive.contextOrToolFailure}）`,
-      analysisQuestions: pkg.failureModesDeepDive.triageQuestions,
-      fixGuidance: pkg.failureModesDeepDive.remediationRule,
+      mistakeScenario: pkg.failureModesPublic.classicError,
+      rootCause: `${pkg.failureModesPublic.looksRightButWrong}（工具/上下文因素：${pkg.failureModesPublic.contextOrToolFailure}）`,
+      analysisQuestions: pkg.failureModesPublic.triageQuestions,
+      fixGuidance: pkg.failureModesPublic.remediationRule,
     },
     relatedResourceIds: mod.resourceIds.slice(0, 2),
     estimatedMinutes: 8,
@@ -940,16 +846,8 @@ function buildCompatibleUnitsForModule(
       "能写出 1 条可直接防复发的规则约束或检查门禁",
     ],
     knowledgeEntryIds: kbIds,
-    knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
-    teacherMaterials: {
-      teachingTips: "请先让学员在学员视图下独立思考排查问题，再揭晓深层根因与纠偏做法。",
-      referenceAnswers: [
-        `深层根因：${pkg.failureModesDeepDive.looksRightButWrong}`,
-        `防复发纠偏规范：${pkg.failureModesDeepDive.remediationRule}`,
-      ],
-      commonPitfalls: [pkg.failureModesDeepDive.contextOrToolFailure],
-      timeTrimNote: "短讲模式重点展示“看起来对但实际错”的反例对比即可（约 5 分钟）。",
-    },
+    knowledgeSedimentNote: pkg.failureModesPublic.remediationRule,
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };
@@ -997,12 +895,7 @@ function buildCompatibleUnitsForModule(
     completionCriteria: pkg.rubric.map((r) => `${r.dimension}：${r.passCriteria}`),
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "将练习产出的规则或清单保留到团队知识库。",
-    teacherMaterials: {
-      teachingTips: "要求学员先过 Rubric 红线检查，再提交产物，不要拿未核对的大段代码凑数。",
-      referenceAnswers: pkg.rubric.map((r) => `${r.dimension} 合格证据：${r.evidence}（红线：${r.redFlag}）`),
-      commonPitfalls: pkg.rubric.map((r) => r.redFlag),
-      timeTrimNote: "时间有限时聚焦课堂最小版完成 1 轮核验。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
     revealJump: { slideOffset: practiceSlideOffset, label: `打开 Reveal ${mod.code} 实战页` },
@@ -1032,12 +925,7 @@ function buildCompatibleUnitsForModule(
           ].slice(0, Math.max(3, lab.acceptanceCriteria.length + 1)),
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: `沙盘产出物：${lab.deliverables.join("；")}`,
-    teacherMaterials: {
-      teachingTips: `沙盘常见误区：${lab.failureModes.join("；")}`,
-      referenceAnswers: lab.acceptanceCriteria,
-      commonPitfalls: lab.failureModes,
-      timeTrimNote: "如已使用同系列沙盘，可由讲师快速带过关键判定步骤。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
     revealJump: { labId: lab.id, label: `启动 Reveal Lab ${lab.code}` },
@@ -1055,7 +943,7 @@ function buildCompatibleUnitsForModule(
     contentBlocks: [
       `• 研讨焦点 A（不可委派红线）：${pkg.traditionalVsAi.nonDelegableCases.join("；")}`,
       `• 研讨焦点 B（人类核查点）：${pkg.exerciseVariants.nonDelegableCheckpoints.join("；")}`,
-      `• 研讨焦点 C（常见阻塞追问）：${pkg.instructorDemo.stuckStudentPrompts[0] || pkg.coreQuestion}`,
+      `• 研讨焦点 C（核心追问）：${pkg.coreQuestion}`,
     ],
     relatedResourceIds: mod.resourceIds.slice(0, 2),
     estimatedMinutes: 6,
@@ -1066,12 +954,7 @@ function buildCompatibleUnitsForModule(
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "研讨达成的团队准入共识建议记录为团队决策档案（ADR）。",
-    teacherMaterials: {
-      teachingTips: "鼓励不同岗位学员（前端/后端/PM/负责人）就风险承担点交换真实视角。",
-      referenceAnswers: pkg.traditionalVsAi.nonDelegableCases,
-      commonPitfalls: ["只谈工具表面快捷，忽略真实项目中的权限、成本或回归责任边界。"],
-      timeTrimNote: "自主学习或紧凑短讲可略过现场圆桌，保留复盘笔记即可。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };
@@ -1082,10 +965,10 @@ function buildCompatibleUnitsForModule(
     title: `${String(nextNumBase + 1).padStart(2, "0")} 巩固测验（${quiz ? quiz.questions.length : 3} 题即时诊断）`,
     type: "quiz",
     learningObjective: `能独立完成 ${mod.code} 核心诊断测验，并针对错题定位相应沙盘或知识点加固。`,
-    summary: "支持在本工作台直接作答测验并即时查看解析与补救建议，作答记录与 Reveal 幻灯片测验双向同步。",
+    summary: "支持在本工作台直接作答测验并由服务端判分给出解析与补救建议，作答记录与 Reveal 幻灯片测验双向同步。",
     contentBlocks: [
       `• 本测验包含 ${quiz ? quiz.questions.length : 3} 道聚焦工程边界与异常排查的选择题。`,
-      "• 作答记录保存在当前浏览器 localStorage，不依赖任何云端服务。",
+      "• 标准答案与解析统一由服务端判分接口返回，作答进度保存在本地与云端学习档案。",
     ],
     relatedResourceIds: mod.resourceIds.slice(0, 2),
     estimatedMinutes: 6,
@@ -1096,14 +979,7 @@ function buildCompatibleUnitsForModule(
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "建议把易混淆选项背后的判定依据补入个人笔记。",
-    teacherMaterials: {
-      teachingTips: "建议在学员全部提交后再集中串讲易错题，避免先念答案剧透。",
-      referenceAnswers: (quiz?.questions || []).map(
-        (q, i) => `Q${i + 1} (${q.topic})：${q.options[q.correctIndex]}`
-      ),
-      commonPitfalls: ["仅凭直觉选最长选项，未核查安全红线与校验依据。"],
-      timeTrimNote: "工作坊模式可将测验移至课后自主通关。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
     revealJump: { slideOffset: quizSlideOffset, label: `跳转 Reveal ${mod.code} Quiz` },
@@ -1128,13 +1004,8 @@ function buildCompatibleUnitsForModule(
       "验证导出的 Markdown 内容可直接贴入目标项目仓库中复用",
     ],
     knowledgeEntryIds: kbIds,
-    knowledgeSedimentNote: pkg.failureModesDeepDive.remediationRule,
-    teacherMaterials: {
-      teachingTips: "提醒学员重点关注标注“待验证假设”和“已废弃实践”的条目，理解规则会随模型迭代而过期。",
-      referenceAnswers: modKbEntries.map((k) => `《${k.title}》适用范围：${k.scope}`),
-      commonPitfalls: ["整段照搬示例目录或忽略版本变更直接写死进全局规则。"],
-      timeTrimNote: "即便在短讲中也保留 3 分钟，确保学员带走至少 1 条结构化模板。",
-    },
+    knowledgeSedimentNote: pkg.failureModesPublic.remediationRule,
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };
@@ -1159,12 +1030,7 @@ function buildCompatibleUnitsForModule(
     ],
     knowledgeEntryIds: kbIds,
     knowledgeSedimentNote: "完成课后迁移后，将实际踩坑与新规则反向更新进团队知识库。",
-    teacherMaterials: {
-      teachingTips: "鼓励零基础或时间紧张学员优先选 A 档 30 分钟快速验证任务，确保形成首次闭环。",
-      referenceAnswers: pkg.homeworkTiers.map((h) => `${h.label} 人工把关：${h.humanReviewGate}`),
-      commonPitfalls: ["直接选择跨团队大改任务但未预留评审窗口，导致中途放弃。"],
-      timeTrimNote: "结课用 3–5 分钟布置并让学员当场选定档位。",
-    },
+    teacherMaterials: EMPTY_TEACHER_MATERIALS,
     verificationStatus: mod.status,
     updatedAt: mod.lastReviewedAt,
   };

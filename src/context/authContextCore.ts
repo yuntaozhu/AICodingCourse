@@ -12,7 +12,12 @@ export interface AuthContextValue {
   signOutUser: () => Promise<void>;
   refreshSession: () => Promise<AuthSessionData | null>;
   claimInitialAdmin: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<void>;
+  requestEmailOtp: (email: string) => Promise<{
+    deliveryMode: "email" | "dev_preview";
+    cooldownSeconds: number;
+    devPreviewCode?: string;
+  }>;
+  verifyEmailOtp: (email: string, code: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

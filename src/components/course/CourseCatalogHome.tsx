@@ -11,8 +11,7 @@ import {
   Play,
   Presentation as PresentationIcon,
 } from "lucide-react";
-import { buildFullCourseInstructorHandbookMarkdown } from "@/data/courseWorkspaceStore";
-import { getQuizReviewSummary, MODULE_QUIZZES } from "@/data/moduleQuizzes";
+import { MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import {
   COURSE_LABS,
@@ -32,7 +31,9 @@ import {
   getCourseOverallStats,
   getModuleCompletionStats,
   type CourseWorkspaceState,
+  type WorkspaceQuizScoreSummary,
 } from "@/data/courseWorkspaceStore";
+import { fetchInstructorHandbookMarkdownApi } from "@/lib/apiClient";
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 import { TEAM_KNOWLEDGE_BASE, type KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
 
@@ -40,6 +41,7 @@ interface CourseCatalogHomeProps {
   workspaceState: CourseWorkspaceState;
   completedLabIds: string[];
   quizAnswersByModule: Record<string, Record<string, number>>;
+  latestQuizByModule?: Record<string, WorkspaceQuizScoreSummary>;
   hasPaidAccess?: boolean;
   isInstructorAuthorized?: boolean;
   onOpenBilling?: () => void;
@@ -53,6 +55,7 @@ export default function CourseCatalogHome({
   workspaceState,
   completedLabIds,
   quizAnswersByModule,
+  latestQuizByModule = {},
   hasPaidAccess = false,
   isInstructorAuthorized = false,
   onOpenBilling,
@@ -63,6 +66,8 @@ export default function CourseCatalogHome({
 }: CourseCatalogHomeProps) {
   const [selectedPathId, setSelectedPathId] = useState<LearnerPersonaId | "all">("all");
   const [selectedTrackId, setSelectedTrackId] = useState<TrackId | "all">("all");
+  const [exportingHandbook, setExportingHandbook] = useState(false);
+  const [handbookNotice, setHandbookNotice] = useState<string | null>(null);
   const canShowInstructor = isInstructorAuthorized && workspaceState.viewMode === "instructor";
 
   const overall = getCourseOverallStats(workspaceState);
@@ -504,31 +509,47 @@ export default function CourseCatalogHome({
             {canShowInstructor && (
               <button
                 type="button"
-                onClick={() => {
-                  const md = buildFullCourseInstructorHandbookMarkdown(workspaceState);
+                disabled={exportingHandbook}
+                onClick={async () => {
+                  setExportingHandbook(true);
+                  setHandbookNotice(null);
                   try {
-                    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `AICodingCourse-全课教师备课手册-${new Date().toISOString().slice(0, 10)}.md`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  } catch {
-                    void navigator.clipboard?.writeText(md);
+                    const res = await fetchInstructorHandbookMarkdownApi(
+                      workspaceState.selectedPlanByModule
+                    );
+                    try {
+                      const blob = new Blob([res.markdown], { type: "text/markdown;charset=utf-8" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = res.filename || `AICodingCourse-全课教师备课手册-${new Date().toISOString().slice(0, 10)}.md`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      await navigator.clipboard?.writeText(res.markdown);
+                    }
+                  } catch (err) {
+                    setHandbookNotice(
+                      err instanceof Error ? err.message : "导出全课备课手册失败，请确认讲师权限。"
+                    );
+                  } finally {
+                    setExportingHandbook(false);
                   }
                 }}
-                className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
+                className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 hover:bg-gemini-purple/30 border border-gemini-purple/45 text-xs text-purple-100 cursor-pointer inline-flex items-center gap-1 whitespace-nowrap disabled:opacity-50"
                 title={`按当前各模块已选授课方案导出全课 ${COURSE_MODULE_RECORDS.length} 模块备课手册 (.md)`}
               >
                 <Download className="w-3.5 h-3.5 text-gemini-purple" />
-                <span>导出全课备课手册 (.md)</span>
+                <span>{exportingHandbook ? "导出中..." : "导出全课备课手册 (.md)"}</span>
               </button>
             )}
           </div>
         </div>
+        {handbookNotice && (
+          <div className="text-xs text-amber-300 font-mono">{handbookNotice}</div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {orderedModules.map((mod) => {
@@ -546,7 +567,10 @@ export default function CourseCatalogHome({
               quizAnswersByModule[mod.id] ??
               (mod.order <= 10 ? quizAnswersByModule[String(mod.order)] : undefined) ??
               {};
-            const modQuizSummary = modQuiz ? getQuizReviewSummary(modQuiz, modQuizAnswers) : null;
+            const latestGrade = latestQuizByModule[mod.id];
+            const answeredQuizCount = modQuiz
+              ? modQuiz.questions.filter((q) => typeof modQuizAnswers[q.id] === "number").length
+              : 0;
 
             return (
               <article
@@ -623,7 +647,7 @@ export default function CourseCatalogHome({
                         <span>教师备课速览 · 核心问题：{teachingPkg.coreQuestion}</span>
                       </div>
                       <div className="text-slate-300 leading-relaxed">
-                        时间裁剪建议：{teachingPkg.trimAndMergeNote}
+                        授课节奏：{teachingPkg.deliveryModes.map((dm) => dm.label).join(" · ")}（进入模块后可导出完整教师讲义）
                       </div>
                     </div>
                   )}
@@ -644,8 +668,12 @@ export default function CourseCatalogHome({
                       ) : (
                         "无外挂沙盘（蓝图练习单）"
                       )}
-                      {modQuiz && modQuizSummary && (mod.id === "m1" || hasPaidAccess)
-                        ? ` · 测验 ${modQuizSummary.correctCount}/${modQuiz.questions.length}`
+                      {modQuiz && (mod.id === "m1" || hasPaidAccess)
+                        ? latestGrade
+                          ? ` · 测验 ${latestGrade.correctCount}/${latestGrade.totalCount}`
+                          : answeredQuizCount > 0
+                          ? ` · 测验已答 ${answeredQuizCount}/${modQuiz.questions.length}`
+                          : ""
                         : ""}
                     </span>
                   </div>

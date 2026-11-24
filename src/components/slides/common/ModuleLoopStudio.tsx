@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -14,7 +14,11 @@ import {
 import Slide from "@/components/Slide";
 import { CopySnippetButton } from "@/components/sandboxes/SandboxFrame";
 import { stopRevealKey, stopRevealWheel } from "@/components/sandboxes/revealEvents";
-import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
+import { useAuth } from "@/context/authContextCore";
+import {
+  getModuleTeachingPackage,
+  type PublicModuleTeachingPackage,
+} from "@/data/moduleTeachingPackages";
 import {
   getKnowledgeEntriesForModule,
   KNOWLEDGE_CATEGORY_LABELS,
@@ -25,6 +29,7 @@ import {
   getRuntimeKnowledgeEntriesForModule,
   RUNTIME_WORKSHOP_MODULE_CODES,
 } from "@/data/runtimeKnowledgeBase";
+import { fetchAuthorizedModuleDetail } from "@/lib/apiClient";
 
 export interface LoopCaseBlock {
   title: string;
@@ -92,14 +97,63 @@ export default function ModuleLoopStudio({
   practiceTotalCount,
   renderPractice,
 }: ModuleLoopStudioProps) {
+  const { session } = useAuth();
+  const isInstructor = Boolean(session?.isAdmin || session?.isInstructorOrTa);
   const [activeTab, setActiveTab] = useState<StudioTab>("cases");
   const [casesSubView, setCasesSubView] = useState<CasesSubView>("examples");
   const [practiceSideView, setPracticeSideView] = useState<PracticeSideView>("dod");
   const [transferSubView, setTransferSubView] = useState<TransferSubView>("homework");
   const [checkedDodIds, setCheckedDodIds] = useState<string[]>([]);
   const [showReflectionHint, setShowReflectionHint] = useState(false);
+  const [instructorFetchResult, setInstructorFetchResult] = useState<{
+    moduleCode: string;
+    pkg: PublicModuleTeachingPackage | null;
+    failed: boolean;
+  } | null>(null);
 
   const teachingPkg = getModuleTeachingPackage(moduleCode);
+  const resolvedTransferSubView: TransferSubView =
+    isInstructor && transferSubView === "instructor" ? "instructor" : "homework";
+  const authorizedPkg =
+    isInstructor && instructorFetchResult?.moduleCode === moduleCode
+      ? instructorFetchResult.pkg
+      : null;
+  const loadingInstructorPkg =
+    isInstructor &&
+    activeTab === "transfer" &&
+    resolvedTransferSubView === "instructor" &&
+    instructorFetchResult?.moduleCode !== moduleCode;
+
+  useEffect(() => {
+    if (!isInstructor || activeTab !== "transfer" || resolvedTransferSubView !== "instructor") {
+      return;
+    }
+    if (instructorFetchResult?.moduleCode === moduleCode) {
+      return;
+    }
+    let active = true;
+    fetchAuthorizedModuleDetail(moduleCode.toLowerCase())
+      .then((res) => {
+        if (!active) return;
+        if (res.instructorAuthorized && res.teachingPackage) {
+          setInstructorFetchResult({
+            moduleCode,
+            pkg: res.teachingPackage as unknown as PublicModuleTeachingPackage,
+            failed: false,
+          });
+        } else {
+          setInstructorFetchResult({ moduleCode, pkg: null, failed: true });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setInstructorFetchResult({ moduleCode, pkg: null, failed: true });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, instructorFetchResult?.moduleCode, isInstructor, moduleCode, resolvedTransferSubView]);
   const matchedRuntimeCode = RUNTIME_WORKSHOP_MODULE_CODES.find(
     (code) => code.toLowerCase() === moduleCode.toLowerCase()
   );
@@ -427,7 +481,7 @@ export default function ModuleLoopStudio({
                       <div className="p-2.5 rounded-xl bg-rose-500/[0.07] border border-rose-400/25 text-[11px] space-y-1">
                         <div className="font-semibold text-rose-300">“看起来对但实际错”隐蔽坑</div>
                         <div className="text-slate-200 leading-relaxed">
-                          {teachingPkg.failureModesDeepDive.looksRightButWrong}
+                          {teachingPkg.failureModesPublic.looksRightButWrong}
                         </div>
                       </div>
                     </div>
@@ -670,28 +724,30 @@ export default function ModuleLoopStudio({
                     type="button"
                     onClick={() => setTransferSubView("homework")}
                     className={`px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap ${
-                      transferSubView === "homework"
+                      resolvedTransferSubView === "homework"
                         ? "bg-emerald-400 text-slate-950 font-semibold"
                         : "text-slate-300 hover:text-white"
                     }`}
                   >
                     三档迁移任务
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setTransferSubView("instructor")}
-                    className={`px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap ${
-                      transferSubView === "instructor"
-                        ? "bg-gemini-cyan text-slate-950 font-semibold"
-                        : "text-slate-300 hover:text-white"
-                    }`}
-                  >
-                    教师演示与排课脚本
-                  </button>
+                  {isInstructor && (
+                    <button
+                      type="button"
+                      onClick={() => setTransferSubView("instructor")}
+                      className={`px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap ${
+                        resolvedTransferSubView === "instructor"
+                          ? "bg-gemini-cyan text-slate-950 font-semibold"
+                          : "text-slate-300 hover:text-white"
+                      }`}
+                    >
+                      教师演示与排课脚本
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {transferSubView === "homework" ? (
+              {resolvedTransferSubView === "homework" || !isInstructor ? (
                 <div className="grid grid-cols-12 gap-3 flex-1 min-h-0">
                   {teachingPkg.homeworkTiers.map((hw) => (
                     <div
@@ -728,7 +784,7 @@ export default function ModuleLoopStudio({
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : authorizedPkg?.instructorDemo ? (
                 <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
                   {/* Left: Multi-step Live Demo with Intentional AI Flaw -> Constraint -> Fix */}
                   <div className="col-span-7 p-3.5 rounded-2xl bg-[#0b0f19] border border-gemini-cyan/30 overflow-y-auto custom-scrollbar space-y-2">
@@ -737,10 +793,10 @@ export default function ModuleLoopStudio({
                     </div>
                     <div className="text-[11px] text-slate-300">
                       <span className="font-mono text-slate-400">课前准备：</span>
-                      {teachingPkg.instructorDemo.prepAndEnv}
+                      {authorizedPkg.instructorDemo.prepAndEnv}
                     </div>
                     <div className="space-y-2">
-                      {teachingPkg.instructorDemo.steps.map((st, idx) => (
+                      {authorizedPkg.instructorDemo.steps.map((st, idx) => (
                         <div
                           key={idx}
                           className="p-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-[11px] space-y-1"
@@ -771,24 +827,30 @@ export default function ModuleLoopStudio({
                     </div>
                     <div className="pt-2 border-t border-white/10 space-y-1">
                       <div className="font-semibold text-amber-300">学员卡住引导 &amp; 离线降级</div>
-                      {teachingPkg.instructorDemo.stuckStudentPrompts.map((p, idx) => (
+                      {authorizedPkg.instructorDemo.stuckStudentPrompts.map((p, idx) => (
                         <div key={idx} className="text-slate-300 leading-snug">
                           {p}
                         </div>
                       ))}
                       <div className="text-slate-400 leading-snug">
-                        无 Key 替代：{teachingPkg.instructorDemo.noKeyOfflineFallback}
+                        无 Key 替代：{authorizedPkg.instructorDemo.noKeyOfflineFallback}
                       </div>
                     </div>
                     <div className="pt-2 border-t border-white/10 space-y-1">
                       <div className="font-semibold text-emerald-300">可接受的多元解法</div>
-                      {teachingPkg.instructorDemo.acceptableAlternatives.map((alt, idx) => (
+                      {authorizedPkg.instructorDemo.acceptableAlternatives.map((alt, idx) => (
                         <div key={idx} className="text-slate-300 leading-snug">
                           · {alt}
                         </div>
                       ))}
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div className="flex-1 rounded-2xl bg-[#0b0f19] border border-white/15 flex items-center justify-center text-xs text-slate-300 font-mono">
+                  {loadingInstructorPkg
+                    ? "正在从服务端加载授权教师演示与排课脚本..."
+                    : "未能读取教师演示脚本，请确认当前账号具备讲师/管理员角色权限。"}
                 </div>
               )}
             </div>

@@ -12,11 +12,18 @@ import {
   COURSE_TRACKS,
   LEARNER_PATHS,
 } from "../../data/courseCurriculum.ts";
-import { COURSE_SKILLS, type SkillId } from "../../data/courseSkills.ts";
-import { getModuleRecordById } from "../../data/courseUnitsModel.ts";
+import {
+  COURSE_SKILLS as PRIVATE_COURSE_SKILLS,
+  type SkillId,
+} from "../data/privateSkills.ts";
+import {
+  COURSE_MODULE_RECORDS as PRIVATE_COURSE_MODULE_RECORDS,
+  getModuleRecordById,
+  getUnitsForPlan,
+} from "../data/privateCourseUnits.ts";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
-import { MODULE_QUIZZES } from "../../data/moduleQuizzes.ts";
-import { getModuleTeachingPackage } from "../../data/moduleTeachingPackages.ts";
+import { MODULE_QUIZZES } from "../data/privateQuizBank.ts";
+import { getModuleTeachingPackage } from "../data/privateTeachingPackages.ts";
 import { getQuestionRemediation } from "../../data/quizRemediation.ts";
 import type { AuthContext } from "../auth.ts";
 
@@ -241,12 +248,233 @@ export async function gradeAndRecordQuizAttempt(input: {
   };
 }
 
+export function gradeSingleQuizQuestion(input: {
+  moduleId: string;
+  questionId: string;
+  selectedIndex: number;
+  hasPaidAccess: boolean;
+}) {
+  const quiz = MODULE_QUIZZES[input.moduleId];
+  if (!quiz) {
+    return { ok: false as const, status: 404, error: "未找到对应模块测验。" };
+  }
+  if (!isFreeTrialModule(input.moduleId) && !input.hasPaidAccess) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "该模块测验需开通会员或班级权益后判分。",
+    };
+  }
+  const q = quiz.questions.find((item) => item.id === input.questionId);
+  if (!q) {
+    return { ok: false as const, status: 404, error: "未找到对应测验题目。" };
+  }
+  const isCorrect = input.selectedIndex === q.correctIndex;
+  const remediation = getQuestionRemediation(q.id, quiz.moduleId);
+  return {
+    ok: true as const,
+    moduleId: input.moduleId,
+    questionId: q.id,
+    topic: q.topic,
+    selectedIndex: input.selectedIndex,
+    correctIndex: q.correctIndex,
+    isCorrect,
+    explanation: q.explanation,
+    reviewTarget: q.reviewTarget,
+    remediationAction: remediation.reviewAction,
+  };
+}
+
+export function gradePreviewM1Quiz(answers: Record<string, number>) {
+  const quiz = MODULE_QUIZZES.m1;
+  const questionResults: Array<{
+    questionId: string;
+    topic: string;
+    selectedIndex: number;
+    correctIndex: number;
+    isCorrect: boolean;
+    explanation: string;
+    reviewTarget?: { label: string; labId?: string; moduleId?: string };
+    remediationAction: string;
+  }> = [];
+
+  let correctCount = 0;
+  for (const q of quiz.questions) {
+    const chosen = answers[q.id];
+    if (typeof chosen !== "number" || !Number.isInteger(chosen) || chosen < 0 || chosen > 3) {
+      continue;
+    }
+    const isCorrect = chosen === q.correctIndex;
+    if (isCorrect) correctCount += 1;
+    const remediation = getQuestionRemediation(q.id, "m1");
+    questionResults.push({
+      questionId: q.id,
+      topic: q.topic,
+      selectedIndex: chosen,
+      correctIndex: q.correctIndex,
+      isCorrect,
+      explanation: q.explanation,
+      reviewTarget: q.reviewTarget,
+      remediationAction: remediation.reviewAction,
+    });
+  }
+
+  const totalCount = quiz.questions.length;
+  const answeredCount = questionResults.length;
+  const scorePct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+  return {
+    ok: true as const,
+    moduleId: "m1",
+    answeredCount,
+    correctCount,
+    totalCount,
+    scorePct,
+    questionResults,
+  };
+}
+
+export function gradePreviewSkillDiagnostic(input: {
+  skillId: SkillId;
+  answers: Record<string, number>;
+}) {
+  const skill = PRIVATE_COURSE_SKILLS.find((s) => s.id === input.skillId);
+  if (!skill) {
+    return { ok: false as const, status: 404, error: "未找到对应前置技能定义。" };
+  }
+  const results = skill.diagnosticQuestions.map((dq) => {
+    const selected = input.answers[dq.id];
+    const isAnswered = typeof selected === "number" && Number.isInteger(selected);
+    const isCorrect = isAnswered && selected === dq.correctIndex;
+    return {
+      id: dq.id,
+      isCorrect,
+      explanation: isAnswered ? dq.explanation : "",
+    };
+  });
+  const passed = results.length > 0 && results.every((r) => r.isCorrect);
+  return {
+    ok: true as const,
+    passed,
+    results,
+  };
+}
+
+export function buildInstructorLessonPlanMarkdown(
+  moduleId: string,
+  planId?: string
+): string | null {
+  const moduleRecord = getModuleRecordById(moduleId);
+  if (!moduleRecord) return null;
+  const plan =
+    moduleRecord.deliveryPlans.find((p) => p.id === planId) || moduleRecord.deliveryPlans[0];
+  const units = getUnitsForPlan(moduleRecord, plan?.id);
+  const totalMinutes = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
+
+  const lines: string[] = [
+    `# ${moduleRecord.code} 教师备课讲义 · ${moduleRecord.title}`,
+    ``,
+    `- 所选授课方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"}`,
+    `- 适用对象：${plan?.targetAudience || moduleRecord.audience.join(" / ")}`,
+    `- 预计授课总时长：约 ${totalMinutes} 分钟（共 ${units.length} 个教学单元）`,
+    `- 先修要求：${moduleRecord.prerequisites.join("；")}`,
+    `- 边界提示：${moduleRecord.boundaryNote}`,
+    ``,
+    `## 学习目标`,
+    ...moduleRecord.learningObjectives.map((obj, idx) => `${idx + 1}. ${obj}`),
+    ``,
+    `---`,
+    ``,
+    `## 分单元备课指南与参考答案`,
+    ``,
+  ];
+
+  units.forEach((unit, idx) => {
+    lines.push(
+      `### ${String(idx + 1).padStart(2, "0")}. ${unit.title}（约 ${unit.estimatedMinutes} 分钟）`
+    );
+    lines.push(`- 单元目标：${unit.learningObjective}`);
+    lines.push(`- 组织提示：${unit.teacherMaterials.teachingTips}`);
+    lines.push(`- 时间裁剪建议：${unit.teacherMaterials.timeTrimNote}`);
+
+    if (unit.demoSteps && unit.demoSteps.length > 0) {
+      lines.push(`- 演示步骤：`);
+      for (const st of unit.demoSteps) {
+        lines.push(`  - **${st.phase}**：${st.action} ｜ 人类把关：${st.humanControl}`);
+      }
+    }
+
+    if (unit.teacherMaterials.referenceAnswers.length > 0) {
+      lines.push(`- 参考答案与可接受解法：`);
+      for (const ans of unit.teacherMaterials.referenceAnswers) {
+        lines.push(`  - ${ans}`);
+      }
+    }
+
+    if (unit.teacherMaterials.commonPitfalls.length > 0) {
+      lines.push(`- 课堂翻车预警：`);
+      for (const pit of unit.teacherMaterials.commonPitfalls) {
+        lines.push(`  - ${pit}`);
+      }
+    }
+
+    lines.push(``);
+  });
+
+  return lines.join("\n");
+}
+
+export function buildFullCourseInstructorHandbookMarkdown(
+  selectedPlanByModule: Record<string, string> = {}
+): string {
+  let totalCourseMinutes = 0;
+  let totalCourseUnits = 0;
+
+  const moduleSections: string[] = [];
+
+  for (const mod of PRIVATE_COURSE_MODULE_RECORDS) {
+    const planId = selectedPlanByModule[mod.id];
+    const plan =
+      mod.deliveryPlans.find((p) => p.id === planId) || mod.deliveryPlans[0];
+    const units = getUnitsForPlan(mod, plan?.id);
+    const mins = units.reduce((sum, u) => sum + u.estimatedMinutes, 0);
+    totalCourseMinutes += mins;
+    totalCourseUnits += units.length;
+
+    moduleSections.push(
+      [
+        `## ${mod.code} · ${mod.title}`,
+        `- 方案：${plan ? `${plan.name}（${plan.shortLabel}）` : "全部单元"} ｜ 单元数：${units.length} ｜ 预计：${mins} 分钟`,
+        `- 先修：${mod.prerequisites.join("；")}`,
+        `- 边界：${mod.boundaryNote}`,
+        ``,
+        ...units.map(
+          (u, idx) =>
+            `${idx + 1}. **${u.title}** (${u.estimatedMinutes}m) — 组织提示：${u.teacherMaterials.teachingTips} ｜ 裁剪：${u.teacherMaterials.timeTrimNote}`
+        ),
+        ``,
+      ].join("\n")
+    );
+  }
+
+  return [
+    `# AICodingCourse 全课 ${PRIVATE_COURSE_MODULE_RECORDS.length} 模块教师备课总手册`,
+    ``,
+    `- 生成日期：${new Date().toISOString().slice(0, 10)}`,
+    `- 覆盖模块：${PRIVATE_COURSE_MODULE_RECORDS.length} 个模块 ｜ 合计单元：${totalCourseUnits} 个 ｜ 总预计课时：约 ${totalCourseMinutes} 分钟`,
+    ``,
+    `---`,
+    ``,
+    ...moduleSections,
+  ].join("\n");
+}
+
 export async function gradeSkillDiagnosticAndGrant(input: {
   userId: number;
   skillId: SkillId;
   answers: Record<string, number>;
 }) {
-  const skill = COURSE_SKILLS.find((s) => s.id === input.skillId);
+  const skill = PRIVATE_COURSE_SKILLS.find((s) => s.id === input.skillId);
   if (!skill) {
     return { ok: false as const, status: 404, error: "未找到对应前置技能定义。" };
   }

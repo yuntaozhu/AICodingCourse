@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   Ban,
+  CalendarPlus,
+  CheckCircle2,
+  CreditCard,
   KeyRound,
   MessageSquare,
   Plus,
@@ -9,13 +12,18 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
+import { COURSE_MODULES } from "@/data/courseCurriculum";
 import {
   adminAssignInstructorApi,
+  adminCancelOrderApi,
+  adminConfirmOrderApi,
   adminCreateCohortApi,
+  adminCreateMilestoneApi,
   adminCreateRedeemCodeApi,
   adminEnrollLearnerApi,
   adminGrantEntitlementApi,
   adminRevokeEntitlementApi,
+  adminUpdateInquiryStatusApi,
   adminUpdateRole,
   fetchAdminOverview,
   type AdminOverviewResponse,
@@ -56,6 +64,11 @@ export default function AdminConsole() {
     "non-tech" | "indie-dev" | "eng-team" | "cs-student"
   >("indie-dev");
 
+  const [msCohortId, setMsCohortId] = useState<number>(0);
+  const [msTitle, setMsTitle] = useState("");
+  const [msModuleId, setMsModuleId] = useState("m3");
+  const [msDueDate, setMsDueDate] = useState("2026-12-15");
+
   const loadOverview = async () => {
     setLoading(true);
     try {
@@ -66,6 +79,7 @@ export default function AdminConsole() {
       if (res.cohorts[0]) {
         if (assignCohortId === 0) setAssignCohortId(res.cohorts[0].id);
         if (enrollCohortId === 0) setEnrollCohortId(res.cohorts[0].id);
+        if (msCohortId === 0) setMsCohortId(res.cohorts[0].id);
       }
     } catch (err) {
       setStatusMsg({
@@ -124,6 +138,8 @@ export default function AdminConsole() {
         {data && (
           <div className="flex flex-wrap gap-3 font-mono text-[11px] tabular-nums text-slate-300">
             <span>用户 {data.users.length}</span>
+            <span>·</span>
+            <span>订单 {data.orders.length}</span>
             <span>·</span>
             <span>权益 {data.entitlements.length}</span>
             <span>·</span>
@@ -503,6 +519,155 @@ export default function AdminConsole() {
               </div>
             </div>
 
+            {/* Row 2.5: Cohort Milestones & Pending Order Fulfillment */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <div className="lg:col-span-4 p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-2.5">
+                <div className="font-semibold text-white inline-flex items-center gap-1.5">
+                  <CalendarPlus className="w-4 h-4 text-emerald-400" />
+                  <span>新增班级里程碑任务</span>
+                </div>
+                <select
+                  value={msCohortId}
+                  onChange={(e) => setMsCohortId(Number(e.target.value))}
+                  className="w-full px-3 py-1.5 rounded-lg bg-black/50 border border-white/15 text-white"
+                >
+                  {data.cohorts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code}（{c.milestones.length} 个里程碑 / {c.enrollments.length} 人）
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={msTitle}
+                  onChange={(e) => setMsTitle(e.target.value)}
+                  placeholder="里程碑名称，如 Checkpoint 1 · M3 鉴权实战"
+                  className="w-full px-3 py-1.5 rounded-lg bg-black/50 border border-white/15 text-white"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={msModuleId}
+                    onChange={(e) => setMsModuleId(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg bg-black/50 border border-white/15 text-white"
+                  >
+                    {COURSE_MODULES.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.code}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    value={msDueDate}
+                    onChange={(e) => setMsDueDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg bg-black/50 border border-white/15 text-white"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={!msCohortId || msTitle.trim().length < 3}
+                  onClick={() =>
+                    void runAction(
+                      async () => {
+                        await adminCreateMilestoneApi(msCohortId, {
+                          title: msTitle.trim(),
+                          moduleId: msModuleId,
+                          dueDate: msDueDate,
+                        });
+                        setMsTitle("");
+                      },
+                      "已为该班期新增里程碑节点。"
+                    )
+                  }
+                  className="w-full py-2 rounded-lg bg-emerald-400 text-slate-950 font-semibold cursor-pointer disabled:opacity-50"
+                >
+                  添加里程碑
+                </button>
+              </div>
+
+              <div className="lg:col-span-8 p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-white inline-flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-amber-300" />
+                    <span>订单核销与收款流水 ({data.orders.length})</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    待核销 {data.orders.filter((o) => o.status === "pending").length} 笔
+                  </span>
+                </div>
+                {data.orders.length === 0 ? (
+                  <div className="text-slate-500 py-4">暂无订单记录。</div>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                    {data.orders.map((ord) => {
+                      const buyer = data.users.find((u) => u.id === ord.userId);
+                      const prod = data.products.find((p) => p.id === ord.productId);
+                      return (
+                        <div
+                          key={ord.id}
+                          className="p-2.5 rounded-xl border border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-white font-semibold">
+                                {ord.orderNo}
+                              </span>
+                              <span
+                                className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
+                                  ord.status === "paid"
+                                    ? "bg-emerald-500/20 text-emerald-300"
+                                    : ord.status === "pending"
+                                    ? "bg-amber-500/20 text-amber-300"
+                                    : "bg-white/10 text-slate-400"
+                                }`}
+                              >
+                                {ord.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {buyer?.email || `User #${ord.userId}`} ·{" "}
+                              {prod?.title || `Product #${ord.productId}`} ·{" "}
+                              <span className="font-mono text-slate-200">
+                                ¥{(ord.amountCents / 100).toFixed(0)} ({ord.provider})
+                              </span>
+                            </div>
+                          </div>
+                          {ord.status === "pending" && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void runAction(
+                                    () => adminConfirmOrderApi(ord.id),
+                                    `订单 ${ord.orderNo} 已核销收款并自动开通对应课程/班级权益。`
+                                  )
+                                }
+                                className="px-2.5 py-1 rounded bg-emerald-400 text-slate-950 font-semibold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3 h-3" /> 核销开通
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void runAction(
+                                    () => adminCancelOrderApi(ord.id),
+                                    `订单 ${ord.orderNo} 已取消。`
+                                  )
+                                }
+                                className="px-2 py-1 rounded border border-white/15 bg-white/5 text-slate-300 text-[11px] cursor-pointer"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Row 3: Redeem codes + Entitlements (with Revoke/Refund) + Inquiries */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-3">
@@ -578,15 +743,26 @@ export default function AdminConsole() {
                     {data.inquiries.map((inq) => (
                       <div
                         key={inq.id}
-                        className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-1"
+                        className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-1.5"
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="font-semibold text-white">
                             {inq.name} · {inq.contact}
                           </span>
-                          <span className="font-mono text-[10px] text-gemini-cyan">
-                            {inq.inquiryType}
-                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                            <span className="text-gemini-cyan">{inq.inquiryType}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded ${
+                                inq.status === "closed"
+                                  ? "bg-white/10 text-slate-400"
+                                  : inq.status === "contacted"
+                                  ? "bg-emerald-500/20 text-emerald-300"
+                                  : "bg-amber-500/20 text-amber-300"
+                              }`}
+                            >
+                              {inq.status}
+                            </span>
+                          </div>
                         </div>
                         {inq.organization && (
                           <div className="text-[11px] text-slate-400">
@@ -594,6 +770,36 @@ export default function AdminConsole() {
                           </div>
                         )}
                         <div className="text-slate-300 leading-relaxed">{inq.message}</div>
+                        <div className="flex items-center gap-2 pt-1 text-[10px] font-mono">
+                          {inq.status !== "contacted" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void runAction(
+                                  () => adminUpdateInquiryStatusApi(inq.id, "contacted"),
+                                  "已标记该咨询线索为「已联系」。"
+                                )
+                              }
+                              className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 cursor-pointer"
+                            >
+                              标记已联系
+                            </button>
+                          )}
+                          {inq.status !== "closed" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void runAction(
+                                  () => adminUpdateInquiryStatusApi(inq.id, "closed"),
+                                  "已标记该咨询线索为「已闭环」。"
+                                )
+                              }
+                              className="px-2 py-0.5 rounded bg-white/10 text-slate-300 cursor-pointer"
+                            >
+                              归档闭环
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

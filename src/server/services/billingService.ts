@@ -492,3 +492,97 @@ export async function adminCreateRedeemCode(input: {
     .returning();
   return created;
 }
+
+export async function adminConfirmOrderPayment(orderId: number) {
+  return await db.transaction(async (tx) => {
+    const [order] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      return { ok: false as const, status: 404, error: "订单不存在。" };
+    }
+    if (order.status !== "pending") {
+      return {
+        ok: false as const,
+        status: 409,
+        error: `仅待支付（pending）订单可核销，当前状态为 ${order.status}。`,
+      };
+    }
+
+    const updatedOrders = await tx
+      .update(orders)
+      .set({ status: "paid", paidAt: new Date() })
+      .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+      .returning();
+
+    if (updatedOrders.length === 0) {
+      return { ok: false as const, status: 409, error: "订单已被其他操作处理。" };
+    }
+
+    const [price] = await tx
+      .select()
+      .from(prices)
+      .where(eq(prices.id, order.priceId))
+      .limit(1);
+    const [product] = await tx
+      .select()
+      .from(products)
+      .where(eq(products.id, order.productId))
+      .limit(1);
+
+    if (!price || !product) {
+      throw new Error("Order references missing price or product.");
+    }
+
+    const now = new Date();
+    const validUntil = new Date(now.getTime() + price.durationDays * 86400 * 1000);
+
+    const [entitlement] = await tx
+      .insert(entitlements)
+      .values({
+        userId: order.userId,
+        productId: product.id,
+        sourceOrderId: order.id,
+        scopeType: product.scopeType,
+        scopeRef: product.scopeRef,
+        status: "active",
+        validFrom: now,
+        validUntil,
+      })
+      .returning();
+
+    if (order.cohortId) {
+      await tx
+        .insert(cohortEnrollments)
+        .values({
+          cohortId: order.cohortId,
+          userId: order.userId,
+          targetPathId: "indie-dev",
+          status: "active",
+        })
+        .onConflictDoNothing();
+    }
+
+    return { ok: true as const, order: updatedOrders[0], entitlement };
+  });
+}
+
+export async function adminCancelOrder(orderId: number) {
+  const updated = await db
+    .update(orders)
+    .set({ status: "cancelled" })
+    .where(and(eq(orders.id, orderId), eq(orders.status, "pending")))
+    .returning();
+
+  if (updated.length === 0) {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "订单不存在或非待支付状态，无法取消。",
+    };
+  }
+  return { ok: true as const, order: updated[0] };
+}

@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { auditMcpConfigJson, MCP_LAB_GUIDE } from "../src/data/mcpLabGuide";
-import { getQuizReviewSummary, MODULE_QUIZZES } from "../src/data/moduleQuizzes";
+import {
+  getQuizReviewSummary,
+  MODULE_QUIZZES,
+} from "../src/server/data/privateQuizBank";
 import {
   buildRetryWrongAnswersState,
   getQuestionRemediation,
@@ -169,7 +172,11 @@ test("buildRetryWrongAnswersState keeps only correct answers and finds first wro
     [m1Questions[3].id]: (m1Questions[3].correctIndex + 2) % 4,
   };
 
-  const retryState = buildRetryWrongAnswersState(m1Questions, sampleAnswers);
+  const retryState = buildRetryWrongAnswersState(
+    m1Questions,
+    sampleAnswers,
+    new Set([m1Questions[0].id, m1Questions[2].id])
+  );
   assert.equal(retryState.wrongCount, 2);
   assert.equal(retryState.firstWrongIndex, 1);
   assert.deepEqual(Object.keys(retryState.keptAnswers), [
@@ -206,11 +213,15 @@ test("quizRemediation covers all modules/questions, legacy numeric lookup, and r
   assert.equal(m13Fallback.moduleId, "m13-gov");
 
   const m4 = MODULE_QUIZZES.m4;
-  const retry = buildRetryWrongAnswersState(m4.questions, {
-    [m4.questions[0].id]: m4.questions[0].correctIndex,
-    [m4.questions[1].id]: (m4.questions[1].correctIndex + 1) % 4,
-    [m4.questions[2].id]: m4.questions[2].correctIndex,
-  });
+  const retry = buildRetryWrongAnswersState(
+    m4.questions,
+    {
+      [m4.questions[0].id]: m4.questions[0].correctIndex,
+      [m4.questions[1].id]: (m4.questions[1].correctIndex + 1) % 4,
+      [m4.questions[2].id]: m4.questions[2].correctIndex,
+    },
+    new Set([m4.questions[0].id, m4.questions[2].id])
+  );
   assert.equal(retry.wrongCount, 1);
   assert.equal(retry.firstWrongIndex, 1);
   assert.equal(Object.keys(retry.keptAnswers).length, 2);
@@ -683,7 +694,7 @@ test("labPracticeEngine audits Plan prompts, .mdc rules, and computes DoD lab co
 });
 
 test("MODULE_TEACHING_PACKAGES covers all 14 modules with flexible delivery, demo flaw-fix loop, rubric, and 3-tier homework", async () => {
-  const { MODULE_TEACHING_PACKAGES } = await import("../src/data/moduleTeachingPackages");
+  const { MODULE_TEACHING_PACKAGES } = await import("../src/server/data/privateTeachingPackages");
   const { COURSE_MODULES } = await import("../src/data/courseCurriculum");
 
   const vagueVerbRegex = /理解|认识|掌握/;
@@ -830,7 +841,7 @@ test("courseUnitsModel provides 14 modules, complete exemplars for M1 & M11-M13-
     getDeliveryPlanMinutes,
     getModuleRecordById,
     getUnitsForPlan,
-  } = await import("../src/data/courseUnitsModel");
+  } = await import("../src/server/data/privateCourseUnits");
   const { M13_GOV_SIMULATION_DISCLAIMER } = await import("../src/data/courseWorkspaceStore");
 
   assert.equal(COURSE_MODULE_RECORDS.length, 14);
@@ -1015,17 +1026,24 @@ test("courseWorkspaceStore computes progress stats, migrates quiz keys, and expo
     };
   }
 
-  const md = buildWorkspaceMarkdownExport(state, {
-    "1": {
-      "m1-q1": 1,
-      "m1-q2": 0,
-      "m1-q3": 2,
-      "m1-q4": 1,
+  const md = buildWorkspaceMarkdownExport(
+    state,
+    {
+      "1": {
+        "m1-q1": 1,
+        "m1-q2": 0,
+        "m1-q3": 2,
+        "m1-q4": 1,
+      },
+      "m13-gov": {
+        "m13-gov-q1": 0,
+      },
     },
-    "m13-gov": {
-      "m13-gov-q1": 0,
-    },
-  });
+    {
+      m1: { correctCount: 4, totalCount: 4, scorePct: 100 },
+      "m13-gov": { correctCount: 1, totalCount: 4, scorePct: 25 },
+    }
+  );
   assert.ok(md.includes("AICodingCourse 学员学习产物与知识沉淀导出"));
   assert.ok(md.includes("Intent: 验证 Plan 模式边界"));
   assert.ok(md.includes("先锁文件白名单再让 AI 动手。"));
@@ -1038,26 +1056,27 @@ test("courseWorkspaceStore computes progress stats, migrates quiz keys, and expo
   assert.ok(md.includes("Webhook HMAC 验签"));
   assert.ok(md.includes(M13_GOV_SIMULATION_DISCLAIMER), "Markdown export must preserve verbatim M13-Gov disclaimer");
 
-  const { buildInstructorLessonPlanMarkdown } = await import("../src/data/courseWorkspaceStore");
-  const m1PrepShort = buildInstructorLessonPlanMarkdown(m1, "m1-plan-short");
+  const {
+    buildFullCourseInstructorHandbookMarkdown,
+    buildInstructorLessonPlanMarkdown,
+  } = await import("../src/server/services/curriculumService");
+  const m1PrepShort = buildInstructorLessonPlanMarkdown("m1", "m1-plan-short")!;
   assert.ok(m1PrepShort.includes("短讲精要"));
   assert.ok(m1PrepShort.includes("分单元备课指南与参考答案"));
   assert.ok(m1PrepShort.includes("参考答案与可接受解法"));
 
-  const m4 = getModuleRecordById("m4")!;
-  const m4Prep = buildInstructorLessonPlanMarkdown(m4, "m4-plan-workshop");
+  const m4Prep = buildInstructorLessonPlanMarkdown("m4", "m4-plan-workshop")!;
   assert.ok(m4Prep.includes("M4 教师备课讲义"));
   assert.ok(m4Prep.includes("工作坊实战"));
 
   const {
-    buildFullCourseInstructorHandbookMarkdown,
     buildKnowledgeBaseMarkdownExport,
     buildRuntimeWorkshopMarkdownExport,
   } = await import("../src/data/courseWorkspaceStore");
   const { TEAM_KNOWLEDGE_BASE } = await import("../src/data/teamKnowledgeBase");
   const { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } = await import("../src/data/runtimeKnowledgeBase");
 
-  const fullHandbook = buildFullCourseInstructorHandbookMarkdown(state);
+  const fullHandbook = buildFullCourseInstructorHandbookMarkdown(state.selectedPlanByModule);
   assert.ok(fullHandbook.includes("AICodingCourse 全课 14 模块教师备课总手册"));
   assert.ok(fullHandbook.includes("短讲精要"));
   for (const code of [
@@ -1137,19 +1156,22 @@ test("searchCourseWorkspace searches modules, unit content, custom KB, and gates
   assert.ok(andRes.totalCount >= 1);
   assert.ok(andRes.results.some((r) => r.kind === "unit" && r.moduleId === "m1"));
 
-  // Strictly gates instructor-only text when includeInstructorMaterials is false
+  // Client courseSearch must never contain stripped instructor-only text
   const learnerSecretSearch = searchCourseWorkspace("改坏代码的原因", {
     customKbEntries: customEntries,
     includeInstructorMaterials: false,
   });
   assert.equal(learnerSecretSearch.totalCount, 0);
 
-  const instructorSecretSearch = searchCourseWorkspace("改坏代码的原因", {
+  const clientInstructorSearch = searchCourseWorkspace("改坏代码的原因", {
     customKbEntries: customEntries,
     includeInstructorMaterials: true,
   });
-  assert.equal(instructorSecretSearch.counts.unit, 1);
-  assert.equal(instructorSecretSearch.results[0].unitId, "m1-u1-concept");
+  assert.equal(
+    clientInstructorSearch.totalCount,
+    0,
+    "Client bundle courseSearch must never contain stripped teacherMaterials strings"
+  );
 
   // Searches AI-pdf-books knowledge base
   const bookSearch = searchCourseWorkspace("Chip Huyen", { customKbEntries: customEntries });
@@ -1386,4 +1408,57 @@ test("runtimeKnowledgeBase enforces ACL pre-filter, tombstone invalidation, cita
   assert.equal(evalReport.passedProbes, 5);
 });
 
+test("courseMetrics provides single source of truth and website routes isolate /teens and /teams cleanly", async () => {
+  const { getFreeTrialModulePreview, getPublicCourseMetrics } = await import(
+    "../src/data/courseMetrics"
+  );
 
+  const metrics = getPublicCourseMetrics();
+  assert.equal(metrics.moduleCount, 14);
+  assert.equal(metrics.labCount, 20);
+  assert.equal(metrics.trackCount, 3);
+  assert.equal(metrics.unitCount, 149);
+  assert.equal(metrics.slideCount, 152);
+  assert.equal(metrics.quizQuestionCount, 49);
+
+  const m1Preview = getFreeTrialModulePreview();
+  assert.equal(m1Preview.moduleMeta.id, "m1");
+  assert.equal(m1Preview.units.length, 10);
+
+  const appSrc = fs.readFileSync(path.resolve(process.cwd(), "src/App.tsx"), "utf8");
+  assert.ok(appSrc.includes('"/teens"'), "App.tsx must route /teens");
+  assert.ok(appSrc.includes('"/teams"'), "App.tsx must route /teams");
+
+  const homeSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/website/OfficialHomePage.tsx"),
+    "utf8"
+  );
+  const teensSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/website/TeensLandingPage.tsx"),
+    "utf8"
+  );
+  const teamsSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/website/TeamsLandingPage.tsx"),
+    "utf8"
+  );
+  const navSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/components/website/WebsiteNavbar.tsx"),
+    "utf8"
+  );
+
+  assert.ok(homeSrc.includes("getPublicCourseMetrics"), "Homepage must consume dynamic courseMetrics");
+  assert.ok(homeSrc.includes("PlanPromptSandbox"), "Homepage must embed live PlanPromptSandbox");
+  assert.ok(teensSrc.includes("HiMCM #19243"), "Teens landing page must present HiMCM workflow with honest boundaries");
+  assert.ok(teamsSrc.includes("ECE-Brain-Meeting"), "Teams landing page must cover team engineering cases");
+  assert.ok(navSrc.includes("青少年营") && navSrc.includes("团队内训"), "WebsiteNavbar must expose /teens and /teams links");
+
+  const stalePattern = /10\s*个?\s*模块|16\s*个?\s*(?:交互)?沙盘|111\s*个?\s*单元/;
+  for (const [name, content] of [
+    ["OfficialHomePage", homeSrc],
+    ["TeensLandingPage", teensSrc],
+    ["TeamsLandingPage", teamsSrc],
+    ["WebsiteNavbar", navSrc],
+  ]) {
+    assert.equal(stalePattern.test(content), false, `${name} must not contain stale course counts`);
+  }
+});

@@ -43,6 +43,7 @@ import {
   type CustomKnowledgeDraft,
   type PracticeNoteRecord,
   type SkillVerificationRecord,
+  type WorkspaceQuizScoreSummary,
 } from "@/data/courseWorkspaceStore";
 import { getCompletedLabIds, loadAllLabDodProgress } from "@/data/labPracticeEngine";
 import type { KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
@@ -110,6 +111,9 @@ export default function CourseSystemApp({
   const [quizAnswersByModule, setQuizAnswersByModule] = useState<
     Record<string, Record<string, number>>
   >(() => loadAllQuizAnswers());
+  const [latestQuizByModule, setLatestQuizByModule] = useState<
+    Record<string, WorkspaceQuizScoreSummary>
+  >({});
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportedFeedback, setExportedFeedback] = useState(false);
   const [legacyImportPrompt, setLegacyImportPrompt] = useState(false);
@@ -156,10 +160,17 @@ export default function CourseSystemApp({
       }));
 
       const nextQuizAns: Record<string, Record<string, number>> = {};
+      const nextLatestQuiz: Record<string, WorkspaceQuizScoreSummary> = {};
       for (const [modId, att] of Object.entries(cloud.latestQuizByModule)) {
         nextQuizAns[modId] = att.answers;
+        nextLatestQuiz[modId] = {
+          correctCount: att.correctCount,
+          totalCount: att.totalCount,
+          scorePct: att.scorePct,
+        };
       }
       setQuizAnswersByModule((prev) => ({ ...prev, ...nextQuizAns }));
+      setLatestQuizByModule(nextLatestQuiz);
     } catch {
       // Keep graceful state if cloud fetch transiently fails
     }
@@ -512,7 +523,11 @@ export default function CourseSystemApp({
   };
 
   const handleExportMarkdown = async () => {
-    const md = buildWorkspaceMarkdownExport(workspaceState, quizAnswersByModule);
+    const md = buildWorkspaceMarkdownExport(
+      workspaceState,
+      quizAnswersByModule,
+      latestQuizByModule
+    );
     try {
       const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -540,6 +555,7 @@ export default function CourseSystemApp({
     const fresh = clearAllCourseLearningData();
     setWorkspaceState(fresh);
     setQuizAnswersByModule({});
+    setLatestQuizByModule({});
     setActiveModuleId("m1");
     setActiveUnitId(undefined);
     setConfirmClear(false);
@@ -972,6 +988,7 @@ export default function CourseSystemApp({
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
             quizAnswersByModule={quizAnswersByModule}
+            latestQuizByModule={latestQuizByModule}
             hasPaidAccess={hasPaidAccess}
             isInstructorAuthorized={isInstructorAuthorized}
             onOpenBilling={onOpenBilling}
@@ -991,6 +1008,7 @@ export default function CourseSystemApp({
             initialUnitId={activeUnitId}
             workspaceState={workspaceState}
             completedLabIds={completedLabIds}
+            latestQuizSummary={latestQuizByModule[activeModuleRecord.id]}
             hasPaidAccess={hasPaidAccess}
             isInstructorAuthorized={isInstructorAuthorized}
             isSignedIn={Boolean(session)}
