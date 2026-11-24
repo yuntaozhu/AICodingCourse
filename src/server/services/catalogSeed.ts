@@ -1,6 +1,17 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { cohortMilestones, cohorts, prices, products } from "../../db/schema.ts";
+import {
+  cohortMilestones,
+  cohorts,
+  evalDatasets,
+  prices,
+  products,
+  projectTemplates,
+} from "../../db/schema.ts";
+import {
+  SEED_EVAL_DATASETS,
+  SEED_PROJECT_TEMPLATES,
+} from "../data/projectTemplates.ts";
 
 let catalogSeededPromise: Promise<void> | null = null;
 
@@ -14,7 +25,45 @@ export async function ensureCatalogSeeded(): Promise<void> {
   return catalogSeededPromise;
 }
 
+async function seedProjectTemplatesAndEvals(): Promise<void> {
+  for (const tpl of SEED_PROJECT_TEMPLATES) {
+    await db
+      .insert(projectTemplates)
+      .values({
+        slug: tpl.slug,
+        title: tpl.title,
+        subtitle: tpl.subtitle,
+        trackType: tpl.trackType,
+        targetModuleId: tpl.targetModuleId,
+        allowedGlobsJson: tpl.allowedGlobs,
+        blockedPathsJson: tpl.blockedPaths,
+        starterSpecMarkdown: tpl.starterSpecMarkdown,
+        starterRulesContent: tpl.starterRulesContent,
+        firstHourChecklistJson: tpl.firstHourChecklist,
+        boundaryDisclaimer: tpl.boundaryDisclaimer,
+        active: true,
+      })
+      .onConflictDoNothing();
+  }
+
+  for (const ds of SEED_EVAL_DATASETS) {
+    await db
+      .insert(evalDatasets)
+      .values({
+        slug: ds.slug,
+        title: ds.title,
+        moduleId: ds.moduleId,
+        version: ds.version,
+        casesJson: ds.cases as unknown as Array<Record<string, unknown>>,
+        active: true,
+      })
+      .onConflictDoNothing();
+  }
+}
+
 async function runSeed(): Promise<void> {
+  await seedProjectTemplatesAndEvals();
+
   const existingProducts = await db.select().from(products).limit(1);
   if (existingProducts.length > 0) {
     return;
@@ -24,17 +73,18 @@ async function runSeed(): Promise<void> {
     .insert(products)
     .values({
       skuCode: "self-paced-pass",
-      title: "自助学习账号 · 全模块与沙盘版",
-      subtitle: "面向自驱动独立开发者、产品经理与学生，解锁 M1–M13-Eng 全部课程与云端进度",
+      title: "Coding Everything 全课自助畅学卡",
+      subtitle:
+        "面向独立开发者、产品经理与业务实践者，解锁全 14 模块、Starter Kit 项目交付、Eval 基准与只读引用 Tutor",
       productType: "self_paced",
       scopeType: "all_modules",
       scopeRef: "m1-m13-eng",
       featuresJson: [
         "解锁 M1–M13-Eng 全部 14 模块与 149 教学单元",
-        "20 个交互式沙盘与 0-Token 静态规则实时审计",
-        "49 道随堂测验服务端判分与错题溯源复盘",
-        "云端多端进度同步、个人双链路知识库草稿与 Markdown 导出",
-        "M2–M13-Eng 限额内服务端 AI 代码/规则审查体验",
+        "3 套标准 Starter Kit 模板 + 服务端 422 静态审计门禁与 Handoff 归档",
+        "20 个交互式沙盘 + 标准化 Eval 检索/ACL/熔断评测台",
+        "只读引文 Course Tutor 助教与后端逐题认证 Exam 考场",
+        "云端多端进度同步、个人双链路知识库与 Markdown 导出",
       ],
       active: true,
     })
@@ -45,17 +95,18 @@ async function runSeed(): Promise<void> {
     .insert(products)
     .values({
       skuCode: "cohort-mentored-camp",
-      title: "教师小班实战营 · 深度指导与作业批改",
-      subtitle: "含完整课程访问权 + 当期固定课表、3 个里程碑作业批改与结业人工评审",
+      title: "Coding Everything 企二代与小班实战营",
+      subtitle:
+        "基于真实授权业务场景开展项目交付，含 Starter Kit 双门禁审校、AI 预审草稿、人工批准与三锁技能认证",
       productType: "cohort_mentored",
       scopeType: "cohort_track",
       scopeRef: "COHORT-2026-Q4",
       featuresJson: [
-        "包含自助学习账号的全部课程、沙盘与测验权限",
-        "加入当期固定 Cohort 班级与分阶段里程碑课表",
-        "老师/助教逐份批改实操产物（支持退回修改与二次点评）",
-        "通过前置实证后由指导老师核发 5 项能力认证账本",
-        "支持 M13-Gov 无代码治理或 M13-Eng 工程双轨结业验收",
+        "包含「Coding Everything 全课自助畅学卡」全部课程、沙盘、Eval 与 Tutor 权限",
+        "首推 GEO Evidence Lab 与企业私有知识库等脱敏业务实战项目",
+        "服务端静态审计门禁 + 教师 AI 预审参考 + 人工终审退回重交闭环",
+        "通过测验、实操证据与导师批准三锁门禁后核发 5 项能力认证账本",
+        "支持 M13-Gov 无代码治理或 M13-Eng 工程双轨结业与 Handoff 交接归档",
       ],
       active: true,
     })
@@ -148,10 +199,10 @@ async function runSeed(): Promise<void> {
         .insert(cohorts)
         .values({
           code: "COHORT-2026-Q4",
-          title: "2026 Q4 · AI Coding 与可控 Agent 实战小班第 1 期",
+          title: "2026 Q4 · Coding Everything 企二代与可控 Agent 项目营第 1 期",
           productId: resolvedCohort.id,
           description:
-            "6 周阶段式小班带练：从 Intent/SDD 蓝图、全栈鉴权基线，到长程 Harness 与双轨 Capstone 人工评审。",
+            "6 周阶段式项目交付带练：从 Intent/SPEC 边界、Starter Kit 首小时闭环，到 Eval 评测与双轨 Capstone 人工终审。",
           startDate: "2026-11-25",
           endDate: "2027-01-10",
           maxSeats: 30,

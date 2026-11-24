@@ -215,6 +215,7 @@ function App() {
         <OfficialHomePage
           onNavigatePage={handleNavigateWebsitePage}
           onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterProjects={() => handleOpenCourseSystem(undefined, "projects")}
           onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
           onOpenBilling={() => setBillingOpen(true)}
           onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}
@@ -227,6 +228,7 @@ function App() {
         <TeensLandingPage
           onNavigatePage={handleNavigateWebsitePage}
           onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterProjects={() => handleOpenCourseSystem(undefined, "projects")}
           onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
           onOpenBilling={() => setBillingOpen(true)}
           onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}
@@ -239,6 +241,7 @@ function App() {
         <TeamsLandingPage
           onNavigatePage={handleNavigateWebsitePage}
           onEnterWorkspace={(moduleId) => handleOpenCourseSystem(moduleId, moduleId ? "module" : "catalog")}
+          onEnterProjects={() => handleOpenCourseSystem(undefined, "projects")}
           onEnterSlides={(moduleId) => handleSwitchToReveal({ moduleId })}
           onOpenBilling={() => setBillingOpen(true)}
           onOpenCohortPanel={() => handleOpenCourseSystem(undefined, "cohort")}

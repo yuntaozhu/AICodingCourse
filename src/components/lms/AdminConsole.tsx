@@ -26,12 +26,15 @@ import {
   adminUpdateInquiryStatusApi,
   adminUpdateRole,
   fetchAdminOverview,
+  fetchAdminPilotMetricsApi,
   type AdminOverviewResponse,
+  type AdminPilotMetrics,
 } from "@/lib/apiClient";
 
 export default function AdminConsole() {
   const { session, refreshSession } = useAuth();
   const [data, setData] = useState<AdminOverviewResponse | null>(null);
+  const [pilotMetrics, setPilotMetrics] = useState<AdminPilotMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -72,8 +75,14 @@ export default function AdminConsole() {
   const loadOverview = async () => {
     setLoading(true);
     try {
-      const res = await fetchAdminOverview();
+      const [res, metricsRes] = await Promise.all([
+        fetchAdminOverview(),
+        fetchAdminPilotMetricsApi().catch(() => null),
+      ]);
       setData(res);
+      if (metricsRes) {
+        setPilotMetrics(metricsRes.metrics);
+      }
       if (res.products[0] && grantProductId === 0) setGrantProductId(res.products[0].id);
       if (res.prices[0] && codePriceId === 0) setCodePriceId(res.prices[0].id);
       if (res.cohorts[0]) {
@@ -167,6 +176,59 @@ export default function AdminConsole() {
       ) : (
         data && (
           <div className="space-y-6">
+            {pilotMetrics && (
+              <section className="p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-semibold text-white">
+                    Coding Everything 试点量化指标看板（严格统计自云端真实数据库）
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    实时聚合 /api/admin/metrics
+                  </span>
+                </div>
+                <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono tabular-nums">
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">项目工作区 / 已交付</dt>
+                    <dd className="text-base font-bold text-white mt-0.5">
+                      {pilotMetrics.totalWorkspaces} / {pilotMetrics.completedProjects}
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">作业人工通过率</dt>
+                    <dd className="text-base font-bold text-emerald-300 mt-0.5">
+                      {pilotMetrics.submissionPassRatePct}% ({pilotMetrics.approvedSubmissions}/
+                      {pilotMetrics.totalSubmissions})
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">静态门禁阻断率</dt>
+                    <dd className="text-base font-bold text-amber-300 mt-0.5">
+                      {pilotMetrics.staticBlockRatePct}% ({pilotMetrics.blockedAudits}/
+                      {pilotMetrics.totalAudits})
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">标准化 Eval 通过</dt>
+                    <dd className="text-base font-bold text-gemini-cyan mt-0.5">
+                      {pilotMetrics.passedEvalRuns} / {pilotMetrics.totalEvalRuns}
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">认证 Exam 完考/通过</dt>
+                    <dd className="text-base font-bold text-white mt-0.5">
+                      {pilotMetrics.completedExams} / {pilotMetrics.passedExams}
+                    </dd>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10">
+                    <dt className="text-[10px] text-slate-400">Tutor / 预审调用</dt>
+                    <dd className="text-base font-bold text-purple-200 mt-0.5">
+                      {pilotMetrics.tutorCalls} / {pilotMetrics.prereviewCalls}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+
             {/* Row 1: Role grant + Entitlement grant + Redeem code generator */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Role Assignment */}

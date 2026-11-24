@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  Bot,
   CheckCircle2,
   ExternalLink,
   RotateCcw,
@@ -10,6 +11,7 @@ import {
 import { useAuth } from "@/context/authContextCore";
 import {
   fetchInstructorCockpit,
+  generateInstructorAiPrereviewApi,
   reviewSubmission,
   type InstructorCockpitResponse,
   type InstructorCockpitSubmission,
@@ -29,6 +31,7 @@ export default function InstructorCockpit() {
   const [feedbackMarkdown, setFeedbackMarkdown] = useState("");
   const [grantSkillId, setGrantSkillId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [generatingPrereview, setGeneratingPrereview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadCockpit = async () => {
@@ -82,6 +85,27 @@ export default function InstructorCockpit() {
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGenerateAiPrereview = async () => {
+    if (!selectedSub) return;
+    setGeneratingPrereview(true);
+    setReviewMsg(null);
+    try {
+      await generateInstructorAiPrereviewApi(selectedSub.id, `pre-${selectedSub.id}-${Date.now()}`);
+      setReviewMsg({
+        ok: true,
+        text: "已生成 AI 预审初筛草稿（仅供参考，最终通过与技能授予须由您人工确认）。",
+      });
+      await loadCockpit();
+    } catch (err) {
+      setReviewMsg({
+        ok: false,
+        text: err instanceof Error ? err.message : "生成 AI 预审草稿失败。",
+      });
+    } finally {
+      setGeneratingPrereview(false);
     }
   };
 
@@ -303,15 +327,60 @@ export default function InstructorCockpit() {
                       </div>
                     )}
 
-                    {/* Static Audit Snapshot */}
-                    {selectedSub.staticAuditJson && (
-                      <div className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-1">
-                        <div className="font-mono text-[11px] text-slate-300">
-                          提交附带静态自检快照：
+                    {/* Authoritative Server Audit + Evidence */}
+                    {(selectedSub.latestAudit || selectedSub.staticAuditJson) && (
+                      <div className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
+                          <span
+                            className={
+                              selectedSub.latestAudit?.passed === false
+                                ? "text-rose-300 font-semibold"
+                                : "text-emerald-300 font-semibold"
+                            }
+                          >
+                            服务端静态门禁：
+                            {selectedSub.latestAudit
+                              ? selectedSub.latestAudit.passed
+                                ? `PASSED（警告 ${selectedSub.latestAudit.warningCount}）`
+                                : `BLOCKED（阻塞 ${selectedSub.latestAudit.blockingCount}）`
+                              : "已记录审计快照"}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={generatingPrereview}
+                            onClick={() => void handleGenerateAiPrereview()}
+                            className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 border border-gemini-purple/45 text-purple-100 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <Bot className="w-3.5 h-3.5" />
+                            <span>
+                              {generatingPrereview
+                                ? "生成预审草稿中..."
+                                : "生成 AI 预审草稿 (仅供参考)"}
+                            </span>
+                          </button>
                         </div>
-                        <pre className="font-mono text-[11px] text-slate-300 whitespace-pre-wrap">
-                          {JSON.stringify(selectedSub.staticAuditJson, null, 2)}
-                        </pre>
+                        {selectedSub.evidence?.aiPrereviewJson && (
+                          <div className="p-2.5 rounded-lg border border-gemini-purple/35 bg-gemini-purple/10 text-[11px] text-slate-100 whitespace-pre-wrap leading-relaxed">
+                            {selectedSub.evidence.aiPrereviewJson.draftMarkdown}
+                          </div>
+                        )}
+                        {selectedSub.evidence && (
+                          <div className="space-y-1.5 text-[11px] font-mono text-slate-300 pt-1">
+                            {selectedSub.evidence.changedFilesJson.length > 0 && (
+                              <div>
+                                变更文件：{selectedSub.evidence.changedFilesJson.join(", ")}
+                                {selectedSub.evidence.evalRunId
+                                  ? ` · 关联 Eval Run #${selectedSub.evidence.evalRunId}`
+                                  : ""}
+                              </div>
+                            )}
+                            {selectedSub.evidence.testCommandLog && (
+                              <pre className="p-2 rounded bg-black/50 border border-white/10 text-emerald-200 whitespace-pre-wrap">
+                                {selectedSub.evidence.testCommandLog}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 

@@ -6,11 +6,16 @@ import {
   Compass,
   Download,
   FileCode2,
+  FolderGit2,
   GraduationCap,
   Layers,
   Play,
   Presentation as PresentationIcon,
 } from "lucide-react";
+import {
+  MODULE_STAGE_LABELS,
+  type ModuleProgressStage,
+} from "@/data/projectTemplatesPublic";
 import { MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import { getModuleTeachingPackage } from "@/data/moduleTeachingPackages";
 import {
@@ -42,9 +47,11 @@ interface CourseCatalogHomeProps {
   completedLabIds: string[];
   quizAnswersByModule: Record<string, Record<string, number>>;
   latestQuizByModule?: Record<string, WorkspaceQuizScoreSummary>;
+  moduleStageById?: Record<string, ModuleProgressStage>;
   hasPaidAccess?: boolean;
   isInstructorAuthorized?: boolean;
   onOpenBilling?: () => void;
+  onOpenProjects?: () => void;
   onOpenModule: (moduleId: string, unitId?: string, planId?: string) => void;
   onApplyPlanPresetAll: (preset: "double" | "short" | "workshop" | "self") => void;
   onOpenKnowledgeBase: (moduleCode?: string, track?: KnowledgeBaseTrack) => void;
@@ -56,9 +63,11 @@ export default function CourseCatalogHome({
   completedLabIds,
   quizAnswersByModule,
   latestQuizByModule = {},
+  moduleStageById = {},
   hasPaidAccess = false,
   isInstructorAuthorized = false,
   onOpenBilling,
+  onOpenProjects,
   onOpenModule,
   onApplyPlanPresetAll,
   onOpenKnowledgeBase,
@@ -119,17 +128,17 @@ export default function CourseCatalogHome({
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 p-5 sm:p-6 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-gemini-cyan">
-            <span>AI CODING 工程化交互式课程系统 (MVP)</span>
+            <span>CODING EVERYTHING 项目学院 · 项目型编程工作台</span>
             <span className="text-slate-400">
               当前视角：{workspaceState.viewMode === "instructor" ? "教师备课视图" : "学员学习视图"}
             </span>
           </div>
           <div className="space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              课程内容管理 · 课堂呈现 · 人机练习 · 知识沉淀
+              业务问题 → 系统边界 → AI 协作 → 确定性验证 → 可维护数字资产
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-              按「AI Coding 基本功（Track 1）→ 长程软件 Harness（Track 2）→ Agent 蓝图、运行时 KB 与双轨 Capstone（Track 3）」组织 14 个课程模块。支持按短讲、工作坊、双课时与自主学习动态重组单元顺序，并与 Reveal.js 幻灯片及 {COURSE_LABS.length} 个交互沙盘无缝并存。
+              按「AI Coding 基本功（Track 1）→ 长程软件 Harness（Track 2）→ Agent 蓝图、运行时 KB 与双轨 Capstone（Track 3）」组织 14 个课程模块，并与 Starter Kit 项目交付、服务端静态审计、Eval 评测、只读助教 Tutor 与逐题 Exam 无缝联动。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -151,6 +160,17 @@ export default function CourseCatalogHome({
               <Play className="w-4 h-4" />
               <span>{resumeLabel}</span>
             </button>
+
+            {onOpenProjects && (
+              <button
+                type="button"
+                onClick={onOpenProjects}
+                className="px-4 py-2.5 rounded-xl bg-emerald-400/15 border border-emerald-400/45 text-emerald-200 hover:bg-emerald-400/25 transition-colors text-xs sm:text-sm font-semibold cursor-pointer inline-flex items-center gap-2 whitespace-nowrap"
+              >
+                <FolderGit2 className="w-4 h-4" />
+                <span>进入项目学院 (Starter Kit / Eval / Tutor)</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -659,6 +679,9 @@ export default function CourseCatalogHome({
                     <span>
                       当前方案进度 ({activePlan?.shortLabel})：{stats.completedCount}/
                       {stats.totalCount} 单元
+                      {moduleStageById[mod.id] && moduleStageById[mod.id] !== "not_started"
+                        ? ` · ${MODULE_STAGE_LABELS[moduleStageById[mod.id]]}`
+                        : ""}
                     </span>
                     <span className="text-slate-400">
                       {mod.id !== "m1" && !hasPaidAccess ? (

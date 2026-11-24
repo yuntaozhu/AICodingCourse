@@ -11,14 +11,19 @@ import {
 import { useAuth } from "@/context/authContextCore";
 import { COURSE_MODULES } from "@/data/courseCurriculum";
 import {
+  ApiError,
   fetchMyCohorts,
+  fetchProjectWorkspacesApi,
   submitCohortWork,
   uploadSubmissionAttachment,
   type LearnerCohortItem,
+  type ProjectWorkspaceRecord,
+  type StaticAuditResultPayload,
+  type StaticAuditRunRecord,
+  type SubmissionEvidenceRecord,
   type SubmissionRecord,
   type SubmissionReviewRecord,
 } from "@/lib/apiClient";
-import { runLocalBugbotCheck } from "@/lib/gemini";
 
 interface CohortLearnerPanelProps {
   onOpenBilling: () => void;
@@ -42,29 +47,44 @@ export default function CohortLearnerPanel({
   const [cohorts, setCohorts] = useState<LearnerCohortItem[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
   const [reviewsBySub, setReviewsBySub] = useState<Record<number, SubmissionReviewRecord[]>>({});
+  const [evidenceBySub, setEvidenceBySub] = useState<Record<number, SubmissionEvidenceRecord>>({});
+  const [auditBySub, setAuditBySub] = useState<Record<number, StaticAuditRunRecord>>({});
+  const [workspaces, setWorkspaces] = useState<ProjectWorkspaceRecord[]>([]);
 
   // Submission composer
   const [selectedCohortId, setSelectedCohortId] = useState<number | "">("");
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<number | "">("");
   const [selectedModuleId, setSelectedModuleId] = useState<string>("m3");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("");
   const [artifactTitle, setArtifactTitle] = useState("");
   const [artifactText, setArtifactText] = useState("");
+  const [changedFilesText, setChangedFilesText] = useState("");
+  const [diffSummary, setDiffSummary] = useState("");
+  const [testCommandLog, setTestCommandLog] = useState("");
   const [artifactUrl, setArtifactUrl] = useState("");
   const [uploadingBlob, setUploadingBlob] = useState(false);
-  const [attachBugbotAudit, setAttachBugbotAudit] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [blockedAudit, setBlockedAudit] = useState<StaticAuditResultPayload | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadCohorts = async () => {
     if (!session) return;
     setLoading(true);
     try {
-      const data = await fetchMyCohorts();
+      const [data, wsRes] = await Promise.all([
+        fetchMyCohorts(),
+        fetchProjectWorkspacesApi().catch(() => null),
+      ]);
       setEnrolled(data.enrolled);
       setBlobUploadEnabled(Boolean(data.blobUploadEnabled));
       setCohorts(data.cohorts);
       setSubmissions(data.submissions);
       setReviewsBySub(data.reviewsBySubmissionId);
+      setEvidenceBySub(data.evidenceBySubmissionId || {});
+      setAuditBySub(data.auditBySubmissionId || {});
+      if (wsRes) {
+        setWorkspaces(wsRes.workspaces);
+      }
       if (data.cohorts[0] && selectedCohortId === "") {
         setSelectedCohortId(data.cohorts[0].id);
         const firstMs = data.cohorts[0].milestones[0];
@@ -149,42 +169,48 @@ export default function CohortLearnerPanel({
   const handleSubmitWork = async (e: React.FormEvent) => {
     e.preventDefault();
     setNotice(null);
+    setBlockedAudit(null);
     setSubmitting(true);
     try {
-      const findings = attachBugbotAudit
-        ? runLocalBugbotCheck(artifactText, [
-            "TypeScript 严格类型与鉴权边界",
-            "禁止泄露服务端密钥",
-          ])
-        : [];
-      const staticAuditJson = attachBugbotAudit
-        ? {
-            auditedAt: new Date().toISOString(),
-            findingsCount: findings.length,
-            criticalCount: findings.filter((f) => f.severity === "critical").length,
-            summary: findings.map((f) => `${f.severity}:${f.title}`).slice(0, 5),
-          }
-        : null;
+      const wsIdNum = selectedWorkspaceId ? Number(selectedWorkspaceId) : null;
+      const linkedWs = wsIdNum ? workspaces.find((w) => w.id === wsIdNum) : undefined;
+      const changedFiles = changedFilesText
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-      await submitCohortWork({
+      const res = await submitCohortWork({
         cohortId: activeCohort?.id ?? null,
         milestoneId: selectedMilestoneId ? Number(selectedMilestoneId) : null,
         moduleId: selectedModuleId,
         artifactTitle,
         artifactText,
         artifactUrl: artifactUrl.trim() || null,
-        staticAuditJson,
+        workspaceId: wsIdNum,
+        specSnapshot: linkedWs?.specMarkdown,
+        rulesSnapshot: linkedWs?.rulesMarkdown,
+        changedFiles,
+        diffSummary,
+        testCommandLog,
+        handoffSummary: linkedWs?.handoffMarkdown,
+        evalRunId: linkedWs?.latestEval?.id ?? null,
       });
 
       setArtifactTitle("");
       setArtifactText("");
+      setChangedFilesText("");
+      setDiffSummary("");
+      setTestCommandLog("");
       setArtifactUrl("");
       setNotice({
         ok: true,
-        text: "作业已提交（含静态自检快照），指导老师将在批改台查收。",
+        text: `已通过服务端静态门禁并提交（阻塞 0 · 警告 ${res.audit?.warningCount ?? 0}），指导老师将在批改台查收。`,
       });
       await loadCohorts();
     } catch (err) {
+      if (err instanceof ApiError && err.audit) {
+        setBlockedAudit(err.audit);
+      }
       setNotice({
         ok: false,
         text: err instanceof Error ? err.message : "提交失败，请检查权限或字段后重试。",
@@ -316,6 +342,8 @@ export default function CohortLearnerPanel({
                       cls: "text-slate-300",
                     };
                     const reviews = reviewsBySub[sub.id] || [];
+                    const audit = auditBySub[sub.id];
+                    const ev = evidenceBySub[sub.id];
                     return (
                       <div
                         key={sub.id}
@@ -325,9 +353,21 @@ export default function CohortLearnerPanel({
                           <span className="font-semibold text-white">{sub.artifactTitle}</span>
                           <span className={`font-mono text-[11px] ${st.cls}`}>{st.label}</span>
                         </div>
-                        <div className="font-mono text-[10px] text-slate-400">
-                          {sub.moduleId.toUpperCase()} · 更新于 {sub.updatedAt.slice(0, 10)}
+                        <div className="font-mono text-[10px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            {sub.moduleId.toUpperCase()} · 更新于 {sub.updatedAt.slice(0, 10)}
+                          </span>
+                          {audit && (
+                            <span className={audit.passed ? "text-emerald-300" : "text-rose-300"}>
+                              服务端审计：{audit.passed ? "通过" : "阻断"} (警告 {audit.warningCount})
+                            </span>
+                          )}
                         </div>
+                        {ev?.aiPrereviewJson && (
+                          <div className="p-2 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] text-slate-300 whitespace-pre-wrap">
+                            {ev.aiPrereviewJson.draftMarkdown}
+                          </div>
+                        )}
                         {reviews.map((rev) => (
                           <div
                             key={rev.id}
@@ -454,14 +494,83 @@ export default function CohortLearnerPanel({
               />
             </div>
 
-            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={attachBugbotAudit}
-                onChange={(e) => setAttachBugbotAudit(e.target.checked)}
+            {workspaces.length > 0 && (
+              <div className="space-y-1">
+                <label className="block text-slate-300 font-medium">
+                  关联项目学院工作区（自动携带 SPEC、Rules 白名单校验与 Eval ID）
+                </label>
+                <select
+                  value={selectedWorkspaceId}
+                  onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
+                >
+                  <option value="">不绑定项目工作区（按通用模块门禁校验）</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={String(ws.id)}>
+                      {ws.title} ({ws.lifecycleState})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-slate-300 font-medium">
+                  变更文件清单 (changedFiles，逗号或换行分隔)
+                </label>
+                <input
+                  type="text"
+                  value={changedFilesText}
+                  onChange={(e) => setChangedFilesText(e.target.value)}
+                  placeholder="例如：src/auth.ts, tests/auth.test.ts"
+                  className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-slate-300 font-medium">
+                  测试 / 构建命令日志摘要
+                </label>
+                <input
+                  type="text"
+                  value={testCommandLog}
+                  onChange={(e) => setTestCommandLog(e.target.value)}
+                  placeholder="例如：npx tsc --noEmit (0 err) && npm test (31 passed)"
+                  className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-slate-300 font-medium">
+                Git Diff 摘要（选填，便于老师审查最小化修改范围）
+              </label>
+              <textarea
+                rows={3}
+                value={diffSummary}
+                onChange={(e) => setDiffSummary(e.target.value)}
+                placeholder="粘贴 git diff --stat 或核心改动说明..."
+                className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
               />
-              <span>提交时自动附带本地 Bugbot 静态安全/DoD 检查快照（供老师快速初筛）</span>
-            </label>
+            </div>
+
+            <div className="p-3 rounded-xl border border-gemini-cyan/30 bg-gemini-cyan/5 text-[11px] text-slate-300">
+              服务端静态门禁将在提交时强制执行：自动拦截明文密钥、SQL 字符串拼接、测试作弊 (.skip/expect(true))、越界路径改动及 GEO 违规排名承诺；不接受前端绕过。
+            </div>
+
+            {blockedAudit && !blockedAudit.passed && (
+              <div className="p-3 rounded-xl border border-rose-400/45 bg-rose-500/10 space-y-1.5">
+                <div className="font-mono font-semibold text-rose-300">
+                  服务端门禁阻断（{blockedAudit.blockingCount} 项高危违规）：
+                </div>
+                {blockedAudit.findings.map((f, i) => (
+                  <div key={`${f.id}-${i}`} className="text-[11px] text-rose-100">
+                    <span className="font-mono text-rose-300 mr-1.5">[{f.ruleId}]</span>
+                    <strong>{f.title}</strong>：{f.detail}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {notice && (
               <div

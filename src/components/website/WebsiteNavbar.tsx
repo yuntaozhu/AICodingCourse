@@ -47,7 +47,7 @@ export default function WebsiteNavbar({
             onClick={() => onNavigatePage("home")}
             className="text-base font-bold text-white tracking-tight whitespace-nowrap shrink-0 cursor-pointer hover:text-gemini-cyan transition-colors"
           >
-            AI Coding 学院
+            Coding Everything 项目学院
           </button>
 
           {/* Center Zone: Single-line navigation links (<=5 items) */}

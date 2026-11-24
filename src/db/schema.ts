@@ -326,3 +326,143 @@ export const leadInquiries = pgTable("lead_inquiries", {
   status: text("status").notNull().default("new"), // 'new' | 'contacted' | 'closed'
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const projectTemplates = pgTable("project_templates", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle").notNull(),
+  trackType: text("track_type").notNull().default("geo-evidence"),
+  targetModuleId: text("target_module_id").notNull().default("m13-eng"),
+  allowedGlobsJson: jsonb("allowed_globs_json").$type<string[]>().notNull().default([]),
+  blockedPathsJson: jsonb("blocked_paths_json").$type<string[]>().notNull().default([]),
+  starterSpecMarkdown: text("starter_spec_markdown").notNull(),
+  starterRulesContent: text("starter_rules_content").notNull(),
+  firstHourChecklistJson: jsonb("first_hour_checklist_json")
+    .$type<Array<{ id: string; label: string; detail: string }>>()
+    .notNull()
+    .default([]),
+  boundaryDisclaimer: text("boundary_disclaimer").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const projectWorkspaces = pgTable("project_workspaces", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
+  templateId: integer("template_id")
+    .references(() => projectTemplates.id)
+    .notNull(),
+  cohortId: integer("cohort_id").references(() => cohorts.id),
+  title: text("title").notNull(),
+  repoUrl: text("repo_url").notNull().default(""),
+  specMarkdown: text("spec_markdown").notNull(),
+  rulesMarkdown: text("rules_markdown").notNull(),
+  handoffMarkdown: text("handoff_markdown").notNull().default(""),
+  firstHourCheckedJson: jsonb("first_hour_checked_json")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
+  lifecycleState: text("lifecycle_state").notNull().default("draft"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const staticAuditRuns = pgTable("static_audit_runs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
+  workspaceId: integer("workspace_id").references(() => projectWorkspaces.id),
+  submissionId: integer("submission_id").references(() => submissions.id),
+  moduleId: text("module_id").notNull(),
+  passed: boolean("passed").notNull().default(false),
+  blockingCount: integer("blocking_count").notNull().default(0),
+  warningCount: integer("warning_count").notNull().default(0),
+  findingsJson: jsonb("findings_json")
+    .$type<
+      Array<{
+        id: string;
+        ruleId: string;
+        severity: "blocking" | "warning";
+        title: string;
+        detail: string;
+      }>
+    >()
+    .notNull()
+    .default([]),
+  changedFilesJson: jsonb("changed_files_json").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const submissionEvidences = pgTable("submission_evidences", {
+  id: serial("id").primaryKey(),
+  submissionId: integer("submission_id")
+    .references(() => submissions.id)
+    .notNull(),
+  workspaceId: integer("workspace_id").references(() => projectWorkspaces.id),
+  specSnapshot: text("spec_snapshot").notNull().default(""),
+  rulesSnapshot: text("rules_snapshot").notNull().default(""),
+  changedFilesJson: jsonb("changed_files_json").$type<string[]>().notNull().default([]),
+  diffSummary: text("diff_summary").notNull().default(""),
+  testCommandLog: text("test_command_log").notNull().default(""),
+  handoffSummary: text("handoff_summary").notNull().default(""),
+  evalRunId: integer("eval_run_id"),
+  staticAuditRunId: integer("static_audit_run_id"),
+  aiPrereviewJson: jsonb("ai_prereview_json").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const evalDatasets = pgTable("eval_datasets", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  moduleId: text("module_id").notNull(),
+  version: text("version").notNull(),
+  casesJson: jsonb("cases_json")
+    .$type<Array<Record<string, unknown>>>()
+    .notNull()
+    .default([]),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const evalRuns = pgTable("eval_runs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
+  workspaceId: integer("workspace_id").references(() => projectWorkspaces.id),
+  datasetSlug: text("dataset_slug").notNull(),
+  moduleId: text("module_id").notNull(),
+  recallAtK: integer("recall_at_k_pct").notNull().default(0),
+  citationPrecision: integer("citation_precision_pct").notNull().default(0),
+  aclLeakCount: integer("acl_leak_count").notNull().default(0),
+  staleRecallCount: integer("stale_recall_count").notNull().default(0),
+  refusalAccuracy: integer("refusal_accuracy_pct").notNull().default(0),
+  loopCircuitBreakRate: integer("loop_circuit_break_pct").notNull().default(0),
+  passed: boolean("passed").notNull().default(false),
+  reportJson: jsonb("report_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const examSessions = pgTable("exam_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
+  moduleId: text("module_id").notNull(),
+  quizVersion: text("quiz_version").notNull(),
+  questionIdsJson: jsonb("question_ids_json").$type<string[]>().notNull().default([]),
+  currentIndex: integer("current_index").notNull().default(0),
+  answersJson: jsonb("answers_json").$type<Record<string, number>>().notNull().default({}),
+  scorePct: integer("score_pct").notNull().default(0),
+  passed: boolean("passed").notNull().default(false),
+  weakTopicsJson: jsonb("weak_topics_json").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("in_progress"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+

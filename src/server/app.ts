@@ -74,6 +74,26 @@ import {
   gradeSingleQuizQuestion,
   gradeSkillDiagnosticAndGrant,
 } from "./services/curriculumService.ts";
+import { getUserEvalRuns, runAndPersistEval } from "./services/evalRunnerService.ts";
+import {
+  getUserExamSessions,
+  startExamSession,
+  submitExamStepAnswer,
+} from "./services/examService.ts";
+import {
+  buildProjectArchiveMarkdown,
+  createProjectWorkspace,
+  generateInstructorAiPrereview,
+  getAdminPilotMetrics,
+  getPublicProjectTemplates,
+  getUserProjectWorkspaces,
+  updateProjectWorkspace,
+} from "./services/projectService.ts";
+import {
+  recordStaticAuditRun,
+  runDeterministicStaticAudit,
+} from "./services/staticAuditService.ts";
+import { askCourseGroundedTutor } from "./services/tutorService.ts";
 
 interface RawBodyRequest extends Request {
   rawBody?: string;
@@ -1002,7 +1022,14 @@ const submissionSchema = z.object({
   artifactTitle: z.string().trim().min(2, "请填写作业标题").max(200),
   artifactText: z.string().trim().min(10, "请填写产物内容或关键验证输出").max(30000),
   artifactUrl: z.string().trim().max(500).nullable().optional(),
-  staticAuditJson: z.record(z.string(), z.unknown()).nullable().optional(),
+  workspaceId: z.number().int().positive().nullable().optional(),
+  specSnapshot: z.string().max(30000).optional(),
+  rulesSnapshot: z.string().max(15000).optional(),
+  changedFiles: z.array(z.string().trim().max(260)).max(100).optional(),
+  diffSummary: z.string().max(20000).optional(),
+  testCommandLog: z.string().max(20000).optional(),
+  handoffSummary: z.string().max(15000).optional(),
+  evalRunId: z.number().int().positive().nullable().optional(),
 });
 
 app.post("/api/submissions", requireAuth, async (req: AuthedRequest, res: Response) => {
@@ -1029,11 +1056,21 @@ app.post("/api/submissions", requireAuth, async (req: AuthedRequest, res: Respon
       artifactTitle: parsed.data.artifactTitle,
       artifactText: parsed.data.artifactText,
       artifactUrl: parsed.data.artifactUrl,
-      staticAuditJson: parsed.data.staticAuditJson,
+      workspaceId: parsed.data.workspaceId,
+      specSnapshot: parsed.data.specSnapshot,
+      rulesSnapshot: parsed.data.rulesSnapshot,
+      changedFiles: parsed.data.changedFiles,
+      diffSummary: parsed.data.diffSummary,
+      testCommandLog: parsed.data.testCommandLog,
+      handoffSummary: parsed.data.handoffSummary,
+      evalRunId: parsed.data.evalRunId,
       hasPaidAccess,
     });
     if (!result.ok) {
-      res.status(result.status).json({ error: result.error });
+      res.status(result.status).json({
+        error: result.error,
+        ...("audit" in result ? { audit: result.audit } : {}),
+      });
       return;
     }
     res.status(201).json(result);
@@ -1042,6 +1079,315 @@ app.post("/api/submissions", requireAuth, async (req: AuthedRequest, res: Respon
     res.status(500).json({ error: "作业提交失败。" });
   }
 });
+
+// Coding Everything: Starter Kits, Project Workspaces & Server Static Audit
+app.get("/api/projects/templates", async (_req: Request, res: Response) => {
+  try {
+    const templates = await getPublicProjectTemplates();
+    res.json({ ok: true, templates });
+  } catch (err) {
+    console.error("[/api/projects/templates] error:", err);
+    res.status(500).json({ error: "加载项目模板失败。" });
+  }
+});
+
+app.get("/api/projects/workspaces", requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const data = await getUserProjectWorkspaces(req.authContext!.user.id);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    console.error("[/api/projects/workspaces GET] error:", err);
+    res.status(500).json({ error: "加载项目工作区失败。" });
+  }
+});
+
+const createWorkspaceSchema = z.object({
+  templateSlug: z.string().trim().min(2).max(80),
+  title: z.string().trim().max(160).optional(),
+  cohortId: z.number().int().positive().nullable().optional(),
+  repoUrl: z.string().trim().max(400).optional(),
+});
+
+app.post("/api/projects/workspaces", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = createWorkspaceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "创建项目工作区参数不合法。" });
+    return;
+  }
+  if (parsed.data.repoUrl && !/^https?:\/\//i.test(parsed.data.repoUrl)) {
+    res.status(400).json({ error: "仓库链接必须以 http:// 或 https:// 开头。" });
+    return;
+  }
+  try {
+    const result = await createProjectWorkspace({
+      userId: req.authContext!.user.id,
+      ...parsed.data,
+    });
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result);
+  } catch (err) {
+    console.error("[/api/projects/workspaces POST] error:", err);
+    res.status(500).json({ error: "创建项目工作区失败。" });
+  }
+});
+
+const updateWorkspaceSchema = z.object({
+  title: z.string().trim().min(2).max(160).optional(),
+  repoUrl: z.string().trim().max(400).optional(),
+  specMarkdown: z.string().max(30000).optional(),
+  rulesMarkdown: z.string().max(15000).optional(),
+  handoffMarkdown: z.string().max(15000).optional(),
+  firstHourChecked: z.array(z.string().max(60)).max(20).optional(),
+  markArchived: z.boolean().optional(),
+});
+
+app.patch(
+  "/api/projects/workspaces/:workspaceId",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const workspaceId = Number(req.params.workspaceId);
+    const parsed = updateWorkspaceSchema.safeParse(req.body);
+    if (!Number.isInteger(workspaceId) || workspaceId <= 0 || !parsed.success) {
+      res.status(400).json({ error: "更新项目工作区参数无效。" });
+      return;
+    }
+    if (parsed.data.repoUrl && !/^https?:\/\//i.test(parsed.data.repoUrl)) {
+      res.status(400).json({ error: "仓库链接必须以 http:// 或 https:// 开头。" });
+      return;
+    }
+    try {
+      const result = await updateProjectWorkspace({
+        userId: req.authContext!.user.id,
+        workspaceId,
+        ...parsed.data,
+      });
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/projects/workspaces/:id PATCH] error:", err);
+      res.status(500).json({ error: "保存项目工作区失败。" });
+    }
+  }
+);
+
+app.get(
+  "/api/projects/workspaces/:workspaceId/archive",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const workspaceId = Number(req.params.workspaceId);
+    if (!Number.isInteger(workspaceId) || workspaceId <= 0) {
+      res.status(400).json({ error: "工作区 ID 无效。" });
+      return;
+    }
+    try {
+      const result = await buildProjectArchiveMarkdown(
+        req.authContext!.user.id,
+        workspaceId
+      );
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/projects/workspaces/:id/archive] error:", err);
+      res.status(500).json({ error: "生成项目 Handoff 归档失败。" });
+    }
+  }
+);
+
+const staticAuditSchema = z.object({
+  workspaceId: z.number().int().positive().nullable().optional(),
+  moduleId: z.string().trim().min(1).max(40).default("m13-eng"),
+  codeOrArtifactText: z.string().max(30000).default(""),
+  specText: z.string().max(30000).optional(),
+  rulesText: z.string().max(15000).optional(),
+  diffSummary: z.string().max(20000).optional(),
+  testCommandLog: z.string().max(20000).optional(),
+  changedFiles: z.array(z.string().trim().max(260)).max(100).optional().default([]),
+  allowedGlobs: z.array(z.string().trim().max(120)).max(30).optional(),
+  blockedPaths: z.array(z.string().trim().max(120)).max(30).optional(),
+  requireProjectStructure: z.boolean().optional().default(true),
+});
+
+app.post("/api/projects/static-audit", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = staticAuditSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "静态审计请求参数无效。" });
+    return;
+  }
+  try {
+    const audit = runDeterministicStaticAudit(parsed.data);
+    const saved = await recordStaticAuditRun({
+      userId: req.authContext!.user.id,
+      workspaceId: parsed.data.workspaceId ?? null,
+      submissionId: null,
+      moduleId: parsed.data.moduleId,
+      audit,
+    });
+    res.json({ ok: true, audit, savedRunId: saved.id });
+  } catch (err) {
+    console.error("[/api/projects/static-audit] error:", err);
+    res.status(500).json({ error: "执行服务端静态审计失败。" });
+  }
+});
+
+// Coding Everything: Standardized Eval Runner
+const evalRunSchema = z.object({
+  workspaceId: z.number().int().positive().nullable().optional(),
+  datasetSlug: z.string().trim().min(2).max(80).default("geo-evidence-eval-v1"),
+  specMarkdown: z.string().max(30000).optional(),
+  rulesMarkdown: z.string().max(15000).optional(),
+  testCommandLog: z.string().max(20000).optional(),
+  simulateBrokenAcl: z.boolean().optional().default(false),
+  simulateStaleLeak: z.boolean().optional().default(false),
+});
+
+app.get("/api/eval/runs", requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const runs = await getUserEvalRuns(req.authContext!.user.id);
+    res.json({ ok: true, runs });
+  } catch (err) {
+    console.error("[/api/eval/runs GET] error:", err);
+    res.status(500).json({ error: "获取 Eval 评测记录失败。" });
+  }
+});
+
+app.post("/api/eval/runs", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = evalRunSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Eval 评测参数不合法。" });
+    return;
+  }
+  try {
+    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    if (!hasPaidAccess) {
+      res.status(403).json({
+        error: "标准化 Eval Runner 需具备有效课程或训练营权益后运行。",
+        code: "ENTITLEMENT_REQUIRED",
+      });
+      return;
+    }
+    const result = await runAndPersistEval({
+      userId: req.authContext!.user.id,
+      ...parsed.data,
+    });
+    res.status(201).json({ ok: true, ...result });
+  } catch (err) {
+    console.error("[/api/eval/runs POST] error:", err);
+    res.status(500).json({ error: "运行 Eval 评测失败。" });
+  }
+});
+
+// Coding Everything: Course-grounded Tutor (read-only, unlocked modules only, cited, never mutates progress/skills)
+const tutorAskSchema = z.object({
+  question: z.string().trim().min(2, "请输入想请教的课程问题").max(1500),
+  moduleId: z.string().trim().max(40).optional(),
+  requestId: z.string().max(120).optional(),
+});
+
+app.post("/api/tutor/ask", optionalAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = tutorAskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message || "提问格式无效。" });
+    return;
+  }
+  try {
+    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    const result = await askCourseGroundedTutor({
+      userId: req.authContext?.user.id ?? null,
+      question: parsed.data.question,
+      moduleId: parsed.data.moduleId,
+      hasPaidAccess,
+      requestId: parsed.data.requestId,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[/api/tutor/ask] error:", err);
+    res.status(500).json({ error: "课程 Tutor 服务暂时不可用。" });
+  }
+});
+
+// Coding Everything: Step-by-step Exam sessions
+app.get("/api/exam/sessions", requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const sessions = await getUserExamSessions(req.authContext!.user.id);
+    res.json({ ok: true, sessions });
+  } catch (err) {
+    console.error("[/api/exam/sessions GET] error:", err);
+    res.status(500).json({ error: "加载 Exam 考试记录失败。" });
+  }
+});
+
+const startExamSchema = z.object({
+  moduleId: z.string().trim().min(2).max(40),
+});
+
+app.post("/api/exam/sessions", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = startExamSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "请选择有效的模块 ID 开启 Exam。" });
+    return;
+  }
+  try {
+    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    const result = await startExamSession({
+      userId: req.authContext!.user.id,
+      moduleId: parsed.data.moduleId,
+      hasPaidAccess,
+    });
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result);
+  } catch (err) {
+    console.error("[/api/exam/sessions POST] error:", err);
+    res.status(500).json({ error: "开启认证 Exam 失败。" });
+  }
+});
+
+const examAnswerSchema = z.object({
+  questionId: z.string().trim().min(1).max(60),
+  selectedIndex: z.number().int().min(0).max(3),
+});
+
+app.post(
+  "/api/exam/sessions/:sessionId/answer",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const sessionId = Number(req.params.sessionId);
+    const parsed = examAnswerSchema.safeParse(req.body);
+    if (!Number.isInteger(sessionId) || sessionId <= 0 || !parsed.success) {
+      res.status(400).json({ error: "Exam 单题作答参数不合法。" });
+      return;
+    }
+    try {
+      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+      const result = await submitExamStepAnswer({
+        userId: req.authContext!.user.id,
+        sessionId,
+        questionId: parsed.data.questionId,
+        selectedIndex: parsed.data.selectedIndex,
+        hasPaidAccess,
+      });
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/exam/sessions/:id/answer POST] error:", err);
+      res.status(500).json({ error: "Exam 判分保存失败。" });
+    }
+  }
+);
 
 // Stage 2: Strictly cohort-scoped Instructor Cockpit
 app.get("/api/instructor/cockpit", requireAuth, async (req: AuthedRequest, res: Response) => {
@@ -1058,6 +1404,40 @@ app.get("/api/instructor/cockpit", requireAuth, async (req: AuthedRequest, res: 
     res.status(500).json({ error: "加载教师批改队列失败。" });
   }
 });
+
+app.post(
+  "/api/instructor/submissions/:submissionId/ai-prereview",
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const ctx = req.authContext!;
+    if (!ctx.isAdmin && !ctx.isInstructorOrTa) {
+      res.status(403).json({ error: "无权生成教师 AI 预审草稿。" });
+      return;
+    }
+    const submissionId = Number(req.params.submissionId);
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      res.status(400).json({ error: "提交记录 ID 无效。" });
+      return;
+    }
+    try {
+      const requestId =
+        typeof req.body?.requestId === "string" ? req.body.requestId : undefined;
+      const result = await generateInstructorAiPrereview({
+        authContext: ctx,
+        submissionId,
+        requestId,
+      });
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      console.error("[/api/instructor/submissions/:id/ai-prereview] error:", err);
+      res.status(500).json({ error: "生成 AI 预审草稿失败。" });
+    }
+  }
+);
 
 const reviewSubmissionSchema = z.object({
   decision: z.enum(["changes_requested", "approved"]),
@@ -1100,6 +1480,22 @@ app.post(
     } catch (err) {
       console.error("[/api/instructor/submissions/:id/review] error:", err);
       res.status(500).json({ error: "提交批改结果失败。" });
+    }
+  }
+);
+
+// Admin pilot telemetry metrics (derived strictly from DB rows)
+app.get(
+  "/api/admin/metrics",
+  requireAuth,
+  requireAdmin,
+  async (_req: AuthedRequest, res: Response) => {
+    try {
+      const metrics = await getAdminPilotMetrics();
+      res.json({ ok: true, metrics });
+    } catch (err) {
+      console.error("[/api/admin/metrics] error:", err);
+      res.status(500).json({ error: "加载试点量化指标失败。" });
     }
   }
 );

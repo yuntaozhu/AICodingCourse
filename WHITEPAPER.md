@@ -336,3 +336,12 @@ AICodingCourse 的产品与商业核心在于**“不让 AI 代替人类思考�
    - 严禁在课程交付或售后支持中教授、推荐或提供任何绕过商业 IDE 试用限制、重置免费额度或伪造设备指纹的违规脚本，严格遵守工具厂商官方服务条款（ToS）。
 4. **业务代码与 Agent 上线最终责任界定**：
    - 本课程系统及生成的提示词、`.mdc` 规则模板、双链路知识库文档、ACL Pre-filter 参考骨架与代码审查建议仅作为研发与评测辅助工具；涉及资金交易、支付 Webhook 验签、医疗/金融高敏合规、多租户隐私隔离及生产数据库变更的系统上线前，均须由人类工程师与业务负责人完成真实环境测试验收并承担上线主体责任。
+
+---
+
+### 9.3 v2.0「Coding Everything 项目学院」升级实况
+
+- **项目工作区与 8 阶段状态机**：新增 `project_templates` / `project_workspaces` / `submission_evidences` / `static_audit_runs` 数据表与工作台 UI，支持 `Draft → Static Audit → Submitted → AI Pre-review → Human Review → Changes Requested / Approved → Evidence Archived` 闭环及 7 阶段模块进度聚合；一键导出含 `SPEC`、`Rules`、审计结果、Eval 指标与 `HANDOFF.md` 的 Markdown 交付资产包。
+- **服务端权威门禁与三锁授证**：`POST /api/submissions` 由服务端 `staticAuditService` 强制审计，存在密钥/SQLi/测试作弊/文件越界或 GEO 排名过分承诺时返回 HTTP `422` 阻断；`reviewCohortSubmission` 强制校验“静态审计通过 + 实操证据/评测 + 导师人工确认”三锁后才允许核发 `SkillGrant`；教师 AI 预审草稿（`ai-prereview`）严格标记为 `advisoryOnly: true`，不替代人工决定。
+- **Tutor 与 Exam 分离及标准化 Eval Runner**：`POST /api/tutor/ask` 仅检索已解锁模块内容并返回出处引用（严禁修改进度或暴露 `correctIndex` / `teacherMaterials`）；`exam_sessions` 由服务端逐题派发与判分；`eval_runs` 在固定数据集上验证 Recall@K、Citation Precision、ACL 零越权（`aclLeakCount === 0`）、Tombstone 零过期召回与步数熔断率。
+- **GEO Evidence Lab 合规声明**：严格限定为公开/授权来源登记、结构化语料整理、抽样评测与人工审核工作流，明确禁止承诺“保证进入 AI 推荐排名”。

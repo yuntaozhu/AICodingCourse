@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   FlaskConical,
+  FolderGit2,
   GraduationCap,
   Layers,
   Lock,
@@ -24,6 +25,11 @@ import { getFreeTrialModulePreview, getPublicCourseMetrics } from "@/data/course
 import { M13_GOV_SIMULATION_DISCLAIMER } from "@/data/courseWorkspaceStore";
 import { MODULE_QUIZZES } from "@/data/moduleQuizzes";
 import {
+  FIRST_HOUR_DEFAULT_CHECKLIST,
+  GEO_EVIDENCE_LAB_DISCLAIMER,
+  STANDARD_STARTER_KIT_TREE,
+} from "@/data/projectTemplatesPublic";
+import {
   fetchCatalog,
   previewM1QuizApi,
   submitInquiry,
@@ -35,6 +41,7 @@ import WebsiteNavbar, { type WebsitePageRoute } from "./WebsiteNavbar";
 interface OfficialHomePageProps {
   onNavigatePage: (page: WebsitePageRoute) => void;
   onEnterWorkspace: (moduleId?: string) => void;
+  onEnterProjects?: () => void;
   onEnterSlides: (moduleId?: string) => void;
   onOpenBilling: () => void;
   onOpenCohortPanel: () => void;
@@ -69,41 +76,55 @@ const PAIN_POINTS = [
   },
 ];
 
-const FIVE_STEP_METHOD = [
+const SEVEN_STAGE_PIPELINE = [
   {
     step: "01",
-    title: "提出目标",
-    action: "澄清场景与最终可运行产物",
-    artifact: "结构化 Intent 声明",
-    modules: "M1",
+    title: "真实业务任务",
+    action: "锁定品牌监测、私有知识库或审核工作流等真实授权场景",
+    artifact: "README.md 范围契约",
+    modules: "M1 · Starter Kit",
   },
   {
     step: "02",
-    title: "写清边界",
-    action: "锁定数据契约、鉴权与禁改目录",
-    artifact: "Plan 蓝图与 .mdc 规则",
-    modules: "M2 · M4 · M9",
+    title: "数据与权限边界",
+    action: "划清角色权限、脱敏数据与目录修改白名单",
+    artifact: "SPEC.md & 禁改清单",
+    modules: "M2 · M9 · M11",
   },
   {
     step: "03",
-    title: "指挥 AI",
-    action: "按最小切片调度 Plan / Agent",
-    artifact: "受控上下文切片清单",
-    modules: "M3 · M8",
+    title: "规格与 Harness",
+    action: "把系统约束写入可审查的规则契约与运行护栏",
+    artifact: ".cursorrules 规则集",
+    modules: "M4 · M8",
   },
   {
     step: "04",
-    title: "运行验证",
-    action: "用退出码、单测与安全检查说话",
-    artifact: "DoD 检查清单与自愈闭环",
-    modules: "M5 · M6 · M12",
+    title: "AI 协作局部改动",
+    action: "在受控文件白名单内草拟实现，审查每次 Diff 变更",
+    artifact: "Diff 审查与变更切片",
+    modules: "M3 · M6",
   },
   {
     step: "05",
-    title: "沉淀经验",
-    action: "导出复盘文档与可复用规则资产",
-    artifact: "Markdown 归档与双轨结课",
-    modules: "M7 · M13",
+    title: "测试、静态检查与 Eval",
+    action: "服务端静态红线拦截 + 固定基准集自动化评测",
+    artifact: "tests/ & eval/ 报告",
+    modules: "M5 · M12 · M13-Eng",
+  },
+  {
+    step: "06",
+    title: "人工批准（HITL）",
+    action: "教师审校与三锁门禁（测验+实操证据+人工批准）",
+    artifact: "evidence/ 审签证据",
+    modules: "M13-Gov / Cohort",
+  },
+  {
+    step: "07",
+    title: "可维护数字资产",
+    action: "沉淀运维、权限、成本与人工接管说明书一键归档",
+    artifact: "handoff.md 交接归档",
+    modules: "M7 · Handoff",
   },
 ];
 
@@ -224,6 +245,7 @@ function formatCents(cents: number): string {
 export default function OfficialHomePage({
   onNavigatePage,
   onEnterWorkspace,
+  onEnterProjects,
   onEnterSlides,
   onOpenBilling,
   onOpenCohortPanel,
@@ -330,18 +352,18 @@ export default function OfficialHomePage({
           <div className="lg:col-span-6 flex flex-col justify-between gap-6">
             <div className="space-y-5">
               <div className="text-xs font-mono text-gemini-cyan tracking-wide">
-                面向非技术创作者与独立开发者 · AI CODING 实战工作台
+                CODING EVERYTHING 项目学院 · 可运行 · 可验证 · 可交付
               </div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.14] [text-wrap:balance]">
-                教你用 AI 把想法做成
-                <span className="text-gemini-cyan">可运行、可验证</span>的软件
+                把真实业务问题变成
+                <span className="text-gemini-cyan">可运行、可验证</span>的数字资产
               </h1>
               <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-                不再停留在一次性的对话框拼凑。系统训练{" "}
+                不止于“学 Prompt”或“背 IDE 操作”。围绕{" "}
                 <strong className="text-white font-semibold">
-                  需求拆解 · AI Coding 协同 · 测试与安全验收
+                  业务问题 → 系统边界 → AI 协作实现 → 确定性验证 → 人工批准 → 可维护数字资产
                 </strong>{" "}
-                核心能力，支持按自己节奏自学，也可选择教师小班逐阶段批改交付。
+                打造项目型培训平台，服务企二代真实业务项目营、独立开发者、企业内训与青少年科创营。
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -353,12 +375,20 @@ export default function OfficialHomePage({
                   <span>免费体验 M1 课程</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => (onEnterProjects ? onEnterProjects() : onEnterWorkspace("m1"))}
+                  className="px-5 py-3 rounded-xl border border-emerald-400/45 bg-emerald-400/10 hover:bg-emerald-400/20 text-sm font-semibold text-emerald-200 inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <FolderGit2 className="w-4 h-4" />
+                  <span>进入项目学院 (Starter Kit / Eval)</span>
+                </button>
                 <a
                   href="#pricing"
-                  className="px-5 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white inline-flex items-center gap-2"
+                  className="px-4 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white inline-flex items-center gap-2"
                 >
                   <GraduationCap className="w-4 h-4 text-gemini-purple" />
-                  <span>查看学习方案</span>
+                  <span>学习方案</span>
                 </a>
                 <button
                   type="button"
@@ -366,34 +396,34 @@ export default function OfficialHomePage({
                   className="px-4 py-3 rounded-xl border border-white/10 text-xs font-mono text-slate-300 hover:text-white hover:bg-white/5 inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <PresentationIcon className="w-4 h-4 text-gemini-cyan" />
-                  <span>课件演示模式</span>
+                  <span>幻灯片模式</span>
                 </button>
               </div>
             </div>
 
             <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-5 border-t border-white/10">
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">结构化模块</dt>
+                <dt className="text-[11px] font-mono text-slate-400">Starter Kit 模板</dt>
                 <dd className="text-lg sm:text-xl font-bold font-mono text-white tabular-nums mt-0.5">
-                  {metrics.moduleCount} 模块
+                  3 套真实业务基座
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">交互式沙盘</dt>
+                <dt className="text-[11px] font-mono text-slate-400">课程模块与沙盘</dt>
                 <dd className="text-lg sm:text-xl font-bold font-mono text-gemini-cyan tabular-nums mt-0.5">
-                  {metrics.labCount} 个实验
+                  {metrics.moduleCount} 模块 · {metrics.labCount} 沙盘
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">课程学习单元</dt>
-                <dd className="text-lg sm:text-xl font-bold font-mono text-white tabular-nums mt-0.5">
-                  {metrics.unitCount} 单元
+                <dt className="text-[11px] font-mono text-slate-400">服务端双门禁</dt>
+                <dd className="text-lg sm:text-xl font-bold font-mono text-emerald-300 tabular-nums mt-0.5">
+                  静态审计 + Eval
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] font-mono text-slate-400">巩固自测题</dt>
+                <dt className="text-[11px] font-mono text-slate-400">助教与能力认证</dt>
                 <dd className="text-lg sm:text-xl font-bold font-mono text-purple-300 tabular-nums mt-0.5">
-                  {metrics.quizQuestionCount} 题
+                  Tutor · Exam · 三锁
                 </dd>
               </div>
             </dl>
@@ -404,14 +434,14 @@ export default function OfficialHomePage({
               <div className="flex-1 min-h-[240px] w-full overflow-hidden bg-gradient-to-br from-[#0b1120] to-[#130d24]">
                 <img
                   src={heroImg}
-                  alt="AI Coding 实战工作台：从需求拆解到测试验收"
+                  alt="Coding Everything 项目学院：从业务问题到可验证数字资产"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="px-4 py-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-                <span>核心训练：Plan 蓝图 · .mdc 规则 · DoD 验收 · 安全边界</span>
-                <span className="text-gemini-cyan">M1 模块免登录开放试学</span>
+                <span>交付资产：README · SPEC · .cursorrules · tests/ · evidence/ · handoff.md</span>
+                <span className="text-gemini-cyan">M1 与 Starter Kit 预览开放</span>
               </div>
             </div>
           </div>
@@ -446,38 +476,111 @@ export default function OfficialHomePage({
         </div>
       </section>
 
-      {/* 3. 5-Step Methodology Flow */}
+      {/* 3. Coding Everything 7-Stage Pipeline + Starter Kit Architecture */}
       <section className="border-y border-white/10 bg-[#060912]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 space-y-8">
-          <div className="space-y-2 max-w-3xl">
-            <div className="text-xs font-mono text-gemini-purple">METHODOLOGY FLOW</div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              课程的五步确定性交付路径：先锁边界，再让 AI 动手
-            </h2>
-            <p className="text-sm text-slate-300">
-              把原本靠运气试错的聊天开发，拆成可检查、可复跑的五步动作。
-            </p>
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div className="space-y-2 max-w-3xl">
+              <div className="text-xs font-mono text-gemini-purple">
+                CODING EVERYTHING · TOP-LEVEL LEARNING PIPELINE
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                不再以“看懂模块”为终点，而是每阶段产出一份可核验的数字资产
+              </h2>
+              <p className="text-sm text-slate-300">
+                从真实业务任务出发，依次走通边界定义、Harness 约束、Diff 切片、确定性测试与 Eval、人工批准与运维交接。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => (onEnterProjects ? onEnterProjects() : onEnterWorkspace("m1"))}
+              className="px-4 py-2.5 rounded-xl border border-emerald-400/40 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 text-xs font-semibold inline-flex items-center gap-2 self-start cursor-pointer"
+            >
+              <FolderGit2 className="w-4 h-4" />
+              <span>体验 Starter Kit 与首小时清单 →</span>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {FIVE_STEP_METHOD.map((item) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+            {SEVEN_STAGE_PIPELINE.map((item) => (
               <div
                 key={item.step}
-                className="p-5 rounded-xl border border-white/10 bg-[#0b101d] flex flex-col justify-between gap-4"
+                className="p-4 rounded-xl border border-white/10 bg-[#0b101d] flex flex-col justify-between gap-3"
               >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono tabular-nums">
-                    <span className="text-gemini-cyan font-bold">STEP {item.step}</span>
-                    <span className="text-slate-500">{item.modules}</span>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono tabular-nums">
+                    <span className="text-gemini-cyan font-bold">STAGE {item.step}</span>
                   </div>
-                  <h3 className="text-base font-bold text-white">{item.title}</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">{item.action}</p>
+                  <h3 className="text-sm font-bold text-white leading-snug">{item.title}</h3>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">{item.action}</p>
                 </div>
-                <div className="pt-3 border-t border-white/10 text-[11px] font-mono text-emerald-300">
-                  产出：{item.artifact}
+                <div className="pt-2.5 border-t border-white/10 space-y-1 text-[10px] font-mono">
+                  <div className="text-emerald-300">资产：{item.artifact}</div>
+                  <div className="text-slate-500">{item.modules}</div>
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Starter Kit Structure + First-Hour Positive Loop + GEO Pilot Track */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2">
+            <div className="lg:col-span-5 p-5 rounded-2xl border border-white/12 bg-[#0b101d] space-y-3">
+              <div className="text-xs font-mono text-gemini-cyan">
+                STANDARD STARTER KIT · 统一项目模板骨架
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+                {STANDARD_STARTER_KIT_TREE.map((node) => (
+                  <div
+                    key={node.path}
+                    className="px-2.5 py-2 rounded-lg bg-black/40 border border-white/10 flex flex-col gap-0.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-white font-semibold">{node.path}</span>
+                      <span className={node.writable ? "text-emerald-300" : "text-amber-300"}>
+                        {node.writable ? "可改" : "只读"}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-sans">{node.purpose}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 p-5 rounded-2xl border border-white/12 bg-[#0b101d] space-y-3">
+              <div className="text-xs font-mono text-emerald-300">
+                FIRST-HOUR LOOP · 开课第一小时必过 6 步
+              </div>
+              <ol className="space-y-2 text-xs text-slate-200">
+                {FIRST_HOUR_DEFAULT_CHECKLIST.map((step, i) => (
+                  <li key={step.id} className="flex items-start gap-2">
+                    <span className="font-mono text-[11px] text-gemini-cyan shrink-0 mt-0.5">
+                      0{i + 1}.
+                    </span>
+                    <div>
+                      <span className="font-semibold text-white">{step.label}</span>
+                      <span className="text-slate-400"> — {step.detail}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="lg:col-span-3 p-5 rounded-2xl border border-gemini-purple/40 bg-[#100e1c] flex flex-col justify-between gap-3">
+              <div className="space-y-2">
+                <div className="text-xs font-mono text-purple-200">
+                  PILOT TRACK · 首推企二代真实业务项目营
+                </div>
+                <h3 className="text-base font-bold text-white">
+                  GEO Evidence Lab 与企业私有知识库试点
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  企业授权脱敏业务场景 → 学员基于 Starter Kit 搭建可演示原型 → 导师双门禁评审 → 形成交接报告。
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-black/40 border border-amber-400/30 text-[11px] text-amber-200 leading-relaxed">
+                {GEO_EVIDENCE_LAB_DISCLAIMER}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -973,11 +1076,11 @@ export default function OfficialHomePage({
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white">
-                  {selfPacedProduct?.title || "AI Coding 全课自助畅学卡"}
+                  {selfPacedProduct?.title || "Coding Everything 全课自助畅学卡"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {selfPacedProduct?.description ||
-                    "适合想自主安排学习时间的创作者与开发者，解锁全 14 模块、20 交互沙盘、测验反馈与成果导出。"}
+                    "适合独立开发者与业务实践者，解锁全 14 模块、20 沙盘、Starter Kit 模板、Eval 基准集、只读助教 Tutor 与逐题认证考场。"}
                 </p>
               </div>
 
@@ -1048,11 +1151,11 @@ export default function OfficialHomePage({
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white">
-                  {cohortProduct?.title || "AI Coding 深度指导实战营"}
+                  {cohortProduct?.title || "Coding Everything 企二代与小班实战营"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {cohortProduct?.description ||
-                    "适合希望有人带节奏、批改项目蓝图与代码、并在结课前完成一次完整验收交付的学员。"}
+                    "基于真实授权业务场景开展双周/多周项目交付，含服务端 422 静态门禁、AI 预审辅助与导师人工批准及三锁技能认证。"}
                 </p>
               </div>
 
@@ -1347,7 +1450,7 @@ export default function OfficialHomePage({
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-slate-300 font-medium">
-              AI Coding 学院 · 教你用 AI 把想法做成可运行、可验证的软件
+              Coding Everything 项目学院 · 把真实业务问题变成可运行、可验证、可交接的数字资产
             </div>
             <div>{M13_GOV_SIMULATION_DISCLAIMER}</div>
           </div>

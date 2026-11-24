@@ -61,7 +61,7 @@ async function sendOtpEmailViaResend(email: string, code: string): Promise<{ ok:
   if (!apiKey) {
     return { ok: false, error: "RESEND_API_KEY 未配置" };
   }
-  const fromAddress = process.env.EMAIL_FROM?.trim() || "AICodingCourse <onboarding@resend.dev>";
+  const fromAddress = process.env.EMAIL_FROM?.trim() || "Coding Everything 项目学院 <onboarding@resend.dev>";
   try {
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -72,14 +72,14 @@ async function sendOtpEmailViaResend(email: string, code: string): Promise<{ ok:
       body: JSON.stringify({
         from: fromAddress,
         to: [email],
-        subject: `【AICodingCourse】登录验证码：${code}`,
+        subject: `【Coding Everything 项目学院】登录验证码：${code}`,
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0b0f19;color:#e2e8f0;border-radius:12px;">
-          <h2 style="margin:0 0 12px;color:#4cddec;">AICodingCourse 邮箱安全登录</h2>
-          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">您正在登录 AI Coding 确定性研发学院工作台，6 位一次性验证码如下（10 分钟内有效，请勿泄露给他人）：</p>
+          <h2 style="margin:0 0 12px;color:#4cddec;">Coding Everything 项目学院 · 邮箱安全登录</h2>
+          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">您正在登录 Coding Everything 项目学院工作台，6 位一次性验证码如下（10 分钟内有效，请勿泄露给他人）：</p>
           <div style="font-size:28px;font-weight:700;letter-spacing:6px;padding:14px 20px;background:#111827;border:1px solid #334155;border-radius:8px;text-align:center;color:#ffffff;">${code}</div>
           <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;">如非本人操作，请直接忽略此邮件。</p>
         </div>`,
-        text: `AICodingCourse 登录验证码：${code}（10 分钟内有效，请勿泄露）。如非本人操作请忽略。`,
+        text: `Coding Everything 项目学院 登录验证码：${code}（10 分钟内有效，请勿泄露）。如非本人操作请忽略。`,
       }),
     });
     if (!resp.ok) {

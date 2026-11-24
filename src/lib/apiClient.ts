@@ -1,14 +1,25 @@
+import type {
+  ModuleProgressStage,
+  ProjectLifecycleState,
+} from "@/data/projectTemplatesPublic";
 import { getAuthHeaders } from "@/lib/authTokenStore";
 
 export class ApiError extends Error {
   status: number;
   code?: string;
+  audit?: StaticAuditResultPayload;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    audit?: StaticAuditResultPayload
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.audit = audit;
   }
 }
 
@@ -29,13 +40,15 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const payload = (await res.json().catch(() => ({}))) as {
     error?: string;
     code?: string;
+    audit?: StaticAuditResultPayload;
   } & T;
 
   if (!res.ok) {
     throw new ApiError(
       payload.error || `请求失败 (HTTP ${res.status})`,
       res.status,
-      payload.code
+      payload.code,
+      payload.audit
     );
   }
   return payload as T;
@@ -440,6 +453,7 @@ export function fetchWorkspaceCloudState() {
         verifiedAt: string;
       }
     >;
+    moduleStageById?: Record<string, ModuleProgressStage>;
   }>("/api/workspace/state");
 }
 
@@ -600,6 +614,63 @@ export function redeemCode(code: string) {
   });
 }
 
+export interface StaticAuditFindingItem {
+  id: string;
+  ruleId: string;
+  severity: "blocking" | "warning";
+  title: string;
+  detail: string;
+}
+
+export interface StaticAuditResultPayload {
+  passed: boolean;
+  blockingCount: number;
+  warningCount: number;
+  findings: StaticAuditFindingItem[];
+  changedFiles: string[];
+  auditedAt: string;
+}
+
+export interface StaticAuditRunRecord {
+  id: number;
+  userId: number;
+  workspaceId: number | null;
+  submissionId: number | null;
+  moduleId: string;
+  passed: boolean;
+  blockingCount: number;
+  warningCount: number;
+  findingsJson: StaticAuditFindingItem[];
+  changedFilesJson: string[];
+  createdAt: string;
+}
+
+export interface AiPrereviewPayload {
+  advisoryOnly: boolean;
+  generatedAt: string;
+  generatedByUserId: number;
+  usedAiModel: boolean;
+  staticPassed: boolean;
+  warningCount: number;
+  draftMarkdown: string;
+}
+
+export interface SubmissionEvidenceRecord {
+  id: number;
+  submissionId: number;
+  workspaceId: number | null;
+  specSnapshot: string;
+  rulesSnapshot: string;
+  changedFilesJson: string[];
+  diffSummary: string;
+  testCommandLog: string;
+  handoffSummary: string;
+  evalRunId: number | null;
+  staticAuditRunId: number | null;
+  aiPrereviewJson: AiPrereviewPayload | null;
+  createdAt: string;
+}
+
 export function fetchMyCohorts() {
   return apiFetch<{
     enrolled: boolean;
@@ -607,6 +678,8 @@ export function fetchMyCohorts() {
     cohorts: LearnerCohortItem[];
     submissions: SubmissionRecord[];
     reviewsBySubmissionId: Record<number, SubmissionReviewRecord[]>;
+    evidenceBySubmissionId?: Record<number, SubmissionEvidenceRecord>;
+    auditBySubmissionId?: Record<number, StaticAuditRunRecord>;
   }>("/api/cohorts/my");
 }
 
@@ -634,9 +707,20 @@ export function submitCohortWork(payload: {
   artifactTitle: string;
   artifactText: string;
   artifactUrl?: string | null;
-  staticAuditJson?: Record<string, unknown> | null;
+  workspaceId?: number | null;
+  specSnapshot?: string;
+  rulesSnapshot?: string;
+  changedFiles?: string[];
+  diffSummary?: string;
+  testCommandLog?: string;
+  handoffSummary?: string;
+  evalRunId?: number | null;
 }) {
-  return apiFetch<{ ok: true; submission: SubmissionRecord }>("/api/submissions", {
+  return apiFetch<{
+    ok: true;
+    submission: SubmissionRecord;
+    audit?: StaticAuditRunRecord;
+  }>("/api/submissions", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -648,6 +732,8 @@ export interface InstructorCockpitSubmission extends SubmissionRecord {
   cohortTitle: string;
   milestoneTitle: string;
   reviews: SubmissionReviewRecord[];
+  evidence?: SubmissionEvidenceRecord | null;
+  latestAudit?: StaticAuditRunRecord | null;
   simulationDisclaimer?: string;
 }
 
@@ -903,4 +989,330 @@ export function adminUpdateInquiryStatusApi(
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
+}
+
+// Coding Everything: Starter Kits, Project Workspaces & Server Static Audit
+export interface ProjectTemplateRecord {
+  id: number;
+  slug: string;
+  title: string;
+  subtitle: string;
+  trackType: string;
+  targetModuleId: string;
+  allowedGlobsJson: string[];
+  blockedPathsJson: string[];
+  firstHourChecklistJson: string[];
+  starterSpecMarkdown: string;
+  starterRulesContent: string;
+  boundaryDisclaimer: string;
+  active: boolean;
+}
+
+export interface ProjectWorkspaceRecord {
+  id: number;
+  userId: number;
+  templateId: number;
+  cohortId: number | null;
+  title: string;
+  repoUrl: string;
+  specMarkdown: string;
+  rulesMarkdown: string;
+  handoffMarkdown: string;
+  firstHourCheckedJson: string[];
+  lifecycleState: ProjectLifecycleState;
+  createdAt: string;
+  updatedAt: string;
+  template?: ProjectTemplateRecord | null;
+  latestAudit?: StaticAuditRunRecord | null;
+  latestEval?: EvalRunRecord | null;
+  submissionCount?: number;
+}
+
+export interface EvalCaseReport {
+  id: string;
+  query: string;
+  retrievedDocIds: string[];
+  passed: boolean;
+  note: string;
+  reason?: string;
+}
+
+export interface EvalSuiteReport {
+  datasetSlug: string;
+  datasetTitle: string;
+  datasetVersion: string;
+  moduleId: string;
+  recallAtK: number;
+  citationPrecision: number;
+  aclLeakCount: number;
+  staleRecallCount: number;
+  refusalAccuracy: number;
+  loopCircuitBreakRate: number;
+  passed: boolean;
+  caseReports: EvalCaseReport[];
+  simulationDisclaimer?: string;
+}
+
+export interface EvalRunRecord {
+  id: number;
+  userId: number;
+  workspaceId: number | null;
+  datasetSlug: string;
+  moduleId: string;
+  recallAtK: number;
+  citationPrecision: number;
+  aclLeakCount: number;
+  staleRecallCount: number;
+  refusalAccuracy: number;
+  loopCircuitBreakRate: number;
+  passed: boolean;
+  reportJson: {
+    datasetTitle?: string;
+    datasetVersion?: string;
+    caseReports?: EvalCaseReport[];
+    simulationDisclaimer?: string | null;
+  };
+  createdAt: string;
+}
+
+export interface TutorCitationItem {
+  sourceId: string;
+  label: string;
+  moduleId: string;
+  unitId?: string;
+  labId?: string;
+  excerpt: string;
+}
+
+export interface TutorAskResponse {
+  ok: true;
+  refused: boolean;
+  refusalReason?: string;
+  answer: string;
+  citations: TutorCitationItem[];
+  nextPractice: {
+    label: string;
+    moduleId: string;
+    labId?: string;
+    actionHint: string;
+  } | null;
+  usedAiModel: boolean;
+  remainingToday?: number;
+}
+
+export interface ExamQuestionPrompt {
+  id: string;
+  topic: string;
+  question: string;
+  options: [string, string, string, string];
+  index: number;
+}
+
+export interface ExamSessionRecord {
+  id: number;
+  userId: number;
+  moduleId: string;
+  quizVersion: string;
+  questionIdsJson: string[];
+  currentIndex: number;
+  answersJson: Record<string, number>;
+  scorePct: number;
+  passed: boolean;
+  weakTopicsJson: string[];
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface AdminPilotMetrics {
+  totalWorkspaces: number;
+  completedProjects: number;
+  totalSubmissions: number;
+  approvedSubmissions: number;
+  changesRequestedSubmissions: number;
+  submissionPassRatePct: number;
+  totalAudits: number;
+  blockedAudits: number;
+  staticBlockRatePct: number;
+  totalReviews: number;
+  totalEvalRuns: number;
+  passedEvalRuns: number;
+  completedExams: number;
+  passedExams: number;
+  totalAiCalls: number;
+  prereviewCalls: number;
+  tutorCalls: number;
+}
+
+export function fetchProjectTemplatesApi() {
+  return apiFetch<{ ok: true; templates: ProjectTemplateRecord[] }>(
+    "/api/projects/templates"
+  );
+}
+
+export function fetchProjectWorkspacesApi() {
+  return apiFetch<{
+    ok: true;
+    templates: ProjectTemplateRecord[];
+    workspaces: ProjectWorkspaceRecord[];
+    recentAudits: StaticAuditRunRecord[];
+    recentEvals: EvalRunRecord[];
+  }>("/api/projects/workspaces");
+}
+
+export function createProjectWorkspaceApi(payload: {
+  templateSlug: string;
+  title?: string;
+  cohortId?: number | null;
+  repoUrl?: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    workspace: ProjectWorkspaceRecord;
+    template: ProjectTemplateRecord;
+  }>("/api/projects/workspaces", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProjectWorkspaceApi(
+  workspaceId: number,
+  payload: {
+    title?: string;
+    repoUrl?: string;
+    specMarkdown?: string;
+    rulesMarkdown?: string;
+    handoffMarkdown?: string;
+    firstHourChecked?: string[];
+    markArchived?: boolean;
+  }
+) {
+  return apiFetch<{ ok: true; workspace: ProjectWorkspaceRecord }>(
+    `/api/projects/workspaces/${workspaceId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function fetchProjectArchiveApi(workspaceId: number) {
+  return apiFetch<{ ok: true; filename: string; markdown: string }>(
+    `/api/projects/workspaces/${workspaceId}/archive`
+  );
+}
+
+export function runServerStaticAuditApi(payload: {
+  workspaceId?: number | null;
+  moduleId: string;
+  codeOrArtifactText: string;
+  specText?: string;
+  rulesText?: string;
+  diffSummary?: string;
+  testCommandLog?: string;
+  changedFiles?: string[];
+  allowedGlobs?: string[];
+  blockedPaths?: string[];
+  requireProjectStructure?: boolean;
+}) {
+  return apiFetch<{
+    ok: true;
+    audit: StaticAuditResultPayload;
+    savedRunId: number;
+  }>("/api/projects/static-audit", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchEvalRunsApi() {
+  return apiFetch<{ ok: true; runs: EvalRunRecord[] }>("/api/eval/runs");
+}
+
+export function runEvalSuiteApi(payload: {
+  workspaceId?: number | null;
+  datasetSlug: string;
+  specMarkdown?: string;
+  rulesMarkdown?: string;
+  testCommandLog?: string;
+  simulateBrokenAcl?: boolean;
+  simulateStaleLeak?: boolean;
+}) {
+  return apiFetch<{ ok: true; run: EvalRunRecord; report: EvalSuiteReport }>(
+    "/api/eval/runs",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function askTutorApi(payload: {
+  question: string;
+  moduleId?: string;
+  requestId?: string;
+}) {
+  return apiFetch<TutorAskResponse>("/api/tutor/ask", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchExamSessionsApi() {
+  return apiFetch<{ ok: true; sessions: ExamSessionRecord[] }>("/api/exam/sessions");
+}
+
+export function startExamSessionApi(moduleId: string) {
+  return apiFetch<{
+    ok: true;
+    session: ExamSessionRecord;
+    moduleTitle: string;
+    totalCount: number;
+    currentQuestion: ExamQuestionPrompt | null;
+  }>("/api/exam/sessions", {
+    method: "POST",
+    body: JSON.stringify({ moduleId }),
+  });
+}
+
+export function submitExamAnswerApi(
+  sessionId: number,
+  payload: { questionId: string; selectedIndex: number }
+) {
+  return apiFetch<{
+    ok: true;
+    session: ExamSessionRecord;
+    stepFeedback: {
+      questionId: string;
+      topic: string;
+      isCorrect: boolean;
+      correctIndex: number;
+      explanation: string;
+      reviewTarget?: { label: string; labId?: string; moduleId?: string };
+      remediationAction: string;
+    };
+    nextQuestion: ExamQuestionPrompt | null;
+    remediationPlan: Array<{ topic: string; recommendation: string }>;
+  }>(`/api/exam/sessions/${sessionId}/answer`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function generateInstructorAiPrereviewApi(
+  submissionId: number,
+  requestId?: string
+) {
+  return apiFetch<{ ok: true; prereview: AiPrereviewPayload }>(
+    `/api/instructor/submissions/${submissionId}/ai-prereview`,
+    {
+      method: "POST",
+      body: JSON.stringify({ requestId }),
+    }
+  );
+}
+
+export function fetchAdminPilotMetricsApi() {
+  return apiFetch<{ ok: true; metrics: AdminPilotMetrics }>("/api/admin/metrics");
 }

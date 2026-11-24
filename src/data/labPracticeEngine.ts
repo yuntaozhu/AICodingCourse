@@ -1,5 +1,5 @@
 import type { RuleTemplate } from "./cursorPresets.ts";
-import { COURSE_LABS, type LabDefinition } from "./courseCurriculum.ts";
+import { COURSE_LABS, COURSE_MODULES, type LabDefinition } from "./courseCurriculum.ts";
 
 export interface LabAuditCheck {
   id: string;
@@ -348,7 +348,7 @@ export function buildEngineeringHandoffMarkdown(params: {
     `# AICodingCourse 工程化交付包`,
     ``,
     `- 学习路径：${pathText}`,
-    `- 模块进度：已完成 ${params.completedModuleIds.length}/10 (${params.completedModuleIds.join(", ") || "尚未记录"})`,
+    `- 模块进度：已完成 ${params.completedModuleIds.length}/${COURSE_MODULES.length} (${params.completedModuleIds.join(", ") || "尚未记录"})`,
     `- 实操验收：已验收 ${params.completedLabIds.length}/${COURSE_LABS.length} (${params.completedLabIds.join(", ") || "尚未记录"})`,
     `- 导出日期：${params.artifacts.updatedAt || "2026-11-18"}（仅基于浏览器本地练习产物生成）`,
     ``,

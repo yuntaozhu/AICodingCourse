@@ -1,11 +1,15 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../../db/index.ts";
 import {
   customKbEntries,
   quizAttempts,
   skillGrants,
+  staticAuditRuns,
+  submissionReviews,
+  submissions,
   unitProgress,
 } from "../../db/schema.ts";
+import { type ModuleProgressStage } from "../../data/projectTemplatesPublic.ts";
 import {
   COURSE_LABS,
   COURSE_MODULES,
@@ -549,19 +553,39 @@ export async function gradeSkillDiagnosticAndGrant(input: {
 }
 
 export async function getUserWorkspaceCloudState(userId: number) {
-  const [progressRows, kbRows, attemptRows, grantRows] = await Promise.all([
-    db.select().from(unitProgress).where(eq(unitProgress.userId, userId)),
-    db.select().from(customKbEntries).where(eq(customKbEntries.userId, userId)),
-    db
-      .select()
-      .from(quizAttempts)
-      .where(eq(quizAttempts.userId, userId))
-      .orderBy(desc(quizAttempts.createdAt)),
-    db
-      .select()
-      .from(skillGrants)
-      .where(and(eq(skillGrants.userId, userId), isNull(skillGrants.revokedAt))),
-  ]);
+  const [progressRows, kbRows, attemptRows, grantRows, subRows, auditRows] =
+    await Promise.all([
+      db.select().from(unitProgress).where(eq(unitProgress.userId, userId)),
+      db.select().from(customKbEntries).where(eq(customKbEntries.userId, userId)),
+      db
+        .select()
+        .from(quizAttempts)
+        .where(eq(quizAttempts.userId, userId))
+        .orderBy(desc(quizAttempts.createdAt)),
+      db
+        .select()
+        .from(skillGrants)
+        .where(and(eq(skillGrants.userId, userId), isNull(skillGrants.revokedAt))),
+      db
+        .select()
+        .from(submissions)
+        .where(eq(submissions.userId, userId))
+        .orderBy(desc(submissions.updatedAt)),
+      db
+        .select()
+        .from(staticAuditRuns)
+        .where(eq(staticAuditRuns.userId, userId))
+        .orderBy(desc(staticAuditRuns.createdAt)),
+    ]);
+
+  const subIds = subRows.map((s) => s.id);
+  const reviewRows =
+    subIds.length > 0
+      ? await db
+          .select()
+          .from(submissionReviews)
+          .where(inArray(submissionReviews.submissionId, subIds))
+      : [];
 
   const completedUnitIds: Record<string, boolean> = {};
   const dodCheckedByUnit: Record<string, string[]> = {};
@@ -649,6 +673,51 @@ export async function getUserWorkspaceCloudState(userId: number) {
     };
   }
 
+  const moduleStageById: Record<string, ModuleProgressStage> = {};
+  for (const mod of COURSE_MODULES) {
+    const modProgress = progressRows.filter((p) => p.moduleId === mod.id);
+    const modSubs = subRows.filter((s) => s.moduleId === mod.id);
+    const modAudits = auditRows.filter((a) => a.moduleId === mod.id);
+    const modQuiz = latestQuizByModule[mod.id];
+    const hasSkillFromReview = modSubs.some((s) =>
+      reviewRows.some((r) => r.submissionId === s.id && Boolean(r.grantedSkillId))
+    );
+    const hasModSkill =
+      hasSkillFromReview ||
+      mod.grantsSkillIds.some((sk) => Boolean(verifiedSkills[sk]));
+
+    let stage: ModuleProgressStage = "not_started";
+    if (modProgress.some((p) => p.completed)) {
+      stage = "viewed";
+    }
+    if (
+      modProgress.some(
+        (p) =>
+          p.artifactDraft.trim().length > 0 ||
+          p.dodCheckedJson.length > 0
+      ) ||
+      Boolean(modQuiz)
+    ) {
+      stage = "practiced";
+    }
+    if (modSubs.length > 0) {
+      stage = "submitted";
+    }
+    if (
+      modAudits.some((a) => a.passed) ||
+      Boolean(modQuiz?.passed)
+    ) {
+      stage = "auto_verified";
+    }
+    if (modSubs.some((s) => s.status === "approved")) {
+      stage = "human_reviewed";
+    }
+    if (hasModSkill) {
+      stage = "skill_granted";
+    }
+    moduleStageById[mod.id] = stage;
+  }
+
   return {
     curriculumVersion: CURRICULUM_VERSION,
     completedUnitIds,
@@ -667,5 +736,6 @@ export async function getUserWorkspaceCloudState(userId: number) {
     })),
     latestQuizByModule,
     verifiedSkills,
+    moduleStageById,
   };
 }

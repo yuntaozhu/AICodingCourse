@@ -1448,7 +1448,22 @@ test("courseMetrics provides single source of truth and website routes isolate /
 
   assert.ok(homeSrc.includes("getPublicCourseMetrics"), "Homepage must consume dynamic courseMetrics");
   assert.ok(homeSrc.includes("PlanPromptSandbox"), "Homepage must embed live PlanPromptSandbox");
+  assert.ok(teensSrc.includes("getPublicCourseMetrics"), "Teens landing page must consume dynamic courseMetrics");
   assert.ok(teensSrc.includes("HiMCM #19243"), "Teens landing page must present HiMCM workflow with honest boundaries");
+  assert.ok(teensSrc.includes("AI Novel Studio"), "Teens landing page must include AI Novel Studio case");
+  assert.ok(teensSrc.includes("医疗公司 GEO 系统"), "Teens landing page must include Medical GEO case");
+  assert.ok(
+    teensSrc.includes("-ECE-Brain-Meeting") && teensSrc.includes("哲学研究平台"),
+    "Teens landing page must explicitly disclose secondary-adapted prototype sources"
+  );
+  assert.ok(
+    teensSrc.includes("初中阶段") && teensSrc.includes("高中阶段"),
+    "Teens landing page must provide Junior vs Senior progression comparison"
+  );
+  assert.ok(
+    teensSrc.includes("合规使用软件工具") && teensSrc.includes("M13_GOV_SIMULATION_DISCLAIMER"),
+    "Teens landing page must present all 4 parent/teacher transparency principles and M13-Gov disclaimer"
+  );
   assert.ok(teamsSrc.includes("ECE-Brain-Meeting"), "Teams landing page must cover team engineering cases");
   assert.ok(navSrc.includes("青少年营") && navSrc.includes("团队内训"), "WebsiteNavbar must expose /teens and /teams links");
 

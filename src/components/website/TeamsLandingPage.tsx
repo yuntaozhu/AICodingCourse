@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { ArrowRight, CheckCircle2, Layers, Send, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, FolderGit2, Layers, Send, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "@/data/courseWorkspaceStore";
 import { getPublicCourseMetrics } from "@/data/courseMetrics";
+import { GEO_EVIDENCE_LAB_DISCLAIMER } from "@/data/projectTemplatesPublic";
 import { submitInquiry } from "@/lib/apiClient";
 import WebsiteNavbar, { type WebsitePageRoute } from "./WebsiteNavbar";
 
 interface TeamsLandingPageProps {
   onNavigatePage: (page: WebsitePageRoute) => void;
   onEnterWorkspace: (moduleId?: string) => void;
+  onEnterProjects?: () => void;
   onEnterSlides: (moduleId?: string) => void;
   onOpenBilling: () => void;
   onOpenCohortPanel: () => void;
@@ -69,6 +71,7 @@ const DELIVERY_MODES = [
 export default function TeamsLandingPage({
   onNavigatePage,
   onEnterWorkspace,
+  onEnterProjects,
   onEnterSlides,
   onOpenBilling,
   onOpenCohortPanel,
@@ -135,14 +138,14 @@ export default function TeamsLandingPage({
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 lg:py-20 space-y-8">
           <div className="space-y-4 max-w-3xl">
             <div className="text-xs font-mono text-gemini-purple tracking-wide">
-              ENGINEERING TEAMS &amp; LABS · 面向研发团队、技术负责人与高校实验室
+              CODING EVERYTHING 项目学院 · 企二代真实业务项目营 · 团队内训与高校试点
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.15] [text-wrap:balance]">
-              为研发团队建立统一的 AI Coding 护栏，
-              <span className="text-gemini-cyan">降低返工率与越权风险</span>
+              从真实业务问题到可维护数字资产：
+              <span className="text-gemini-cyan">统一 Starter Kit 与确定性验证门禁</span>
             </h1>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-              个人用得好不等于团队用得稳。课程跳过入门语法，直接围绕团队仓库规范（.mdc）、最小特权 MCP、DoD 测试门禁、长程 Coding Harness 与运行时 ACL 知识库构建可审计的研发基线。
+              首推「企业授权真实业务问题 → 学员基于标准 Starter Kit 搭建原型 → 静态/Eval 双门禁与导师评审 → 交接归档」试点链路；同时支持研发团队统一 .mdc 规则契约、最小特权 MCP 与运行时 ACL 隔离基线。
             </p>
           </div>
 
@@ -151,22 +154,30 @@ export default function TeamsLandingPage({
               href="#teams-inquiry"
               className="px-5 py-3 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2"
             >
-              <span>预约团队方案诊断与试听</span>
+              <span>预约团队 / 企二代项目营诊断</span>
               <ArrowRight className="w-4 h-4" />
             </a>
             <button
               type="button"
-              onClick={() => onEnterWorkspace("m4")}
-              className="px-5 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white cursor-pointer"
+              onClick={() => (onEnterProjects ? onEnterProjects() : onEnterWorkspace("m4"))}
+              className="px-5 py-3 rounded-xl border border-emerald-400/40 bg-emerald-400/10 hover:bg-emerald-400/20 text-sm font-semibold text-emerald-200 inline-flex items-center gap-2 cursor-pointer"
             >
-              先体验 M1 公开样板（含工作台入口）
+              <FolderGit2 className="w-4 h-4" />
+              <span>打开 Starter Kit 项目台</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onEnterWorkspace("m4")}
+              className="px-4 py-3 rounded-xl border border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-sm font-medium text-white cursor-pointer"
+            >
+              进入 M4 规则工作台
             </button>
             <button
               type="button"
               onClick={() => onNavigatePage("home")}
-              className="px-4 py-3 rounded-xl text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
+              className="px-3 py-3 rounded-xl text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
             >
-              返回个人学习主页 →
+              返回项目学院主页 →
             </button>
           </div>
 
@@ -283,19 +294,23 @@ export default function TeamsLandingPage({
           </article>
         </div>
 
-        <div className="p-5 rounded-2xl border border-emerald-400/25 bg-[#0a121a] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="w-5 h-5 text-emerald-300 shrink-0 mt-0.5" />
-            <div className="space-y-1 text-xs text-slate-300">
-              <div className="font-semibold text-white">课程内训边界说明</div>
-              <p>
-                我们不对外出售“全自动替代研发团队”的伪承诺。内训与陪跑重点解决规则资产沉淀、代码安全底线与测试防作弊机制，企业核心业务架构与生产密钥始终由客户团队自主掌控。
-              </p>
+        <div className="p-5 rounded-2xl border border-emerald-400/25 bg-[#0a121a] flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-300 shrink-0 mt-0.5" />
+              <div className="space-y-1 text-xs text-slate-300">
+                <div className="font-semibold text-white">
+                  企二代试点与企业内训边界说明（不承诺直接上线或指标担保）
+                </div>
+                <p>
+                  {GEO_EVIDENCE_LAB_DISCLAIMER} 内训与企二代项目营重点交付“监测/知识库/审核工作流可演示原型、静态审计与 Eval 报告及 handoff.md 接管清单”，企业核心生产架构与真实密钥始终由客户团队自主掌控。
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 shrink-0">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>支持团队私有仓库脱敏演练</span>
+            <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>仅使用脱敏或公开授权数据</span>
+            </div>
           </div>
         </div>
       </section>
@@ -406,7 +421,9 @@ export default function TeamsLandingPage({
       <footer className="border-t border-white/10 py-8 px-4 sm:px-6 text-xs text-slate-500">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="text-slate-300 font-medium">AI Coding 学院 · 团队与高校试点专页</div>
+            <div className="text-slate-300 font-medium">
+              Coding Everything 项目学院 · 企二代、团队内训与高校试点专页
+            </div>
             <div>{M13_GOV_SIMULATION_DISCLAIMER}</div>
           </div>
           <div className="flex flex-wrap items-center gap-5 font-mono">

@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FolderGit2,
   Globe,
   Home,
   LogIn,
@@ -23,9 +24,11 @@ import CourseKnowledgeView, {
   type KnowledgeSectionFilter,
 } from "@/components/course/CourseKnowledgeView";
 import ModuleLearningPage from "@/components/course/ModuleLearningPage";
+import ProjectWorkspacePanel from "@/components/course/ProjectWorkspacePanel";
 import AdminConsole from "@/components/lms/AdminConsole";
 import CohortLearnerPanel from "@/components/lms/CohortLearnerPanel";
 import InstructorCockpit from "@/components/lms/InstructorCockpit";
+import type { ModuleProgressStage } from "@/data/projectTemplatesPublic";
 import { useAuth } from "@/context/authContextCore";
 import {
   SEARCH_KIND_LABELS,
@@ -58,6 +61,7 @@ import {
 export type CourseSubView =
   | "catalog"
   | "module"
+  | "projects"
   | "knowledge"
   | "cohort"
   | "instructor"
@@ -113,6 +117,9 @@ export default function CourseSystemApp({
   >(() => loadAllQuizAnswers());
   const [latestQuizByModule, setLatestQuizByModule] = useState<
     Record<string, WorkspaceQuizScoreSummary>
+  >({});
+  const [moduleStageById, setModuleStageById] = useState<
+    Record<string, ModuleProgressStage>
   >({});
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportedFeedback, setExportedFeedback] = useState(false);
@@ -171,6 +178,9 @@ export default function CourseSystemApp({
       }
       setQuizAnswersByModule((prev) => ({ ...prev, ...nextQuizAns }));
       setLatestQuizByModule(nextLatestQuiz);
+      if (cloud.moduleStageById) {
+        setModuleStageById(cloud.moduleStageById);
+      }
     } catch {
       // Keep graceful state if cloud fetch transiently fails
     }
@@ -579,7 +589,7 @@ export default function CourseSystemApp({
                 type="button"
                 onClick={onGoOfficialHome}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
-                title="返回 AI Coding 确定性研发学院官网首页"
+                title="返回 Coding Everything 项目学院官网首页"
               >
                 <Globe className="w-3.5 h-3.5 text-gemini-cyan" />
                 <span className="hidden sm:inline">官网</span>
@@ -613,6 +623,19 @@ export default function CourseSystemApp({
               <span>
                 模块学习{activeModuleRecord ? ` (${activeModuleRecord.code})` : ""}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubView("projects")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                subView === "projects"
+                  ? "bg-gemini-cyan text-slate-950 font-semibold"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <FolderGit2 className="w-3.5 h-3.5" />
+              <span>项目学院 &amp; Tutor</span>
             </button>
 
             <button
@@ -989,14 +1012,27 @@ export default function CourseSystemApp({
             completedLabIds={completedLabIds}
             quizAnswersByModule={quizAnswersByModule}
             latestQuizByModule={latestQuizByModule}
+            moduleStageById={moduleStageById}
             hasPaidAccess={hasPaidAccess}
             isInstructorAuthorized={isInstructorAuthorized}
             onOpenBilling={onOpenBilling}
+            onOpenProjects={() => {
+              setSubView("projects");
+              scrollWorkspaceTop();
+            }}
             onOpenModule={handleOpenModule}
             onApplyPlanPresetAll={handleApplyPlanPresetAll}
             onOpenKnowledgeBase={(modCode, track) =>
               handleOpenKnowledgeBase(modCode, "", "all", track)
             }
+            onSwitchToReveal={onSwitchToReveal}
+          />
+        )}
+
+        {subView === "projects" && (
+          <ProjectWorkspacePanel
+            onOpenBilling={onOpenBilling}
+            onOpenModule={handleOpenModule}
             onSwitchToReveal={onSwitchToReveal}
           />
         )}

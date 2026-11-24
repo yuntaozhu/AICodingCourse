@@ -23,7 +23,12 @@ export function createGeminiClient() {
 export async function checkAndRunGuardedAiCall(input: {
   userId: number;
   requestId?: string;
-  endpoint: "/api/review" | "/api/kb/synthesize" | "/api/craft-rules";
+  endpoint:
+    | "/api/review"
+    | "/api/kb/synthesize"
+    | "/api/craft-rules"
+    | "/api/tutor/ask"
+    | "/api/instructor/prereview";
   prompt: string;
   systemInstruction: string;
   onEmptyFallbackError: string;
