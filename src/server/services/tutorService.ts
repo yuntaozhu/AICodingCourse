@@ -37,13 +37,18 @@ export function retrieveUnlockedTutorCitations(input: {
   question: string;
   moduleId?: string;
   hasPaidAccess: boolean;
+  unlockedModuleIds?: string[];
 }): {
   lockedModuleRequested: string | null;
   citations: TutorCitation[];
   recommendedLab: { id: string; title: string; moduleId: string } | null;
 } {
-  const unlockedModules = COURSE_MODULE_RECORDS.filter(
-    (m) => m.id === "m1" || input.hasPaidAccess
+  const unlockedIdSet = input.unlockedModuleIds
+    ? new Set(["m1", ...input.unlockedModuleIds])
+    : null;
+
+  const unlockedModules = COURSE_MODULE_RECORDS.filter((m) =>
+    unlockedIdSet ? unlockedIdSet.has(m.id) : m.id === "m1" || input.hasPaidAccess
   );
   const unlockedIds = new Set(unlockedModules.map((m) => m.id));
 
@@ -58,12 +63,14 @@ export function retrieveUnlockedTutorCitations(input: {
     }
   }
 
-  // Also detect if user explicitly asks about an unpurchased module code e.g. M12 / M8 / M3 when unpaid
-  if (!input.hasPaidAccess) {
-    const modCodeMatch = input.question.match(/\bM(2|3|4|5|6|7|8|9|10|11|12|13-Gov|13-Eng)\b/i);
-    if (modCodeMatch) {
+  // Also detect if user explicitly asks about an unpurchased / out-of-scope module code e.g. M12 / M8 / M3
+  const modCodeMatch = input.question.match(/\bM(2|3|4|5|6|7|8|9|10|11|12|13-Gov|13-Eng)\b/i);
+  if (modCodeMatch) {
+    const matchedCode = modCodeMatch[0].toLowerCase();
+    const matchedMod = COURSE_MODULES.find((m) => m.code.toLowerCase() === matchedCode);
+    if (matchedMod && !unlockedIds.has(matchedMod.id)) {
       return {
-        lockedModuleRequested: modCodeMatch[0].toUpperCase(),
+        lockedModuleRequested: matchedMod.code,
         citations: [],
         recommendedLab: null,
       };
@@ -138,7 +145,7 @@ export function retrieveUnlockedTutorCitations(input: {
     }
   }
 
-  if (input.hasPaidAccess) {
+  if (unlockedIds.has("m12")) {
     for (const rkb of RUNTIME_WORKSHOP_KNOWLEDGE_BASE) {
       const text = `${rkb.title} ${rkb.summary} ${rkb.evalGate}`.toLowerCase();
       let score = 0;
@@ -157,24 +164,25 @@ export function retrieveUnlockedTutorCitations(input: {
         });
       }
     }
+  }
 
-    for (const tpl of SEED_PROJECT_TEMPLATES) {
-      const text = `${tpl.title} ${tpl.subtitle} ${tpl.starterSpecMarkdown}`.toLowerCase();
-      let score = 0;
-      for (const tok of tokens) {
-        if (text.includes(tok)) score += 2;
-      }
-      if (score > 0) {
-        candidates.push({
-          score,
-          citation: {
-            sourceId: `tpl:${tpl.slug}`,
-            label: `项目模板 · ${tpl.title}`,
-            moduleId: tpl.targetModuleId,
-            excerpt: tpl.subtitle.slice(0, 180),
-          },
-        });
-      }
+  for (const tpl of SEED_PROJECT_TEMPLATES) {
+    if (!unlockedIds.has(tpl.targetModuleId)) continue;
+    const text = `${tpl.title} ${tpl.subtitle} ${tpl.starterSpecMarkdown}`.toLowerCase();
+    let score = 0;
+    for (const tok of tokens) {
+      if (text.includes(tok)) score += 2;
+    }
+    if (score > 0) {
+      candidates.push({
+        score,
+        citation: {
+          sourceId: `tpl:${tpl.slug}`,
+          label: `项目模板 · ${tpl.title}`,
+          moduleId: tpl.targetModuleId,
+          excerpt: tpl.subtitle.slice(0, 180),
+        },
+      });
     }
   }
 
@@ -202,6 +210,7 @@ export async function askCourseGroundedTutor(input: {
   question: string;
   moduleId?: string;
   hasPaidAccess: boolean;
+  unlockedModuleIds?: string[];
   requestId?: string;
 }): Promise<TutorResponsePayload> {
   const question = input.question.trim();
@@ -229,6 +238,7 @@ export async function askCourseGroundedTutor(input: {
     question,
     moduleId: input.moduleId,
     hasPaidAccess: input.hasPaidAccess,
+    unlockedModuleIds: input.unlockedModuleIds,
   });
 
   // 2. Refuse unpurchased / locked module inquiries

@@ -39,6 +39,7 @@ import {
   type WorkspaceQuizScoreSummary,
 } from "@/data/courseWorkspaceStore";
 import { fetchInstructorHandbookMarkdownApi } from "@/lib/apiClient";
+import { STAGE1_PILOT_GROUPS } from "@/data/designPatternPilots";
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 import { TEAM_KNOWLEDGE_BASE, type KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
 
@@ -128,7 +129,7 @@ export default function CourseCatalogHome({
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-8 p-5 sm:p-6 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-gemini-cyan">
-            <span>CODING EVERYTHING 项目学院 · 项目型编程工作台</span>
+            <span>CODING EVERYTHING 项目学院 · PROJECT STUDIO · v2026.11</span>
             <span className="text-slate-400">
               当前视角：{workspaceState.viewMode === "instructor" ? "教师备课视图" : "学员学习视图"}
             </span>
@@ -138,7 +139,7 @@ export default function CourseCatalogHome({
               业务问题 → 系统边界 → AI 协作 → 确定性验证 → 可维护数字资产
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-              按「AI Coding 基本功（Track 1）→ 长程软件 Harness（Track 2）→ Agent 蓝图、运行时 KB 与双轨 Capstone（Track 3）」组织 14 个课程模块，并与 Starter Kit 项目交付、服务端静态审计、Eval 评测、只读助教 Tutor 与逐题 Exam 无缝联动。
+              按「AI Coding 基本功（Track 1）→ 长程软件 Harness（Track 2）→ Agent 蓝图、运行时 KB 与双轨 Capstone（Track 3）」组织 14 个课程模块，并与 Project Studio 工作区、静态材料检查、模拟 Eval、只读助教 Tutor 与人工批准审校无缝联动。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -155,7 +156,7 @@ export default function CourseCatalogHome({
                   onOpenModule("m1");
                 }
               }}
-              className="px-4 py-2.5 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs sm:text-sm hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center gap-2 whitespace-nowrap"
+              className="px-4 py-2.5 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-xs sm:text-sm hover:opacity-90 transition-opacity cursor-pointer inline-flex items-center gap-2 whitespace-nowrap shrink-0"
             >
               <Play className="w-4 h-4" />
               <span>{resumeLabel}</span>
@@ -165,10 +166,10 @@ export default function CourseCatalogHome({
               <button
                 type="button"
                 onClick={onOpenProjects}
-                className="px-4 py-2.5 rounded-xl bg-emerald-400/15 border border-emerald-400/45 text-emerald-200 hover:bg-emerald-400/25 transition-colors text-xs sm:text-sm font-semibold cursor-pointer inline-flex items-center gap-2 whitespace-nowrap"
+                className="px-4 py-2.5 rounded-xl bg-emerald-400/15 border border-emerald-400/45 text-emerald-200 hover:bg-emerald-400/25 transition-colors text-xs sm:text-sm font-semibold cursor-pointer inline-flex items-center gap-2 whitespace-nowrap shrink-0"
               >
                 <FolderGit2 className="w-4 h-4" />
-                <span>进入项目学院 (Starter Kit / Eval / Tutor)</span>
+                <span>进入 Project Studio (工作区 / Eval / Tutor)</span>
               </button>
             )}
 
@@ -442,6 +443,53 @@ export default function CourseCatalogHome({
           >
             进入 M13-Eng
           </button>
+        </div>
+      </section>
+
+      {/* Stage 1: Design Pattern Curriculum Pilot Entry */}
+      <section className="p-4 sm:p-5 rounded-2xl bg-[#0b0f19] border border-gemini-cyan/35 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <div className="text-xs font-mono text-gemini-cyan font-semibold">
+              Stage 1 新教学主线试点 · 项目驱动 + 模式判断 + 证据验收
+            </div>
+            <h2 className="text-sm sm:text-base font-bold text-white">
+              AI 时代软件设计模式与架构边界实战（M9/M3 与 M5/M8 两组先行试点）
+            </h2>
+          </div>
+          <span className="text-[11px] font-mono text-slate-400">
+            含 7 步模式卡 · 故障演练台 · 反过度抽象 Rubric · 90 分钟带教脚本
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          {STAGE1_PILOT_GROUPS.map((pilot) => (
+            <div
+              key={pilot.id}
+              className="p-3.5 rounded-xl bg-[#070b14] border border-white/12 flex flex-col justify-between gap-3"
+            >
+              <div className="space-y-1">
+                <div className="font-mono text-[11px] text-gemini-cyan">
+                  {pilot.moduleLabel} · {pilot.patterns.map((p) => p.name).join(" / ")}
+                </div>
+                <div className="font-semibold text-white">{pilot.title}</div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">{pilot.subtitle}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {pilot.moduleIds.map((mid) => (
+                  <button
+                    key={mid}
+                    type="button"
+                    onClick={() => onOpenModule(mid)}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-gemini-cyan hover:text-slate-950 border border-white/15 text-slate-100 font-mono text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                  >
+                    <span>进入 {mid.toUpperCase()} 试点工作台</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

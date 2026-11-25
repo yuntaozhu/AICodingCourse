@@ -62,7 +62,7 @@ export async function submitExamStepAnswer(input: {
   sessionId: number;
   questionId: string;
   selectedIndex: number;
-  hasPaidAccess: boolean;
+  hasPaidAccess: boolean | ((moduleId: string) => boolean);
 }) {
   const rows = await db
     .select()
@@ -74,7 +74,11 @@ export async function submitExamStepAnswer(input: {
   if (!session) {
     return { ok: false as const, status: 404, error: "未找到对应的 Exam 会话。" };
   }
-  if (!isFreeTrialModule(session.moduleId) && !input.hasPaidAccess) {
+  const hasModuleAccess =
+    typeof input.hasPaidAccess === "function"
+      ? input.hasPaidAccess(session.moduleId)
+      : input.hasPaidAccess;
+  if (!isFreeTrialModule(session.moduleId) && !hasModuleAccess) {
     return { ok: false as const, status: 403, error: "无权访问该模块 Exam。" };
   }
   if (session.status === "completed") {

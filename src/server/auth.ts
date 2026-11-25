@@ -1,10 +1,14 @@
+import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { and, eq, gt, lte, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import { cohortInstructors, entitlements, userRoles, users } from "../db/schema.ts";
 import { getOrCreateUser, getUserRoles } from "../db/users.ts";
 import { getAdminAuth } from "../lib/firebase-admin.ts";
+import { resolveUserEntitlementSnapshot } from "./services/entitlementService.ts";
 import { verifyToken } from "./services/tokenService.ts";
+
+export type AuthMethod = "email_otp" | "firebase";
 
 export interface AuthContext {
   user: {
@@ -14,6 +18,7 @@ export interface AuthContext {
     displayName: string;
     avatarUrl: string;
   };
+  authMethod: AuthMethod;
   roles: string[];
   isAdmin: boolean;
   isInstructorOrTa: boolean;
@@ -37,8 +42,9 @@ export async function resolveAuthFromHeader(
   let uid = "";
   let displayName = "";
   let avatarUrl = "";
+  let authMethod: AuthMethod = "email_otp";
 
-  // 1. Try Vercel native email/token session verification first
+  // 1. Primary auth channel: Email OTP HMAC-SHA256 Bearer session token
   const jwtSession = await verifyToken(token);
   if (jwtSession) {
     const [dbUser] = await db.select().from(users).where(eq(users.id, jwtSession.userId)).limit(1);
@@ -47,10 +53,11 @@ export async function resolveAuthFromHeader(
       uid = dbUser.uid;
       displayName = dbUser.displayName;
       avatarUrl = dbUser.avatarUrl;
+      authMethod = "email_otp";
     }
   }
 
-  // 2. Fallback to Firebase ID Token verification if JWT did not match
+  // 2. Secondary auth channel: Firebase Auth ID Token verification
   if (!email) {
     const adminAuth = getAdminAuth();
     if (!adminAuth) {
@@ -62,6 +69,7 @@ export async function resolveAuthFromHeader(
       uid = decoded.uid;
       displayName = typeof decoded.name === "string" ? decoded.name : "";
       avatarUrl = typeof decoded.picture === "string" ? decoded.picture : "";
+      authMethod = "firebase";
     } catch {
       return null;
     }
@@ -95,6 +103,7 @@ export async function resolveAuthFromHeader(
       displayName: dbUser.displayName,
       avatarUrl: dbUser.avatarUrl,
     },
+    authMethod,
     roles,
     isAdmin,
     isInstructorOrTa,
@@ -160,26 +169,21 @@ export function requireAdmin(
 }
 
 export async function hasActiveCourseEntitlement(
-  authContext: AuthContext | undefined
+  authContext: AuthContext | undefined,
+  options?: { moduleId?: string; cohortId?: number | null }
 ): Promise<boolean> {
   if (!authContext) return false;
-  if (authContext.isAdmin || authContext.isInstructorOrTa) return true;
+  if (authContext.isAdmin) return true;
 
-  const now = new Date();
-  const rows = await db
-    .select({ id: entitlements.id })
-    .from(entitlements)
-    .where(
-      and(
-        eq(entitlements.userId, authContext.user.id),
-        eq(entitlements.status, "active"),
-        lte(entitlements.validFrom, now),
-        gt(entitlements.validUntil, now)
-      )
-    )
-    .limit(1);
-
-  return rows.length > 0;
+  const snapshot = await resolveUserEntitlementSnapshot(authContext);
+  if (options?.cohortId) {
+    const cohortCheck = snapshot.canSubmitToCohort(options.cohortId);
+    if (!cohortCheck.allowed) return false;
+  }
+  if (options?.moduleId) {
+    return snapshot.hasModuleAccess(options.moduleId);
+  }
+  return snapshot.hasPaidAccess;
 }
 
 export async function getUserActiveEntitlements(userId: number) {
@@ -204,8 +208,125 @@ export async function hasAnyAdmin(): Promise<boolean> {
   return count > 0;
 }
 
-export async function claimFirstAdmin(userId: number): Promise<boolean> {
-  return await db.transaction(async (tx) => {
+function timingSafeTokenMatch(expected: string, provided: string): boolean {
+  const expectedDigest = crypto.createHash("sha256").update(expected, "utf8").digest();
+  const providedDigest = crypto.createHash("sha256").update(provided, "utf8").digest();
+  return crypto.timingSafeEqual(expectedDigest, providedDigest);
+}
+
+export function getAdminBootstrapUiState(
+  userEmail?: string,
+  env: Record<string, string | undefined> = process.env
+): {
+  requiresToken: boolean;
+  configuredEmailWhitelist: boolean;
+  canAttemptSelfClaim: boolean;
+} {
+  const bootstrapToken = env.ADMIN_BOOTSTRAP_TOKEN?.trim() || "";
+  const adminEmails = (env.ADMIN_EMAIL || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const isProd = env.NODE_ENV === "production";
+
+  if (bootstrapToken) {
+    return {
+      requiresToken: true,
+      configuredEmailWhitelist: adminEmails.length > 0,
+      canAttemptSelfClaim: true,
+    };
+  }
+
+  if (adminEmails.length > 0) {
+    const normalized = (userEmail || "").trim().toLowerCase();
+    return {
+      requiresToken: false,
+      configuredEmailWhitelist: true,
+      canAttemptSelfClaim: Boolean(normalized && adminEmails.includes(normalized)),
+    };
+  }
+
+  return {
+    requiresToken: false,
+    configuredEmailWhitelist: false,
+    canAttemptSelfClaim: !isProd,
+  };
+}
+
+export function evaluateAdminBootstrapCheck(input: {
+  userEmail: string;
+  providedToken?: string;
+  env?: Record<string, string | undefined>;
+}): { allowed: true } | { allowed: false; status: number; error: string } {
+  const env = input.env ?? process.env;
+  const expectedToken = env.ADMIN_BOOTSTRAP_TOKEN?.trim() || "";
+  const adminEmails = (env.ADMIN_EMAIL || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedEmail = input.userEmail.trim().toLowerCase();
+  const provided = (input.providedToken || "").trim();
+  const isProd = env.NODE_ENV === "production";
+
+  if (expectedToken) {
+    if (!provided || !timingSafeTokenMatch(expectedToken, provided)) {
+      return {
+        allowed: false,
+        status: 403,
+        error: "初始化口令校验失败：请提供正确的 ADMIN_BOOTSTRAP_TOKEN。",
+      };
+    }
+    if (adminEmails.length > 0 && !adminEmails.includes(normalizedEmail)) {
+      return {
+        allowed: false,
+        status: 403,
+        error: "当前账号邮箱不在 ADMIN_EMAIL 管理员白名单中。",
+      };
+    }
+    return { allowed: true };
+  }
+
+  if (adminEmails.length > 0) {
+    if (!adminEmails.includes(normalizedEmail)) {
+      return {
+        allowed: false,
+        status: 403,
+        error: "当前仅允许 ADMIN_EMAIL 白名单邮箱认领初始管理员权限。",
+      };
+    }
+    return { allowed: true };
+  }
+
+  if (isProd) {
+    return {
+      allowed: false,
+      status: 403,
+      error:
+        "生产环境未配置 ADMIN_BOOTSTRAP_TOKEN 或 ADMIN_EMAIL，已禁用开放式管理员认领。请在服务端环境变量中配置后重试。",
+    };
+  }
+
+  return { allowed: true };
+}
+
+export async function claimFirstAdmin(
+  userId: number,
+  userEmail: string,
+  providedToken?: string
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const policyCheck = evaluateAdminBootstrapCheck({
+    userEmail,
+    providedToken,
+  });
+  if ("error" in policyCheck) {
+    return {
+      ok: false,
+      status: policyCheck.status,
+      error: policyCheck.error,
+    };
+  }
+
+  const claimed = await db.transaction(async (tx) => {
     const [{ count }] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(userRoles)
@@ -226,6 +347,16 @@ export async function claimFirstAdmin(userId: number): Promise<boolean> {
 
     return true;
   });
+
+  if (!claimed) {
+    return {
+      ok: false,
+      status: 409,
+      error: "系统已存在管理员，无法重复认领初始管理员权限。",
+    };
+  }
+
+  return { ok: true };
 }
 
 export async function findUserByEmail(email: string) {

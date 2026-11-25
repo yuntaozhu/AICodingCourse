@@ -64,18 +64,13 @@ async function seedProjectTemplatesAndEvals(): Promise<void> {
 async function runSeed(): Promise<void> {
   await seedProjectTemplatesAndEvals();
 
-  const existingProducts = await db.select().from(products).limit(1);
-  if (existingProducts.length > 0) {
-    return;
-  }
-
   const [selfPaced] = await db
     .insert(products)
     .values({
       skuCode: "self-paced-pass",
       title: "Coding Everything 全课自助畅学卡",
       subtitle:
-        "面向独立开发者、产品经理与业务实践者，解锁全 14 模块、Starter Kit 项目交付、Eval 基准与只读引用 Tutor",
+        "面向独立开发者、产品经理与业务实践者，解锁全 14 模块、Starter Kit 项目交付、Eval 基准与只读引用 Tutor（不含班级人工批改）",
       productType: "self_paced",
       scopeType: "all_modules",
       scopeRef: "m1-m13-eng",
@@ -113,6 +108,27 @@ async function runSeed(): Promise<void> {
     .onConflictDoNothing()
     .returning();
 
+  const [enterpriseCohort] = await db
+    .insert(products)
+    .values({
+      skuCode: "enterprise-training-cohort",
+      title: "Coding Everything 企业内训与专班方案",
+      subtitle:
+        "面向研发团队与业务部门的隔离专班交付，含专属 Cohort 批改驾驶舱、团队规范治理与组织级项目验收",
+      productType: "enterprise_training",
+      scopeType: "enterprise_cohort",
+      scopeRef: "ENT-2026-CUSTOM",
+      featuresJson: [
+        "严格隔离的组织专属 Cohort 学习空间与成员入班管理",
+        "包含全课 14 模块、企业知识库 ACL/Tombstone Eval 与项目工作台",
+        "专属带班导师/助教驾驶舱：团队 Diff 审查、Rules 门禁与三锁授证",
+        "按企业内训班期与有效期统一管控授权名额与交接归档",
+      ],
+      active: true,
+    })
+    .onConflictDoNothing()
+    .returning();
+
   const resolvedSelf =
     selfPaced ||
     (
@@ -130,6 +146,16 @@ async function runSeed(): Promise<void> {
         .select()
         .from(products)
         .where(eq(products.skuCode, "cohort-mentored-camp"))
+        .limit(1)
+    )[0];
+
+  const resolvedEnterprise =
+    enterpriseCohort ||
+    (
+      await db
+        .select()
+        .from(products)
+        .where(eq(products.skuCode, "enterprise-training-cohort"))
         .limit(1)
     )[0];
 
@@ -187,7 +213,28 @@ async function runSeed(): Promise<void> {
         active: true,
       });
     }
+  }
 
+  if (resolvedEnterprise) {
+    const existingEnterprisePrices = await db
+      .select()
+      .from(prices)
+      .where(eq(prices.productId, resolvedEnterprise.id))
+      .limit(1);
+
+    if (existingEnterprisePrices.length === 0) {
+      await db.insert(prices).values({
+        productId: resolvedEnterprise.id,
+        billingInterval: "one_time",
+        amountCents: 1980000,
+        currency: "CNY",
+        durationDays: 180,
+        active: true,
+      });
+    }
+  }
+
+  if (resolvedCohort) {
     const existingCohorts = await db
       .select()
       .from(cohorts)

@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
 import { COURSE_MODULES } from "@/data/courseCurriculum";
+import type {
+  EvidenceTraceabilityChain,
+  TraceableEvalSummary,
+} from "@/data/projectTemplatesPublic";
 import {
   ApiError,
   fetchMyCohorts,
@@ -49,6 +53,8 @@ export default function CohortLearnerPanel({
   const [reviewsBySub, setReviewsBySub] = useState<Record<number, SubmissionReviewRecord[]>>({});
   const [evidenceBySub, setEvidenceBySub] = useState<Record<number, SubmissionEvidenceRecord>>({});
   const [auditBySub, setAuditBySub] = useState<Record<number, StaticAuditRunRecord>>({});
+  const [evalBySub, setEvalBySub] = useState<Record<number, TraceableEvalSummary>>({});
+  const [traceBySub, setTraceBySub] = useState<Record<number, EvidenceTraceabilityChain>>({});
   const [workspaces, setWorkspaces] = useState<ProjectWorkspaceRecord[]>([]);
 
   // Submission composer
@@ -61,6 +67,8 @@ export default function CohortLearnerPanel({
   const [changedFilesText, setChangedFilesText] = useState("");
   const [diffSummary, setDiffSummary] = useState("");
   const [testCommandLog, setTestCommandLog] = useState("");
+  const [decisionRationale, setDecisionRationale] = useState("");
+  const [knownLimitations, setKnownLimitations] = useState("");
   const [artifactUrl, setArtifactUrl] = useState("");
   const [uploadingBlob, setUploadingBlob] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -82,6 +90,8 @@ export default function CohortLearnerPanel({
       setReviewsBySub(data.reviewsBySubmissionId);
       setEvidenceBySub(data.evidenceBySubmissionId || {});
       setAuditBySub(data.auditBySubmissionId || {});
+      setEvalBySub(data.evalBySubmissionId || {});
+      setTraceBySub(data.traceabilityBySubmissionId || {});
       if (wsRes) {
         setWorkspaces(wsRes.workspaces);
       }
@@ -193,6 +203,8 @@ export default function CohortLearnerPanel({
         diffSummary,
         testCommandLog,
         handoffSummary: linkedWs?.handoffMarkdown,
+        decisionRationale,
+        knownLimitations,
         evalRunId: linkedWs?.latestEval?.id ?? null,
       });
 
@@ -201,6 +213,8 @@ export default function CohortLearnerPanel({
       setChangedFilesText("");
       setDiffSummary("");
       setTestCommandLog("");
+      setDecisionRationale("");
+      setKnownLimitations("");
       setArtifactUrl("");
       setNotice({
         ok: true,
@@ -344,6 +358,8 @@ export default function CohortLearnerPanel({
                     const reviews = reviewsBySub[sub.id] || [];
                     const audit = auditBySub[sub.id];
                     const ev = evidenceBySub[sub.id];
+                    const evalSummary = evalBySub[sub.id];
+                    const trace = traceBySub[sub.id];
                     return (
                       <div
                         key={sub.id}
@@ -353,16 +369,38 @@ export default function CohortLearnerPanel({
                           <span className="font-semibold text-white">{sub.artifactTitle}</span>
                           <span className={`font-mono text-[11px] ${st.cls}`}>{st.label}</span>
                         </div>
-                        <div className="font-mono text-[10px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-mono text-[10px] text-slate-400 flex flex-wrap items-center justify-between gap-2 tabular-nums">
                           <span>
-                            {sub.moduleId.toUpperCase()} · 更新于 {sub.updatedAt.slice(0, 10)}
+                            {sub.moduleId.toUpperCase()} · 课程 {sub.curriculumVersion || "2026.11"} · 更新于{" "}
+                            {sub.updatedAt.slice(0, 10)}
                           </span>
                           {audit && (
                             <span className={audit.passed ? "text-emerald-300" : "text-rose-300"}>
-                              服务端审计：{audit.passed ? "通过" : "阻断"} (警告 {audit.warningCount})
+                              静态检查：{audit.passed ? "通过" : "阻断"} (警告 {audit.warningCount})
                             </span>
                           )}
                         </div>
+                        {(evalSummary || trace) && (
+                          <div className="font-mono text-[10px] text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums">
+                            {trace && (
+                              <span className="text-gemini-cyan">
+                                证据完整度 {trace.completeness.passedCount}/{trace.completeness.totalCount} (
+                                {trace.completeness.scorePct}%)
+                              </span>
+                            )}
+                            {evalSummary && (
+                              <span
+                                className={
+                                  evalSummary.passed ? "text-emerald-300" : "text-amber-300"
+                                }
+                              >
+                                Eval #{evalSummary.evalRunId} ({evalSummary.datasetSlug}@
+                                {evalSummary.datasetVersion}) ·{" "}
+                                {evalSummary.passed ? "PASS" : "FAIL"}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {ev?.aiPrereviewJson && (
                           <div className="p-2 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] text-slate-300 whitespace-pre-wrap">
                             {ev.aiPrereviewJson.draftMarkdown}
@@ -552,6 +590,33 @@ export default function CohortLearnerPanel({
                 placeholder="粘贴 git diff --stat 或核心改动说明..."
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-slate-300 font-medium">
+                  模式选择理由与反过度设计说明（选填）
+                </label>
+                <textarea
+                  rows={2}
+                  value={decisionRationale}
+                  onChange={(e) => setDecisionRationale(e.target.value)}
+                  placeholder="说明模式选择、备选方案以及为何没有过度抽象..."
+                  className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="block text-slate-300 font-medium">
+                  已知限制与人工接管边界（选填）
+                </label>
+                <textarea
+                  rows={2}
+                  value={knownLimitations}
+                  onChange={(e) => setKnownLimitations(e.target.value)}
+                  placeholder="列出暂未覆盖的边界条件与人工复核接管点..."
+                  className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
+                />
+              </div>
             </div>
 
             <div className="p-3 rounded-xl border border-gemini-cyan/30 bg-gemini-cyan/5 text-[11px] text-slate-300">

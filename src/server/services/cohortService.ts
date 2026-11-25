@@ -5,6 +5,7 @@ import {
   cohortInstructors,
   cohortMilestones,
   cohorts,
+  evalRuns,
   projectTemplates,
   projectWorkspaces,
   quizAttempts,
@@ -17,12 +18,37 @@ import {
 } from "../../db/schema.ts";
 import { COURSE_SKILLS } from "../../data/courseSkills.ts";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
+import {
+  buildEvidenceTraceabilityChain,
+  STATIC_AUDIT_RULE_VERSION,
+  type EvidenceTraceabilityChain,
+  type TraceableEvalSummary,
+} from "../../data/projectTemplatesPublic.ts";
 import type { AuthContext } from "../auth.ts";
 import { CURRICULUM_VERSION } from "./curriculumService.ts";
+import { summarizeEvalRunForTraceability } from "./evalRunnerService.ts";
 import {
   recordStaticAuditRun,
   runDeterministicStaticAudit,
 } from "./staticAuditService.ts";
+
+function extractHumanEvidenceNotes(staticAuditJson: Record<string, unknown> | null | undefined): {
+  decisionRationale: string;
+  knownLimitations: string;
+} {
+  if (!staticAuditJson || typeof staticAuditJson !== "object") {
+    return { decisionRationale: "", knownLimitations: "" };
+  }
+  const raw = staticAuditJson.humanEvidenceNotes;
+  if (!raw || typeof raw !== "object") {
+    return { decisionRationale: "", knownLimitations: "" };
+  }
+  const notes = raw as Record<string, unknown>;
+  return {
+    decisionRationale: typeof notes.decisionRationale === "string" ? notes.decisionRationale : "",
+    knownLimitations: typeof notes.knownLimitations === "string" ? notes.knownLimitations : "",
+  };
+}
 
 export async function getLearnerCohortView(userId: number) {
   const [enrollmentRows, userSubmissions] = await Promise.all([
@@ -58,6 +84,43 @@ export async function getLearnerCohortView(userId: number) {
       : [],
   ]);
 
+  const evalIds = Array.from(
+    new Set(
+      evidenceRows
+        .map((ev) => ev.evalRunId)
+        .filter((id): id is number => typeof id === "number" && id > 0)
+    )
+  );
+  const wsIds = Array.from(
+    new Set(
+      evidenceRows
+        .map((ev) => ev.workspaceId)
+        .filter((id): id is number => typeof id === "number" && id > 0)
+    )
+  );
+
+  const [evalRows, wsRows] = await Promise.all([
+    evalIds.length > 0
+      ? db
+          .select()
+          .from(evalRuns)
+          .where(and(inArray(evalRuns.id, evalIds), eq(evalRuns.userId, userId)))
+      : Promise.resolve([] as Array<typeof evalRuns.$inferSelect>),
+    wsIds.length > 0
+      ? db
+          .select()
+          .from(projectWorkspaces)
+          .where(and(inArray(projectWorkspaces.id, wsIds), eq(projectWorkspaces.userId, userId)))
+      : Promise.resolve([] as Array<typeof projectWorkspaces.$inferSelect>),
+  ]);
+
+  const evalMap = new Map<number, TraceableEvalSummary>(
+    evalRows.map((e) => [e.id, summarizeEvalRunForTraceability(e)])
+  );
+  const wsMap = new Map<number, typeof projectWorkspaces.$inferSelect>(
+    wsRows.map((w) => [w.id, w])
+  );
+
   const reviewsBySubmissionId: Record<number, typeof reviewRows> = {};
   for (const r of reviewRows) {
     if (!reviewsBySubmissionId[r.submissionId]) {
@@ -78,6 +141,50 @@ export async function getLearnerCohortView(userId: number) {
     }
   }
 
+  const evalBySubmissionId: Record<number, TraceableEvalSummary> = {};
+  const traceabilityBySubmissionId: Record<number, EvidenceTraceabilityChain> = {};
+
+  for (const sub of userSubmissions) {
+    const ev = evidenceBySubmissionId[sub.id];
+    const audit = auditBySubmissionId[sub.id];
+    const evalSummary = ev?.evalRunId ? evalMap.get(ev.evalRunId) ?? null : null;
+    if (evalSummary) {
+      evalBySubmissionId[sub.id] = evalSummary;
+    }
+    const ws = ev?.workspaceId ? wsMap.get(ev.workspaceId) : undefined;
+    const subReviews = reviewsBySubmissionId[sub.id] || [];
+    const notes = extractHumanEvidenceNotes(sub.staticAuditJson);
+    const frozenRuleVersion =
+      sub.staticAuditJson && typeof sub.staticAuditJson.ruleVersion === "string"
+        ? sub.staticAuditJson.ruleVersion
+        : STATIC_AUDIT_RULE_VERSION;
+
+    traceabilityBySubmissionId[sub.id] = buildEvidenceTraceabilityChain({
+      curriculumVersion: sub.curriculumVersion,
+      moduleId: sub.moduleId,
+      workspaceId: ev?.workspaceId ?? null,
+      workspaceTitle: ws?.title ?? null,
+      staticAuditRunId: audit?.id ?? ev?.staticAuditRunId ?? null,
+      staticAuditRuleVersion: frozenRuleVersion,
+      staticAuditPassed: audit ? audit.passed : typeof sub.staticAuditJson?.passed === "boolean" ? sub.staticAuditJson.passed : null,
+      staticBlockingCount: audit?.blockingCount ?? 0,
+      staticWarningCount: audit?.warningCount ?? 0,
+      staticAuditedAt: audit?.createdAt?.toISOString() ?? null,
+      evalSummary,
+      changedFiles: ev?.changedFilesJson ?? [],
+      specSnapshot: ev?.specSnapshot ?? "",
+      diffSummary: ev?.diffSummary ?? "",
+      testCommandLog: ev?.testCommandLog ?? "",
+      handoffSummary: ev?.handoffSummary ?? "",
+      decisionRationale: notes.decisionRationale,
+      knownLimitations: notes.knownLimitations,
+      submissionStatus: sub.status,
+      reviewerFeedbackCount: subReviews.length,
+      latestReviewDecision: subReviews[0]?.decision ?? null,
+      grantedSkillId: subReviews.find((r) => r.grantedSkillId)?.grantedSkillId ?? null,
+    });
+  }
+
   if (enrollmentRows.length === 0) {
     return {
       enrolled: false as const,
@@ -86,6 +193,8 @@ export async function getLearnerCohortView(userId: number) {
       reviewsBySubmissionId,
       evidenceBySubmissionId,
       auditBySubmissionId,
+      evalBySubmissionId,
+      traceabilityBySubmissionId,
     };
   }
 
@@ -126,6 +235,8 @@ export async function getLearnerCohortView(userId: number) {
     reviewsBySubmissionId,
     evidenceBySubmissionId,
     auditBySubmissionId,
+    evalBySubmissionId,
+    traceabilityBySubmissionId,
   };
 }
 
@@ -145,21 +256,35 @@ export async function createOrResubmitLearnerWork(input: {
   diffSummary?: string;
   testCommandLog?: string;
   handoffSummary?: string;
+  decisionRationale?: string;
+  knownLimitations?: string;
   evalRunId?: number | null;
   hasPaidAccess: boolean;
+  canSubmitToCohort?: boolean;
+  cohortDenyReason?: string;
 }) {
   if (!input.hasPaidAccess && input.moduleId !== "m1") {
     return { ok: false as const, status: 403, error: "提交付费模块作业需具备有效课程或班级权益。" };
   }
 
   if (input.cohortId) {
+    if (input.canSubmitToCohort === false) {
+      return {
+        ok: false as const,
+        status: 403,
+        error:
+          input.cohortDenyReason ||
+          "当前权益范围不支持向该班级提交作业，请确认是否已开通对应的指导班或企业培训权益。",
+      };
+    }
     const enrolled = await db
       .select()
       .from(cohortEnrollments)
       .where(
         and(
           eq(cohortEnrollments.cohortId, input.cohortId),
-          eq(cohortEnrollments.userId, input.userId)
+          eq(cohortEnrollments.userId, input.userId),
+          eq(cohortEnrollments.status, "active")
         )
       )
       .limit(1);
@@ -171,6 +296,7 @@ export async function createOrResubmitLearnerWork(input: {
   let allowedGlobs: string[] = [];
   let blockedPaths: string[] | undefined;
   let workspaceRow: typeof projectWorkspaces.$inferSelect | undefined;
+  let templateSlug: string | null = null;
 
   if (input.workspaceId) {
     const wsRows = await db
@@ -195,15 +321,41 @@ export async function createOrResubmitLearnerWork(input: {
     if (tplRows[0]) {
       allowedGlobs = tplRows[0].allowedGlobsJson;
       blockedPaths = tplRows[0].blockedPathsJson;
+      templateSlug = tplRows[0].slug;
     }
   }
+
+  let verifiedEvalSummary: TraceableEvalSummary | null = null;
+  if (input.evalRunId) {
+    const evalRows = await db
+      .select()
+      .from(evalRuns)
+      .where(
+        and(eq(evalRuns.id, input.evalRunId), eq(evalRuns.userId, input.userId))
+      )
+      .limit(1);
+    if (!evalRows[0]) {
+      return {
+        ok: false as const,
+        status: 403,
+        error: "关联的 Eval 评测记录不存在或不属于当前账号。",
+      };
+    }
+    verifiedEvalSummary = summarizeEvalRunForTraceability(evalRows[0]);
+  }
+
+  const effectiveSpec = input.specSnapshot ?? workspaceRow?.specMarkdown ?? "";
+  const effectiveRules = input.rulesSnapshot ?? workspaceRow?.rulesMarkdown ?? "";
+  const effectiveHandoff = input.handoffSummary ?? workspaceRow?.handoffMarkdown ?? "";
+  const decisionRationale = (input.decisionRationale ?? "").trim();
+  const knownLimitations = (input.knownLimitations ?? "").trim();
 
   // Authoritative server-side static audit gate (never trust client staticAuditJson)
   const audit = runDeterministicStaticAudit({
     moduleId: input.moduleId,
     codeOrArtifactText: input.artifactText,
-    specText: input.specSnapshot ?? workspaceRow?.specMarkdown,
-    rulesText: input.rulesSnapshot ?? workspaceRow?.rulesMarkdown,
+    specText: effectiveSpec,
+    rulesText: effectiveRules,
     diffSummary: input.diffSummary,
     testCommandLog: input.testCommandLog,
     changedFiles: input.changedFiles,
@@ -230,8 +382,32 @@ export async function createOrResubmitLearnerWork(input: {
     };
   }
 
+  const traceabilityChain = buildEvidenceTraceabilityChain({
+    curriculumVersion: CURRICULUM_VERSION,
+    moduleId: input.moduleId,
+    workspaceId: input.workspaceId ?? null,
+    workspaceTitle: workspaceRow?.title ?? null,
+    templateSlug,
+    staticAuditRuleVersion: STATIC_AUDIT_RULE_VERSION,
+    staticAuditPassed: audit.passed,
+    staticBlockingCount: audit.blockingCount,
+    staticWarningCount: audit.warningCount,
+    staticAuditedAt: audit.auditedAt,
+    evalSummary: verifiedEvalSummary,
+    changedFiles: audit.changedFiles,
+    specSnapshot: effectiveSpec,
+    diffSummary: input.diffSummary ?? "",
+    testCommandLog: input.testCommandLog ?? "",
+    handoffSummary: effectiveHandoff,
+    decisionRationale,
+    knownLimitations,
+    submissionStatus: "submitted",
+  });
+
   const serverAuditSnapshot: Record<string, unknown> = {
     source: "server_static_audit",
+    ruleVersion: STATIC_AUDIT_RULE_VERSION,
+    verificationMode: "static_material_check",
     auditedAt: audit.auditedAt,
     passed: audit.passed,
     blockingCount: audit.blockingCount,
@@ -239,6 +415,11 @@ export async function createOrResubmitLearnerWork(input: {
     findingsCount: audit.findings.length,
     findings: audit.findings,
     changedFiles: audit.changedFiles,
+    humanEvidenceNotes: {
+      decisionRationale,
+      knownLimitations,
+    },
+    traceabilityChain,
   };
 
   let submissionRecord: typeof submissions.$inferSelect;
@@ -260,6 +441,7 @@ export async function createOrResubmitLearnerWork(input: {
       const [updated] = await db
         .update(submissions)
         .set({
+          curriculumVersion: CURRICULUM_VERSION,
           artifactTitle: input.artifactTitle.trim(),
           artifactText: input.artifactText.trim(),
           artifactUrl: input.artifactUrl?.trim() || null,
@@ -441,21 +623,104 @@ export async function getInstructorCockpitData(authContext: AuthContext) {
       : [],
   ]);
 
+  const evalIds = Array.from(
+    new Set(
+      evidenceRows
+        .map((ev) => ev.evalRunId)
+        .filter((id): id is number => typeof id === "number" && id > 0)
+    )
+  );
+  const wsIds = Array.from(
+    new Set(
+      evidenceRows
+        .map((ev) => ev.workspaceId)
+        .filter((id): id is number => typeof id === "number" && id > 0)
+    )
+  );
+
+  const [evalRows, wsRows] = await Promise.all([
+    evalIds.length > 0
+      ? db.select().from(evalRuns).where(inArray(evalRuns.id, evalIds))
+      : Promise.resolve([] as Array<typeof evalRuns.$inferSelect>),
+    wsIds.length > 0
+      ? db.select().from(projectWorkspaces).where(inArray(projectWorkspaces.id, wsIds))
+      : Promise.resolve([] as Array<typeof projectWorkspaces.$inferSelect>),
+  ]);
+
+  const templateIds = Array.from(new Set(wsRows.map((w) => w.templateId)));
+  const templateRows =
+    templateIds.length > 0
+      ? await db.select().from(projectTemplates).where(inArray(projectTemplates.id, templateIds))
+      : ([] as Array<typeof projectTemplates.$inferSelect>);
+
+  const evalMap = new Map<number, TraceableEvalSummary>(
+    evalRows.map((e) => [e.id, summarizeEvalRunForTraceability(e)])
+  );
+  const wsMap = new Map<number, typeof projectWorkspaces.$inferSelect>(
+    wsRows.map((w) => [w.id, w])
+  );
+  const tplMap = new Map<number, typeof projectTemplates.$inferSelect>(
+    templateRows.map((t) => [t.id, t])
+  );
+
   const enrichedSubs = subRows.map((s) => {
     const learner = learnerMap.get(s.userId);
     const cohort = cohortRows.find((c) => c.id === s.cohortId);
     const milestone = milestoneRows.find((m) => m.id === s.milestoneId);
     const evidence = evidenceRows.find((ev) => ev.submissionId === s.id) ?? null;
     const latestAudit = auditRows.find((a) => a.submissionId === s.id) ?? null;
+    const subReviews = reviewRows.filter((r) => r.submissionId === s.id);
+    const linkedEvalRun = evidence?.evalRunId ? evalMap.get(evidence.evalRunId) ?? null : null;
+    const ws = evidence?.workspaceId ? wsMap.get(evidence.workspaceId) : undefined;
+    const tpl = ws ? tplMap.get(ws.templateId) : undefined;
+    const humanEvidenceNotes = extractHumanEvidenceNotes(s.staticAuditJson);
+    const frozenRuleVersion =
+      s.staticAuditJson && typeof s.staticAuditJson.ruleVersion === "string"
+        ? s.staticAuditJson.ruleVersion
+        : STATIC_AUDIT_RULE_VERSION;
+
+    const traceabilityChain = buildEvidenceTraceabilityChain({
+      curriculumVersion: s.curriculumVersion,
+      moduleId: s.moduleId,
+      workspaceId: evidence?.workspaceId ?? null,
+      workspaceTitle: ws?.title ?? null,
+      templateSlug: tpl?.slug ?? null,
+      staticAuditRunId: latestAudit?.id ?? evidence?.staticAuditRunId ?? null,
+      staticAuditRuleVersion: frozenRuleVersion,
+      staticAuditPassed: latestAudit
+        ? latestAudit.passed
+        : typeof s.staticAuditJson?.passed === "boolean"
+        ? s.staticAuditJson.passed
+        : null,
+      staticBlockingCount: latestAudit?.blockingCount ?? 0,
+      staticWarningCount: latestAudit?.warningCount ?? 0,
+      staticAuditedAt: latestAudit?.createdAt?.toISOString() ?? null,
+      evalSummary: linkedEvalRun,
+      changedFiles: evidence?.changedFilesJson ?? [],
+      specSnapshot: evidence?.specSnapshot ?? "",
+      diffSummary: evidence?.diffSummary ?? "",
+      testCommandLog: evidence?.testCommandLog ?? "",
+      handoffSummary: evidence?.handoffSummary ?? "",
+      decisionRationale: humanEvidenceNotes.decisionRationale,
+      knownLimitations: humanEvidenceNotes.knownLimitations,
+      submissionStatus: s.status,
+      reviewerFeedbackCount: subReviews.length,
+      latestReviewDecision: subReviews[0]?.decision ?? null,
+      grantedSkillId: subReviews.find((r) => r.grantedSkillId)?.grantedSkillId ?? null,
+    });
+
     return {
       ...s,
       learnerEmail: learner?.email ?? "",
       learnerName: learner?.displayName || learner?.email || `Learner #${s.userId}`,
       cohortTitle: cohort?.title ?? "",
       milestoneTitle: milestone?.title ?? `${s.moduleId.toUpperCase()} 自由提交`,
-      reviews: reviewRows.filter((r) => r.submissionId === s.id),
+      reviews: subReviews,
       evidence,
       latestAudit,
+      linkedEvalRun,
+      humanEvidenceNotes,
+      traceabilityChain,
       simulationDisclaimer:
         s.moduleId === "m13-gov" ? M13_GOV_SIMULATION_DISCLAIMER : undefined,
     };
@@ -659,14 +924,16 @@ export async function reviewCohortSubmission(input: {
 
     let grantedSkill = null;
     if (input.decision === "approved" && verifiedSkillTarget) {
+      const evRow = evRows[0];
+      const evalRef = evRow?.evalRunId ? ` · Eval #${evRow.evalRunId}` : "";
       const [grant] = await tx
         .insert(skillGrants)
         .values({
           userId: sub.userId,
           skillId: verifiedSkillTarget.id,
-          curriculumVersion: CURRICULUM_VERSION,
+          curriculumVersion: sub.curriculumVersion || CURRICULUM_VERSION,
           method: "starter-repo-evidence",
-          evidenceSummary: `三锁认证通过（静态门禁 + 实操证据 + 导师人工审核：${sub.artifactTitle}）`,
+          evidenceSummary: `三锁认证通过（课程 ${sub.curriculumVersion || CURRICULUM_VERSION} · 静态门禁 + 实操证据${evalRef} + 导师人工审核：${sub.artifactTitle}）`,
           evidenceSubmissionId: sub.id,
           grantedByUserId: input.authContext.user.id,
         })

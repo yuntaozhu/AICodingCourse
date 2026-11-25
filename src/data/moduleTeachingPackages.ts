@@ -500,6 +500,12 @@ export const MODULE_TEACHING_PACKAGES: Record<string, PublicModuleTeachingPackag
         "passCriteria": "保留分步 Git 节点或回滚说明，并完成至少 1 个失败/重放边界验证。",
         "evidence": "`E2E_VERTICAL_SLICE_BLUEPRINT.md` 审查记录与复现命令。",
         "redFlag": "出事无法退回上一个可运行状态。"
+      },
+      {
+        "dimension": "坏味道识别与反过度抽象判断（Stage 1 试点）",
+        "passCriteria": "能识别至少 1 类混层或外部依赖耦合坏味道，解释为何只用轻量 Facade 与垂直切片而不建单实现工厂或拆微服务。",
+        "evidence": "Stage 1 故障演练台验收通过记录与 ADR 反过度抽象说明。",
+        "redFlag": "在 Prompt 中写上设计模式名词却保留客户端传真相漏洞，或堆砌 5 层空接口。"
       }
     ],
     "homeworkTiers": [
@@ -804,6 +810,12 @@ export const MODULE_TEACHING_PACKAGES: Record<string, PublicModuleTeachingPackag
         "passCriteria": "交付前清理干净临时日志、注释死代码与未引用导入。",
         "evidence": "静态 Lint 通过且 `git diff` 无调试残留。",
         "redFlag": "满屏遗留 `console.log('test123')` 与未使用旧函数。"
+      },
+      {
+        "dimension": "坏味道识别与反过度抽象判断（Stage 1 试点）",
+        "passCriteria": "能识别无界自愈或测试篡改坏味道，以显式状态表和有限重试熔断收口并写明为何拒绝重型 Saga/事件引擎。",
+        "evidence": "Stage 1 故障演练断言通过日志与 KISS/YAGNI 决策记录。",
+        "redFlag": "为本地 4 态验证循环强上分布式消息队列与通用插件重试引擎。"
       }
     ],
     "homeworkTiers": [
@@ -1260,6 +1272,12 @@ export const MODULE_TEACHING_PACKAGES: Record<string, PublicModuleTeachingPackag
         "passCriteria": "清晰区分 M6 异步 PR 与 M12 运行时 Agent，提供可重复构建与测试退出码 0 证据。",
         "evidence": "本地验证命令记录与可选原型迁移检查单。",
         "redFlag": "只依赖对话自述“已完成”而未执行全量回归测试。"
+      },
+      {
+        "dimension": "坏味道识别与反过度抽象判断（Stage 1 试点）",
+        "passCriteria": "能识别跨会话上下文漂移或目录写冲突坏味道，用检查点交接与克制事件解耦替代重型持久化总线，并写出触发升级阈值。",
+        "evidence": "ACC 检查点交接演练与反过度抽象边界声明。",
+        "redFlag": "只有单一调用链路却搭建全局异步 EventBus 导致执行顺序不可追踪。"
       }
     ],
     "homeworkTiers": [
@@ -1412,6 +1430,12 @@ export const MODULE_TEACHING_PACKAGES: Record<string, PublicModuleTeachingPackag
         "passCriteria": "核验外部平台配额限制或标明“待核验”，绝不在前端藏硬编码兜底数据欺骗状态。",
         "evidence": "ADR 风险备注与真实接口降级提示校验。",
         "redFlag": "接口挂掉后悄悄回退显示假列表让用户误以为保存成功。"
+      },
+      {
+        "dimension": "坏味道识别与反过度抽象判断（Stage 1 试点）",
+        "passCriteria": "能从全栈报错和 Diff 中拆出 UI/API/DB 混层坏味道，解释分层边界选择与拒绝过早微服务化的量化阈值。",
+        "evidence": "Stage 1 模式演练诊断记录与 ADR 中的反过度设计段落。",
+        "redFlag": "面对 1~3 人原型直接拆分多仓库微服务或堆砌 GenericRepositoryFactory。"
       }
     ],
     "homeworkTiers": [

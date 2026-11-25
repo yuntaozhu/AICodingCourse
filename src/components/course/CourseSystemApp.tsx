@@ -639,14 +639,15 @@ export default function CourseSystemApp({
             <button
               type="button"
               onClick={() => setSubView("projects")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+              title="Project Studio：任务工作区、静态门禁、模拟 Eval 与 Tutor 诊断"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
                 subView === "projects"
                   ? "bg-gemini-cyan text-slate-950 font-semibold"
                   : "text-slate-300 hover:bg-white/10 hover:text-white"
               }`}
             >
               <FolderGit2 className="w-3.5 h-3.5" />
-              <span>项目学院 &amp; Tutor</span>
+              <span>Project Studio</span>
             </button>
 
             <button

@@ -10,6 +10,15 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
 import {
+  getPilotGroupForModule,
+  STAGE1_PILOT_RUBRIC,
+} from "@/data/designPatternPilots";
+import {
+  ISOLATED_RUNNER_CONTRACT,
+  STATIC_AUDIT_RULE_VERSION,
+  VERIFICATION_MODES,
+} from "@/data/projectTemplatesPublic";
+import {
   fetchInstructorCockpit,
   generateInstructorAiPrereviewApi,
   reviewSubmission,
@@ -279,8 +288,10 @@ export default function InstructorCockpit() {
                         <div className="text-slate-300">
                           {sub.learnerName} · {sub.milestoneTitle}
                         </div>
-                        <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between">
-                          <span>{sub.cohortTitle}</span>
+                        <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between tabular-nums">
+                          <span>
+                            {sub.cohortTitle} · 课程 {sub.curriculumVersion || "2026.11"}
+                          </span>
                           <span>{sub.updatedAt.slice(0, 10)}</span>
                         </div>
                       </button>
@@ -299,9 +310,9 @@ export default function InstructorCockpit() {
                   <div className="p-5 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
                       <div className="space-y-1">
-                        <div className="font-mono text-[11px] text-gemini-cyan">
-                          #{selectedSub.id} · {selectedSub.moduleId.toUpperCase()} ·{" "}
-                          {selectedSub.cohortTitle}
+                        <div className="font-mono text-[11px] text-gemini-cyan tabular-nums">
+                          #{selectedSub.id} · {selectedSub.moduleId.toUpperCase()} · 课程版本{" "}
+                          {selectedSub.curriculumVersion || "2026.11"} · {selectedSub.cohortTitle}
                         </div>
                         <h2 className="text-lg font-bold text-white">
                           {selectedSub.artifactTitle}
@@ -329,6 +340,124 @@ export default function InstructorCockpit() {
                       </div>
                     )}
 
+                    {/* Stage 3 End-to-End Evidence Traceability Chain */}
+                    {selectedSub.traceabilityChain && (
+                      <div className="p-3.5 rounded-xl border border-gemini-cyan/30 bg-black/45 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold text-white">
+                            Stage 3 证据可追溯链（任务 → 静态检查 → 模拟 Eval → 人工复核）
+                          </div>
+                          <div className="font-mono text-[11px] text-gemini-cyan tabular-nums">
+                            证据完整度 {selectedSub.traceabilityChain.completeness.passedCount}/
+                            {selectedSub.traceabilityChain.completeness.totalCount} (
+                            {selectedSub.traceabilityChain.completeness.scorePct}%)
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono tabular-nums">
+                          <div className="p-2 rounded-lg border border-white/10 bg-white/[0.02] space-y-0.5">
+                            <div className="text-slate-400">1. 任务与课程版本</div>
+                            <div className="text-white">
+                              {selectedSub.traceabilityChain.task.moduleId.toUpperCase()} · 课程{" "}
+                              {selectedSub.traceabilityChain.curriculumVersion}
+                              {selectedSub.traceabilityChain.task.workspaceTitle
+                                ? ` · ${selectedSub.traceabilityChain.task.workspaceTitle}`
+                                : ""}
+                            </div>
+                          </div>
+
+                          <div className="p-2 rounded-lg border border-white/10 bg-white/[0.02] space-y-0.5">
+                            <div className="text-slate-400">2. 静态材料检查</div>
+                            <div
+                              className={
+                                selectedSub.traceabilityChain.staticAudit.passed
+                                  ? "text-emerald-300"
+                                  : "text-rose-300"
+                              }
+                            >
+                              {selectedSub.traceabilityChain.staticAudit.auditRunId
+                                ? `Run #${selectedSub.traceabilityChain.staticAudit.auditRunId} · `
+                                : ""}
+                              {selectedSub.traceabilityChain.staticAudit.ruleVersion} ·{" "}
+                              {selectedSub.traceabilityChain.staticAudit.passed ? "PASSED" : "BLOCKED"}
+                            </div>
+                          </div>
+
+                          <div className="p-2 rounded-lg border border-white/10 bg-white/[0.02] space-y-0.5">
+                            <div className="text-slate-400">3. 关联模拟 Eval 评测</div>
+                            {selectedSub.linkedEvalRun ? (
+                              <div
+                                className={
+                                  selectedSub.linkedEvalRun.passed
+                                    ? "text-emerald-300"
+                                    : "text-rose-300"
+                                }
+                              >
+                                Eval #{selectedSub.linkedEvalRun.evalRunId} ·{" "}
+                                {selectedSub.linkedEvalRun.datasetSlug}@
+                                {selectedSub.linkedEvalRun.datasetVersion} ·{" "}
+                                {selectedSub.linkedEvalRun.passed ? "PASS" : "FAIL"} (Recall{" "}
+                                {selectedSub.linkedEvalRun.recallAtK}% / ACL漏{" "}
+                                {selectedSub.linkedEvalRun.aclLeakCount} / 过期{" "}
+                                {selectedSub.linkedEvalRun.staleRecallCount})
+                              </div>
+                            ) : (
+                              <div className="text-slate-400">未关联 Eval 运行记录</div>
+                            )}
+                          </div>
+
+                          <div className="p-2 rounded-lg border border-white/10 bg-white/[0.02] space-y-0.5">
+                            <div className="text-slate-400">4. 代码执行隔离口径</div>
+                            <div className="text-amber-200">
+                              {ISOLATED_RUNNER_CONTRACT.executionStatus} · 公网{" "}
+                              {ISOLATED_RUNNER_CONTRACT.networkEgress} / 密钥{" "}
+                              {ISOLATED_RUNNER_CONTRACT.secretAccess}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 text-[11px]">
+                          {selectedSub.traceabilityChain.completeness.checks.map((chk) => (
+                            <div
+                              key={chk.key}
+                              className={`inline-flex items-center gap-1.5 font-mono ${
+                                chk.passed ? "text-emerald-300" : "text-slate-400"
+                              }`}
+                            >
+                              {chk.passed ? (
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                              ) : (
+                                <AlertTriangle className="w-3 h-3 shrink-0 text-amber-300" />
+                              )}
+                              <span className="truncate">{chk.label}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {(selectedSub.humanEvidenceNotes?.decisionRationale ||
+                          selectedSub.humanEvidenceNotes?.knownLimitations) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-white/10 text-[11px]">
+                            <div className="space-y-0.5">
+                              <div className="font-mono text-slate-400">
+                                模式选择理由与备选方案：
+                              </div>
+                              <div className="text-slate-200 whitespace-pre-wrap leading-relaxed">
+                                {selectedSub.humanEvidenceNotes.decisionRationale || "（未填写）"}
+                              </div>
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="font-mono text-slate-400">
+                                已知限制与人工接管边界：
+                              </div>
+                              <div className="text-slate-200 whitespace-pre-wrap leading-relaxed">
+                                {selectedSub.humanEvidenceNotes.knownLimitations || "（未填写）"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Authoritative Server Audit + Evidence */}
                     {(selectedSub.latestAudit || selectedSub.staticAuditJson) && (
                       <div className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-2">
@@ -340,10 +469,10 @@ export default function InstructorCockpit() {
                                 : "text-emerald-300 font-semibold"
                             }
                           >
-                            服务端静态门禁：
+                            {VERIFICATION_MODES.static_material_check.label}（{STATIC_AUDIT_RULE_VERSION}）：
                             {selectedSub.latestAudit
                               ? selectedSub.latestAudit.passed
-                                ? `PASSED（警告 ${selectedSub.latestAudit.warningCount}）`
+                                ? `PASSED（警告 ${selectedSub.latestAudit.warningCount} · 不运行业务代码）`
                                 : `BLOCKED（阻塞 ${selectedSub.latestAudit.blockingCount}）`
                               : "已记录审计快照"}
                           </span>
@@ -351,7 +480,7 @@ export default function InstructorCockpit() {
                             type="button"
                             disabled={generatingPrereview}
                             onClick={() => void handleGenerateAiPrereview()}
-                            className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 border border-gemini-purple/45 text-purple-100 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1 rounded-lg bg-gemini-purple/20 border border-gemini-purple/45 text-purple-100 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                           >
                             <Bot className="w-3.5 h-3.5" />
                             <span>
@@ -363,6 +492,9 @@ export default function InstructorCockpit() {
                         </div>
                         {selectedSub.evidence?.aiPrereviewJson && (
                           <div className="p-2.5 rounded-lg border border-gemini-purple/35 bg-gemini-purple/10 text-[11px] text-slate-100 whitespace-pre-wrap leading-relaxed">
+                            <div className="font-mono text-[10px] text-purple-200 mb-1">
+                              AI 预审初筛草稿（辅助参考 · 非最终人工批准）
+                            </div>
                             {selectedSub.evidence.aiPrereviewJson.draftMarkdown}
                           </div>
                         )}
@@ -372,7 +504,7 @@ export default function InstructorCockpit() {
                               <div>
                                 变更文件：{selectedSub.evidence.changedFilesJson.join(", ")}
                                 {selectedSub.evidence.evalRunId
-                                  ? ` · 关联 Eval Run #${selectedSub.evidence.evalRunId}`
+                                  ? ` · 关联${VERIFICATION_MODES.simulated_eval.label} Run #${selectedSub.evidence.evalRunId}`
                                   : ""}
                               </div>
                             )}
@@ -387,9 +519,14 @@ export default function InstructorCockpit() {
                               </details>
                             )}
                             {selectedSub.evidence.testCommandLog && (
-                              <pre className="p-2 rounded bg-black/50 border border-white/10 text-emerald-200 whitespace-pre-wrap">
-                                {selectedSub.evidence.testCommandLog}
-                              </pre>
+                              <div className="space-y-1">
+                                <div className="text-[10px] text-amber-200/90">
+                                  {VERIFICATION_MODES.real_execution_pending_runner.label} — 学员自贴命令输出：
+                                </div>
+                                <pre className="p-2 rounded bg-black/50 border border-white/10 text-emerald-200 whitespace-pre-wrap">
+                                  {selectedSub.evidence.testCommandLog}
+                                </pre>
+                              </div>
                             )}
                             {(selectedSub.evidence.specSnapshot ||
                               selectedSub.evidence.rulesSnapshot ||
@@ -453,6 +590,35 @@ export default function InstructorCockpit() {
                         ))}
                       </div>
                     )}
+
+                    {/* Stage 1 Design Pattern Pilot Grading Reference (m3, m5, m8, m9) */}
+                    {(() => {
+                      const pilotGroup = getPilotGroupForModule(selectedSub.moduleId);
+                      if (!pilotGroup) return null;
+                      return (
+                        <details className="rounded-xl border border-gemini-cyan/35 bg-gemini-cyan/[0.05] p-3 text-[11px]">
+                          <summary className="cursor-pointer font-mono text-gemini-cyan font-semibold">
+                            Stage 1 试点四维验收参考 · {pilotGroup.title}（点击展开批改要点）
+                          </summary>
+                          <div className="mt-2.5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {STAGE1_PILOT_RUBRIC.map((item) => (
+                              <div
+                                key={item.id}
+                                className="p-2.5 rounded-lg bg-[#070b14] border border-white/10 space-y-1"
+                              >
+                                <div className="font-mono text-white font-semibold">
+                                  {item.dimension}
+                                </div>
+                                <div className="text-slate-300 leading-relaxed">
+                                  {item.passCriteria}
+                                </div>
+                                <div className="text-rose-300/90">红旗：{item.redFlag}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      );
+                    })()}
 
                     {/* Review Form */}
                     <div className="pt-3 border-t border-white/10 space-y-3">

@@ -550,6 +550,52 @@ Step 2: 单独传入 Navbar 展开态 + 移动端截图补齐响应式与交互�
   "handoffNote": "已完成类型定义，下一步仅实现检索前 tenantId 过滤"
 }`,
   },
+  {
+    id: "kb-m9-m3-pattern-boundaries",
+    title: "M9 / M3 设计模式试点：分层边界、Facade 门面与垂直切片防过度抽象卡",
+    kbTrack: "engineering",
+    category: "adr",
+    validationStatus: "verified",
+    modules: ["M9", "M3"],
+    version: "v1.0",
+    updatedAt: "2026-11-25",
+    owner: "架构边界与设计模式试点组",
+    source: "Coding Everything Stage 1 设计模式试点（M9/M3）",
+    scope: "全栈垂直切片、第三方支付/邮件集成、前后端权限边界评审",
+    summary:
+      "用分层边界隔离 UI 与服务端权威状态，用轻量 Facade 门面收口外部 SDK 验签与幂等锁，并按垂直切片小步验收；拒绝为单实现场景提前堆砌 AbstractFactory 或拆分微服务。",
+    whenToUse: "AI 第一版把数据库/鉴权写入 React 组件，或第三方回调散落在多个路由中时。",
+    antiPatternOrWarning: "不要在 Prompt 里只写“用设计模式”，也不要为单支付通道建 5 层空转发与 DI 容器。",
+    migrationNotes: "当外部通道增至 3 家以上或确认存在独立吞吐瓶颈时，再从单一 Facade 演进为 Strategy 注册表。",
+    feedbackLoop: "记录课堂故障演练中被误选为坏味道的过度抽象诱饵，更新反例说明。",
+    repoPath: "docs/knowledge-base/templates-and-checklists.md",
+    copyableSnippet: `# M9/M3 模式取舍检查（KISS / YAGNI）
+1. 边界: UI 仅渲染态，401/403 与付费态全部留在 src/server/**
+2. Facade: 第三方验签 + 幂等锁收口于单一 Gateway 模块，不建单实现 Factory
+3. 验收: 未登录 curl 401/403 + 同 eventId 重放幂等 + tsc/test 全绿`,
+  },
+  {
+    id: "kb-m5-m8-state-circuit-handoff",
+    title: "M5 / M8 设计模式试点：显式状态机、有限重试熔断与检查点交接",
+    kbTrack: "engineering",
+    category: "adr",
+    validationStatus: "verified",
+    modules: ["M5", "M8"],
+    version: "v1.0",
+    updatedAt: "2026-11-25",
+    owner: "DoD 与长程 Harness 试点组",
+    source: "Coding Everything Stage 1 设计模式试点（M5/M8）",
+    scope: "AI 自愈循环、测试防篡改门禁、跨会话 ACC 检查点与并发 Worktree 交接",
+    summary:
+      "以 4 态显式迁移表取代混乱布尔开关，将自愈循环严格封顶为 <= 3 轮同错即熔断且禁止改写 tests/ 断言，并通过 feature_list.json 与 ACC 检查点保留跨会话边界。",
+    whenToUse: "AI 在自愈循环里反复盲修、修改测试断言凑绿灯，或超过 15 轮会话丢失禁改范围时。",
+    antiPatternOrWarning: "单机 4 态验证流程禁止强上 XState 分布式 Saga 或全局 Pub-Sub 总线。",
+    migrationNotes: "仅当审计/通知存在多独立消费者且属不同目录所有权时，再抽轻量事件订阅。",
+    feedbackLoop: "根据学员 ACC 交接演练失败原因补充禁改路径与错误签名格式。",
+    repoPath: "docs/knowledge-base/templates-and-checklists.md",
+    copyableSnippet: `type HealingState = "pending" | "verifying" | "circuit_broken" | "passed";
+// 硬门禁: maxAttempts = 3; 连续同错即 circuit_broken; git diff tests/ 禁止被自动改写`,
+  },
 ];
 
 export const ENGINEERING_MODULE_CODES: KnowledgeModuleCode[] = [

@@ -25,13 +25,14 @@ import {
   type AuthedRequest,
   claimFirstAdmin,
   findUserByEmail,
-  getUserActiveEntitlements,
+  getAdminBootstrapUiState,
   hasActiveCourseEntitlement,
   hasAnyAdmin,
   optionalAuth,
   requireAdmin,
   requireAuth,
 } from "./auth.ts";
+import { resolveUserEntitlementSnapshot } from "./services/entitlementService.ts";
 import { AI_MODEL_ID, checkAndRunGuardedAiCall } from "./services/aiService.ts";
 import {
   requestEmailOtp,
@@ -138,15 +139,20 @@ app.get("/api/health", async (req: Request, res: Response) => {
 // Public catalog & pricing endpoint
 app.get("/api/catalog", optionalAuth, async (req: AuthedRequest, res: Response) => {
   try {
-    const [catalog, hasPaidAccess] = await Promise.all([
+    const [catalog, accessSnapshot] = await Promise.all([
       getPublicCatalogProducts(),
-      hasActiveCourseEntitlement(req.authContext),
+      resolveUserEntitlementSnapshot(req.authContext),
     ]);
-    const overview = getPublicCurriculumOverview(hasPaidAccess);
+    const overview = getPublicCurriculumOverview((moduleId) =>
+      accessSnapshot.hasModuleAccess(moduleId)
+    );
     res.json({
       ...catalog,
       curriculum: overview,
-      hasPaidAccess,
+      hasPaidAccess: accessSnapshot.hasPaidAccess,
+      accessTier: accessSnapshot.accessTier,
+      unlockedModuleIds: accessSnapshot.unlockedModuleIds,
+      canSubmitToCohort: accessSnapshot.canSubmitToCohortAny,
     });
   } catch (err) {
     console.error("[/api/catalog] error:", err);
@@ -245,26 +251,46 @@ app.post("/api/auth/login-email", (_req: Request, res: Response) => {
   });
 });
 
-// Current authenticated user session, roles, entitlements & initial admin claim eligibility
+// Current authenticated user session, roles, scoped entitlements & initial admin claim eligibility
 app.get("/api/auth/me", requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const ctx = req.authContext!;
     await ensureCatalogSeeded();
-    const [userEntitlements, hasPaidAccess, adminExists, cohortView] = await Promise.all([
-      getUserActiveEntitlements(ctx.user.id),
-      hasActiveCourseEntitlement(ctx),
+    const [accessSnapshot, adminExists, cohortView] = await Promise.all([
+      resolveUserEntitlementSnapshot(ctx),
       hasAnyAdmin(),
       getLearnerCohortView(ctx.user.id),
     ]);
+    const bootstrapUi = getAdminBootstrapUiState(ctx.user.email);
+    const now = new Date();
+    const enrichedEntitlements = accessSnapshot.entitlements.map((ent) => ({
+      ...ent,
+      isCurrentlyValid:
+        ent.status === "active" &&
+        ent.validFrom <= now &&
+        ent.validUntil > now,
+    }));
+
     res.json({
       user: ctx.user,
+      authMethod: ctx.authMethod,
+      authPolicy: {
+        primary: "email_otp",
+        secondary: "firebase_auth",
+        deprecated: ["passwordless_login_email"],
+      },
       roles: ctx.roles,
       isAdmin: ctx.isAdmin,
       isInstructorOrTa: ctx.isInstructorOrTa,
       assignedCohortIds: ctx.assignedCohortIds,
-      canClaimInitialAdmin: !adminExists,
-      hasPaidAccess,
-      entitlements: userEntitlements,
+      canClaimInitialAdmin: !adminExists && bootstrapUi.canAttemptSelfClaim,
+      adminBootstrapRequiresToken: !adminExists && bootstrapUi.requiresToken,
+      hasPaidAccess: accessSnapshot.hasPaidAccess,
+      accessTier: accessSnapshot.accessTier,
+      unlockedModuleIds: accessSnapshot.unlockedModuleIds,
+      canSubmitToCohort: accessSnapshot.canSubmitToCohortAny,
+      allowedCohortCodes: accessSnapshot.allowedCohortCodes,
+      entitlements: enrichedEntitlements,
       cohortEnrolled: cohortView.enrolled,
       cohorts: cohortView.cohorts,
     });
@@ -274,12 +300,25 @@ app.get("/api/auth/me", requireAuth, async (req: AuthedRequest, res: Response) =
   }
 });
 
-// Atomic one-time first admin bootstrap when zero admins exist in DB
+const claimAdminSchema = z.object({
+  bootstrapToken: z.string().trim().max(200).optional(),
+});
+
+// Controlled one-time first admin bootstrap when zero admins exist in DB
 app.post("/api/auth/claim-admin", requireAuth, async (req: AuthedRequest, res: Response) => {
+  const parsed = claimAdminSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "管理员初始化参数无效。" });
+    return;
+  }
   try {
-    const claimed = await claimFirstAdmin(req.authContext!.user.id);
-    if (!claimed) {
-      res.status(409).json({ error: "系统已存在管理员，无法重复认领初始管理员权限。" });
+    const result = await claimFirstAdmin(
+      req.authContext!.user.id,
+      req.authContext!.user.email,
+      parsed.data.bootstrapToken
+    );
+    if ("error" in result) {
+      res.status(result.status).json({ error: result.error });
       return;
     }
     res.json({ ok: true, role: "admin" });
@@ -289,22 +328,22 @@ app.post("/api/auth/claim-admin", requireAuth, async (req: AuthedRequest, res: R
   }
 });
 
-// Curriculum module detail with entitlement gating and teacher material stripping
+// Curriculum module detail with fine-grained module entitlement gating and teacher material stripping
 app.get(
   "/api/curriculum/modules/:moduleId",
   optionalAuth,
   async (req: AuthedRequest, res: Response) => {
     try {
       const moduleId = String(req.params.moduleId || "").trim();
-      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
-      const detail = getAuthorizedModuleDetail(moduleId, req.authContext, hasPaidAccess);
+      const hasModuleAccess = await hasActiveCourseEntitlement(req.authContext, { moduleId });
+      const detail = getAuthorizedModuleDetail(moduleId, req.authContext, hasModuleAccess);
       if (!detail.found) {
         res.status(404).json({ error: "未找到指定课程模块。" });
         return;
       }
       if (!detail.allowed) {
         res.status(403).json({
-          error: "该课程模块需开通账号权益后解锁学习。",
+          error: "该课程模块需开通对应范围的学习权益后解锁学习。",
           code: "ENTITLEMENT_REQUIRED",
           summary: detail.summary,
         });
@@ -378,15 +417,15 @@ app.get(
   async (req: AuthedRequest, res: Response) => {
     try {
       const moduleId = String(req.params.moduleId || "").trim();
-      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
-      const result = getSanitizedModuleQuiz(moduleId, hasPaidAccess);
+      const hasModuleAccess = await hasActiveCourseEntitlement(req.authContext, { moduleId });
+      const result = getSanitizedModuleQuiz(moduleId, hasModuleAccess);
       if (!result.found) {
         res.status(404).json({ error: "未找到对应模块测验。" });
         return;
       }
       if (!result.allowed) {
         res.status(403).json({
-          error: "该模块测验需开通会员或班级权益后作答。",
+          error: "该模块测验需开通对应模块或班级权益后作答。",
           code: "ENTITLEMENT_REQUIRED",
         });
         return;
@@ -431,12 +470,12 @@ app.post(
     }
     try {
       const moduleId = String(req.params.moduleId || "").trim();
-      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+      const hasModuleAccess = await hasActiveCourseEntitlement(req.authContext, { moduleId });
       const result = gradeSingleQuizQuestion({
         moduleId,
         questionId: parsed.data.questionId,
         selectedIndex: parsed.data.selectedIndex,
-        hasPaidAccess,
+        hasPaidAccess: hasModuleAccess,
       });
       if (!result.ok) {
         res.status(result.status).json({ error: result.error });
@@ -461,12 +500,12 @@ app.post(
     }
     try {
       const moduleId = String(req.params.moduleId || "").trim();
-      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+      const hasModuleAccess = await hasActiveCourseEntitlement(req.authContext, { moduleId });
       const result = await gradeAndRecordQuizAttempt({
         userId: req.authContext!.user.id,
         moduleId,
         answers: parsed.data.answers,
-        hasPaidAccess,
+        hasPaidAccess: hasModuleAccess,
       });
       if (!result.ok) {
         res.status(result.status).json({ error: result.error });
@@ -1029,6 +1068,8 @@ const submissionSchema = z.object({
   diffSummary: z.string().max(20000).optional(),
   testCommandLog: z.string().max(20000).optional(),
   handoffSummary: z.string().max(15000).optional(),
+  decisionRationale: z.string().max(4000).optional(),
+  knownLimitations: z.string().max(4000).optional(),
   evalRunId: z.number().int().positive().nullable().optional(),
 });
 
@@ -1046,7 +1087,9 @@ app.post("/api/submissions", requireAuth, async (req: AuthedRequest, res: Respon
     return;
   }
   try {
-    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    const snapshot = await resolveUserEntitlementSnapshot(req.authContext);
+    const hasModuleAccess = snapshot.hasModuleAccess(parsed.data.moduleId);
+    const cohortPolicy = snapshot.canSubmitToCohort(parsed.data.cohortId);
     const result = await createOrResubmitLearnerWork({
       userId: req.authContext!.user.id,
       cohortId: parsed.data.cohortId,
@@ -1063,8 +1106,12 @@ app.post("/api/submissions", requireAuth, async (req: AuthedRequest, res: Respon
       diffSummary: parsed.data.diffSummary,
       testCommandLog: parsed.data.testCommandLog,
       handoffSummary: parsed.data.handoffSummary,
+      decisionRationale: parsed.data.decisionRationale,
+      knownLimitations: parsed.data.knownLimitations,
       evalRunId: parsed.data.evalRunId,
-      hasPaidAccess,
+      hasPaidAccess: hasModuleAccess,
+      canSubmitToCohort: cohortPolicy.allowed,
+      cohortDenyReason: cohortPolicy.reason,
     });
     if (!result.ok) {
       res.status(result.status).json({
@@ -1119,6 +1166,19 @@ app.post("/api/projects/workspaces", requireAuth, async (req: AuthedRequest, res
     return;
   }
   try {
+    if (parsed.data.cohortId) {
+      const snapshot = await resolveUserEntitlementSnapshot(req.authContext);
+      const cohortPolicy = snapshot.canSubmitToCohort(parsed.data.cohortId);
+      if (!cohortPolicy.allowed) {
+        res.status(403).json({
+          error:
+            cohortPolicy.reason ||
+            "当前账号权益不包含该班期（Cohort），无法绑定班级工作区。",
+          code: "ENTITLEMENT_REQUIRED",
+        });
+        return;
+      }
+    }
     const result = await createProjectWorkspace({
       userId: req.authContext!.user.id,
       ...parsed.data,
@@ -1223,6 +1283,13 @@ app.post("/api/projects/static-audit", requireAuth, async (req: AuthedRequest, r
     return;
   }
   try {
+    if (parsed.data.workspaceId) {
+      const wsCheck = await getUserProjectWorkspaces(req.authContext!.user.id);
+      if (!wsCheck.workspaces.some((w) => w.id === parsed.data.workspaceId)) {
+        res.status(404).json({ error: "未找到关联的个人项目工作区。" });
+        return;
+      }
+    }
     const audit = runDeterministicStaticAudit(parsed.data);
     const saved = await recordStaticAuditRun({
       userId: req.authContext!.user.id,
@@ -1231,7 +1298,13 @@ app.post("/api/projects/static-audit", requireAuth, async (req: AuthedRequest, r
       moduleId: parsed.data.moduleId,
       audit,
     });
-    res.json({ ok: true, audit, savedRunId: saved.id });
+    res.json({
+      ok: true,
+      audit,
+      savedRunId: saved.id,
+      ruleVersion: audit.ruleVersion,
+      verificationMode: audit.verificationMode,
+    });
   } catch (err) {
     console.error("[/api/projects/static-audit] error:", err);
     res.status(500).json({ error: "执行服务端静态审计失败。" });
@@ -1266,10 +1339,18 @@ app.post("/api/eval/runs", requireAuth, async (req: AuthedRequest, res: Response
     return;
   }
   try {
-    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
-    if (!hasPaidAccess) {
+    const evalModuleId =
+      parsed.data.datasetSlug === "runtime-kb-acl-eval-v1"
+        ? "m12"
+        : parsed.data.datasetSlug === "general-agent-workflow-eval-v1"
+        ? "m11"
+        : "m13-eng";
+    const hasAccess = await hasActiveCourseEntitlement(req.authContext, {
+      moduleId: evalModuleId,
+    });
+    if (!hasAccess) {
       res.status(403).json({
-        error: "标准化 Eval Runner 需具备有效课程或训练营权益后运行。",
+        error: "标准化 Eval Runner 需具备对应模块的有效课程、训练营或企业培训权益后运行。",
         code: "ENTITLEMENT_REQUIRED",
       });
       return;
@@ -1280,6 +1361,14 @@ app.post("/api/eval/runs", requireAuth, async (req: AuthedRequest, res: Response
     });
     res.status(201).json({ ok: true, ...result });
   } catch (err) {
+    const statusCode =
+      typeof (err as { statusCode?: unknown })?.statusCode === "number"
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+    if (statusCode === 404) {
+      res.status(404).json({ error: (err as Error).message });
+      return;
+    }
     console.error("[/api/eval/runs POST] error:", err);
     res.status(500).json({ error: "运行 Eval 评测失败。" });
   }
@@ -1299,12 +1388,13 @@ app.post("/api/tutor/ask", optionalAuth, async (req: AuthedRequest, res: Respons
     return;
   }
   try {
-    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    const snapshot = await resolveUserEntitlementSnapshot(req.authContext);
     const result = await askCourseGroundedTutor({
       userId: req.authContext?.user.id ?? null,
       question: parsed.data.question,
       moduleId: parsed.data.moduleId,
-      hasPaidAccess,
+      hasPaidAccess: snapshot.hasPaidAccess,
+      unlockedModuleIds: snapshot.unlockedModuleIds,
       requestId: parsed.data.requestId,
     });
     res.json(result);
@@ -1336,11 +1426,13 @@ app.post("/api/exam/sessions", requireAuth, async (req: AuthedRequest, res: Resp
     return;
   }
   try {
-    const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+    const hasModuleAccess = await hasActiveCourseEntitlement(req.authContext, {
+      moduleId: parsed.data.moduleId,
+    });
     const result = await startExamSession({
       userId: req.authContext!.user.id,
       moduleId: parsed.data.moduleId,
-      hasPaidAccess,
+      hasPaidAccess: hasModuleAccess,
     });
     if (!result.ok) {
       res.status(result.status).json({ error: result.error });
@@ -1369,13 +1461,13 @@ app.post(
       return;
     }
     try {
-      const hasPaidAccess = await hasActiveCourseEntitlement(req.authContext);
+      const snapshot = await resolveUserEntitlementSnapshot(req.authContext);
       const result = await submitExamStepAnswer({
         userId: req.authContext!.user.id,
         sessionId,
         questionId: parsed.data.questionId,
         selectedIndex: parsed.data.selectedIndex,
-        hasPaidAccess,
+        hasPaidAccess: (modId) => snapshot.hasModuleAccess(modId),
       });
       if (!result.ok) {
         res.status(result.status).json({ error: result.error });

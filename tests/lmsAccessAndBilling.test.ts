@@ -20,6 +20,7 @@ const mockLearnerAuth: AuthContext = {
     displayName: "Learner",
     avatarUrl: "",
   },
+  authMethod: "email_otp",
   roles: ["learner"],
   isAdmin: false,
   isInstructorOrTa: false,
@@ -34,6 +35,7 @@ const mockInstructorAuth: AuthContext = {
     displayName: "Instructor",
     avatarUrl: "",
   },
+  authMethod: "email_otp",
   roles: ["instructor"],
   isAdmin: false,
   isInstructorOrTa: true,
@@ -248,8 +250,13 @@ test("emailOtpService hashes/verifies 6-digit codes safely and enforces 60s cool
   assert.equal(verifyEmailOtpHash("other@example.com", "482913", storedHash), false);
   assert.equal(verifyEmailOtpHash("user@example.com", "000000", storedHash), false);
   assert.equal(verifyEmailOtpHash("user@example.com", "482913", "badhashformat"), false);
+  const tamperedLastChar = storedHash.endsWith("0") ? "1" : "0";
   assert.equal(
-    verifyEmailOtpHash("user@example.com", "482913", `${storedHash.slice(0, -1)}0`),
+    verifyEmailOtpHash(
+      "user@example.com",
+      "482913",
+      `${storedHash.slice(0, -1)}${tamperedLastChar}`
+    ),
     false
   );
 
@@ -398,4 +405,209 @@ test("domestic access readiness: index.html avoids Google Fonts CDN and BillingM
   );
   assert.equal(billingModal.includes("signInWithGoogle"), false);
   assert.equal(billingModal.includes("app:open-login"), true);
+});
+
+test("Stage 0: evaluateAccessPolicy enforces product tiers, module/track scopes, validity windows, and cohort isolation", async () => {
+  const {
+    doesScopeCoverModule,
+    evaluateAccessPolicy,
+  } = await import("../src/server/services/entitlementService.ts");
+
+  assert.equal(doesScopeCoverModule("module_list", "m3,m9", "m3"), true);
+  assert.equal(doesScopeCoverModule("module_list", "m3,m9", "m12"), false);
+  assert.equal(doesScopeCoverModule("track", "foundation", "m9"), true);
+  assert.equal(doesScopeCoverModule("track", "foundation", "m12"), false);
+
+  const now = new Date("2026-11-25T12:00:00.000Z");
+  const past = new Date("2026-11-01T00:00:00.000Z");
+  const future = new Date("2026-12-30T00:00:00.000Z");
+
+  // 1. Self-paced user with track scope: foundation modules unlocked, M12 locked, cohort submission denied
+  const selfPacedPolicy = evaluateAccessPolicy({
+    authContext: mockLearnerAuth,
+    entitlements: [
+      {
+        id: 1,
+        productId: 1,
+        productType: "self_paced",
+        scopeType: "track",
+        scopeRef: "foundation",
+        status: "active",
+        validFrom: past,
+        validUntil: future,
+      },
+    ],
+    enrolledCohortIds: [1],
+    cohortCodeById: new Map([[1, "COHORT-2026-Q4"]]),
+    now,
+  });
+  assert.equal(selfPacedPolicy.accessTier, "self_paced");
+  assert.equal(selfPacedPolicy.hasModuleAccess("m9"), true);
+  assert.equal(selfPacedPolicy.hasModuleAccess("m12"), false);
+  assert.equal(selfPacedPolicy.canSubmitToCohort(null).allowed, true);
+  assert.equal(selfPacedPolicy.canSubmitToCohort(1).allowed, false);
+
+  // 2. Cohort mentored entitlement strictly scoped to COHORT-2026-Q4 (id=1), blocked from other cohort (id=2)
+  const cohortPolicy = evaluateAccessPolicy({
+    authContext: mockLearnerAuth,
+    entitlements: [
+      {
+        id: 2,
+        productId: 2,
+        productType: "cohort_mentored",
+        scopeType: "cohort_track",
+        scopeRef: "COHORT-2026-Q4",
+        status: "active",
+        validFrom: past,
+        validUntil: future,
+        cohortId: 1,
+        cohortCode: "COHORT-2026-Q4",
+      },
+    ],
+    enrolledCohortIds: [1, 2],
+    cohortCodeById: new Map([
+      [1, "COHORT-2026-Q4"],
+      [2, "COHORT-2026-OTHER"],
+    ]),
+    now,
+  });
+  assert.equal(cohortPolicy.accessTier, "cohort_mentored");
+  assert.equal(cohortPolicy.hasModuleAccess("m12"), true);
+  assert.equal(cohortPolicy.canSubmitToCohort(1).allowed, true);
+  assert.equal(cohortPolicy.canSubmitToCohort(2).allowed, false);
+
+  // 3. Enterprise training scoped to ENT-2026-ACME:m3,m9 + expired/refunded entitlements rejected
+  const enterprisePolicy = evaluateAccessPolicy({
+    authContext: mockLearnerAuth,
+    entitlements: [
+      {
+        id: 3,
+        productId: 3,
+        productType: "enterprise_training",
+        scopeType: "enterprise_cohort",
+        scopeRef: "ENT-2026-ACME:m3,m9",
+        status: "active",
+        validFrom: past,
+        validUntil: future,
+        cohortId: 9,
+        cohortCode: "ENT-2026-ACME",
+      },
+      {
+        id: 4,
+        productId: 1,
+        productType: "self_paced",
+        scopeType: "all_modules",
+        scopeRef: "m1-m13-eng",
+        status: "refunded",
+        validFrom: past,
+        validUntil: future,
+      },
+    ],
+    enrolledCohortIds: [9],
+    cohortCodeById: new Map([[9, "ENT-2026-ACME"]]),
+    now,
+  });
+  assert.equal(enterprisePolicy.accessTier, "enterprise_training");
+  assert.equal(enterprisePolicy.hasModuleAccess("m3"), true);
+  assert.equal(enterprisePolicy.hasModuleAccess("m12"), false);
+  assert.equal(enterprisePolicy.canSubmitToCohort(9).allowed, true);
+});
+
+test("Stage 0: evaluateAdminBootstrapCheck and validateWebhookOrderConsistency enforce controlled security boundaries", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { evaluateAdminBootstrapCheck } = await import("../src/server/auth.ts");
+  const { validateWebhookOrderConsistency } = await import(
+    "../src/server/services/billingService.ts"
+  );
+
+  // Token-gated bootstrap
+  assert.equal(
+    evaluateAdminBootstrapCheck({
+      userEmail: "ops@example.com",
+      providedToken: "wrong-token",
+      env: { NODE_ENV: "production", ADMIN_BOOTSTRAP_TOKEN: "secret-boot-999" },
+    }).allowed,
+    false
+  );
+  assert.equal(
+    evaluateAdminBootstrapCheck({
+      userEmail: "ops@example.com",
+      providedToken: "secret-boot-999",
+      env: { NODE_ENV: "production", ADMIN_BOOTSTRAP_TOKEN: "secret-boot-999" },
+    }).allowed,
+    true
+  );
+
+  // Email whitelist + production block when unconfigured
+  assert.equal(
+    evaluateAdminBootstrapCheck({
+      userEmail: "stranger@example.com",
+      env: { NODE_ENV: "production", ADMIN_EMAIL: "admin@example.com" },
+    }).allowed,
+    false
+  );
+  assert.equal(
+    evaluateAdminBootstrapCheck({
+      userEmail: "admin@example.com",
+      env: { NODE_ENV: "production", ADMIN_EMAIL: "admin@example.com" },
+    }).allowed,
+    true
+  );
+  assert.equal(
+    evaluateAdminBootstrapCheck({
+      userEmail: "anyone@example.com",
+      env: { NODE_ENV: "production" },
+    }).allowed,
+    false
+  );
+
+  // Webhook consistency checks
+  assert.equal(
+    validateWebhookOrderConsistency(
+      { provider: "stripe", amountCents: 69900, currency: "CNY", status: "pending" },
+      { provider: "wechat", eventType: "payment.succeeded" }
+    ).valid,
+    false
+  );
+  assert.equal(
+    validateWebhookOrderConsistency(
+      { provider: "stripe", amountCents: 69900, currency: "CNY", status: "pending" },
+      {
+        provider: "stripe",
+        eventType: "payment.succeeded",
+        summaryJson: { amountCents: 100, currency: "CNY" },
+      }
+    ).valid,
+    false
+  );
+  assert.equal(
+    validateWebhookOrderConsistency(
+      { provider: "stripe", amountCents: 69900, currency: "CNY", status: "cancelled" },
+      { provider: "stripe", eventType: "payment.succeeded" }
+    ).valid,
+    false
+  );
+  assert.equal(
+    validateWebhookOrderConsistency(
+      { provider: "stripe", amountCents: 69900, currency: "CNY", status: "pending" },
+      {
+        provider: "stripe",
+        eventType: "payment.succeeded",
+        summaryJson: { amountCents: 69900, currency: "CNY" },
+      }
+    ).valid,
+    true
+  );
+
+  // Session token hygiene & .env.example completeness
+  const tokenStoreSrc = fs.readFileSync(
+    path.resolve(process.cwd(), "src/lib/authTokenStore.ts"),
+    "utf8"
+  );
+  assert.equal(tokenStoreSrc.includes("localStorage"), false);
+  assert.equal(tokenStoreSrc.includes("sessionStorage"), false);
+
+  const envExample = fs.readFileSync(path.resolve(process.cwd(), ".env.example"), "utf8");
+  assert.ok(envExample.includes("ADMIN_BOOTSTRAP_TOKEN="));
 });

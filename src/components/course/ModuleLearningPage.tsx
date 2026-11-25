@@ -82,10 +82,13 @@ import {
   previewSkillDiagnosticApi,
   submitQuizAnswers,
   submitSkillDiagnostic,
+  type InstructorPatternPilotScriptPayload,
   type QuizGradeResponse,
   type SanitizedQuizQuestion,
   type SingleQuestionCheckResponse,
 } from "@/lib/apiClient";
+import { getPilotGroupForModule } from "@/data/designPatternPilots";
+import DesignPatternPilotStudio from "./DesignPatternPilotStudio";
 
 interface ModuleLearningPageProps {
   moduleRecord: CourseModuleRecord;
@@ -185,6 +188,8 @@ export default function ModuleLearningPage({
   const [authorizedUnits, setAuthorizedUnits] = useState<CourseUnit[] | null>(null);
   const [authorizedTeachingPkg, setAuthorizedTeachingPkg] =
     useState<PublicModuleTeachingPackage | null>(null);
+  const [authorizedPatternScript, setAuthorizedPatternScript] =
+    useState<InstructorPatternPilotScriptPayload | null>(null);
   const [exportingPlan, setExportingPlan] = useState(false);
 
   useEffect(() => {
@@ -192,6 +197,7 @@ export default function ModuleLearningPage({
     setServerInstructorAllowed(isInstructorAuthorized);
     setAuthorizedUnits(null);
     setAuthorizedTeachingPkg(null);
+    setAuthorizedPatternScript(null);
     let active = true;
     fetchAuthorizedModuleDetail(moduleRecord.id)
       .then((res) => {
@@ -209,6 +215,9 @@ export default function ModuleLearningPage({
           setAuthorizedTeachingPkg(
             res.teachingPackage as unknown as PublicModuleTeachingPackage
           );
+        }
+        if (res.instructorAuthorized && res.patternPilotScript) {
+          setAuthorizedPatternScript(res.patternPilotScript);
         }
       })
       .catch(() => {
@@ -846,8 +855,24 @@ export default function ModuleLearningPage({
               <>
                 <button
                   type="button"
+                  onClick={() => onOpenProjectHub("workspace", moduleRecord.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-gemini-cyan/15 hover:bg-gemini-cyan/25 border border-gemini-cyan/40 text-xs text-gemini-cyan font-semibold cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                >
+                  <FolderGit2 className="w-3.5 h-3.5" />
+                  <span>Project Studio 工作区</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenProjectHub("eval", moduleRecord.id)}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                >
+                  <FlaskConical className="w-3.5 h-3.5 text-gemini-cyan" />
+                  <span>模拟 Eval</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => onOpenProjectHub("tutor", moduleRecord.id)}
-                  className="px-2.5 py-1.5 rounded-lg bg-gemini-purple/15 hover:bg-gemini-purple/25 border border-gemini-purple/40 text-xs text-purple-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                  className="px-2.5 py-1.5 rounded-lg bg-gemini-purple/15 hover:bg-gemini-purple/25 border border-gemini-purple/40 text-xs text-purple-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <Bot className="w-3.5 h-3.5" />
                   <span>问 Tutor</span>
@@ -855,18 +880,10 @@ export default function ModuleLearningPage({
                 <button
                   type="button"
                   onClick={() => onOpenProjectHub("exam", moduleRecord.id)}
-                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-xs text-emerald-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-xs text-emerald-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <ClipboardCheck className="w-3.5 h-3.5" />
                   <span>分步 Exam</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenProjectHub("workspace", moduleRecord.id)}
-                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <FolderGit2 className="w-3.5 h-3.5 text-gemini-cyan" />
-                  <span>Starter Kit</span>
                 </button>
               </>
             )}
@@ -874,10 +891,11 @@ export default function ModuleLearningPage({
             <button
               type="button"
               onClick={() => onSwitchToReveal({ moduleId: moduleRecord.id })}
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+              title="课前预习、概念图解与课后速查幻灯片（不作完成标准）"
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <PresentationIcon className="w-3.5 h-3.5 text-gemini-cyan" />
-              <span>打开 Reveal 幻灯片演示</span>
+              <span>预习/速查幻灯片 (Reveal)</span>
             </button>
           </div>
         </div>
@@ -1173,6 +1191,30 @@ export default function ModuleLearningPage({
             </div>
           )}
         </div>
+      )}
+
+      {/* Stage 1 Design Pattern Pilot Studio (M9/M3 & M5/M8) */}
+      {serverModuleAllowed && getPilotGroupForModule(moduleRecord.id) && (
+        <DesignPatternPilotStudio
+          moduleId={moduleRecord.id}
+          moduleCode={moduleRecord.code}
+          isInstructorView={isInstructorView}
+          patternPilotScript={authorizedPatternScript}
+          onOpenProjectHub={onOpenProjectHub}
+          onApplyDraftToPractice={(markdownDraft) => {
+            const practiceUnit =
+              effectiveModuleRecord.units.find(
+                (u) => u.type === "collab-practice" || Boolean(u.learnerArtifact)
+              ) ?? activeUnit;
+            if (!practiceUnit) return;
+            const prevDraft =
+              workspaceState.practiceNotes[practiceUnit.id]?.artifactDraft?.trim() || "";
+            const nextDraft = prevDraft
+              ? `${prevDraft}\n\n${markdownDraft}`
+              : markdownDraft;
+            onSavePracticeNote(practiceUnit.id, { artifactDraft: nextDraft });
+          }}
+        />
       )}
 
       {/* Main Split: Left Unit Nav + Right Unit Workspace */}

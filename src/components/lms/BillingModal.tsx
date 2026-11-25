@@ -54,6 +54,7 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
   const [selectedPriceId, setSelectedPriceId] = useState<number | null>(null);
   const [provider, setProvider] = useState<"wechat" | "alipay" | "stripe">("wechat");
   const [redeemInput, setRedeemInput] = useState("");
+  const [bootstrapTokenInput, setBootstrapTokenInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -166,7 +167,10 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
     setBusy(true);
     setFeedback(null);
     try {
-      await claimInitialAdmin();
+      await claimInitialAdmin(
+        session?.adminBootstrapRequiresToken ? bootstrapTokenInput.trim() : undefined
+      );
+      setBootstrapTokenInput("");
       setFeedback({
         ok: true,
         text: "已认领系统初始管理员身份！现在可打开「教务后台」生成兑换码、开班或分班。",
@@ -220,26 +224,55 @@ export default function BillingModal({ open, onClose, onEntitled }: BillingModal
                   </span>
                 </div>
                 <div className="font-mono text-[11px] text-slate-300">
-                  角色：{session.roles.join(" / ")} · 权益状态：{" "}
+                  角色：{session.roles.join(" / ")} · 登录方式：
+                  {session.authMethod === "firebase" ? "Firebase Auth" : "邮箱验证码 OTP"} · 权益档位：{" "}
                   <span
                     className={
                       session.hasPaidAccess ? "text-emerald-300 font-semibold" : "text-amber-300"
                     }
                   >
-                    {session.hasPaidAccess ? "已开通完整课程权益" : "当前仅免费试学 M1"}
+                    {session.accessTier === "staff"
+                      ? "教务 / 带班导师（全量教学视图）"
+                      : session.accessTier === "enterprise_training"
+                      ? "企业内训专班（Cohort 隔离）"
+                      : session.accessTier === "cohort_mentored"
+                      ? "小班指导班（含导师审阅与三锁授证）"
+                      : session.accessTier === "self_paced"
+                      ? "全课自学版（个人工作台与自测）"
+                      : "免费试学 M1"}
                   </span>
+                  {session.unlockedModuleIds && (
+                    <span className="ml-2 text-slate-400">
+                      · 已解锁 {session.unlockedModuleIds.length}/14 模块
+                    </span>
+                  )}
                 </div>
               </div>
               {session.canClaimInitialAdmin && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleClaimAdmin()}
-                  className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950 font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5" />
-                  <span>认领首个管理员权限</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {session.adminBootstrapRequiresToken && (
+                    <input
+                      type="password"
+                      value={bootstrapTokenInput}
+                      onChange={(e) => setBootstrapTokenInput(e.target.value)}
+                      placeholder="输入 ADMIN_BOOTSTRAP_TOKEN"
+                      className="px-2.5 py-1.5 rounded-lg bg-black/50 border border-amber-400/40 font-mono text-xs text-white placeholder:text-slate-500"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      (Boolean(session.adminBootstrapRequiresToken) &&
+                        !bootstrapTokenInput.trim())
+                    }
+                    onClick={() => void handleClaimAdmin()}
+                    className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950 font-semibold text-xs inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>认领首个管理员权限</span>
+                  </button>
+                </div>
               )}
             </>
           ) : (

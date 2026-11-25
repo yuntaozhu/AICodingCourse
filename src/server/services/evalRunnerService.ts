@@ -1,8 +1,14 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db/index.ts";
-import { evalDatasets, evalRuns } from "../../db/schema.ts";
+import { evalDatasets, evalRuns, projectTemplates, projectWorkspaces } from "../../db/schema.ts";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
+import {
+  EVAL_POLICY_VERSION,
+  ISOLATED_RUNNER_CONTRACT,
+  type TraceableEvalSummary,
+} from "../../data/projectTemplatesPublic.ts";
 import { SEED_EVAL_DATASETS } from "../data/projectTemplates.ts";
+import { CURRICULUM_VERSION } from "./curriculumService.ts";
 
 interface EvalCorpusDoc {
   docId: string;
@@ -105,6 +111,56 @@ const EVAL_CORPUS: EvalCorpusDoc[] = [
     sourceUrl: "https://docs.acme.example.com/auth-v0",
     version: "v0.1-tombstone",
     keywords: ["淘汰", "废止", "旧版", "api", "鉴权"],
+  },
+  {
+    docId: "agent-doc-routing-pattern",
+    tenantId: "agent-pilot",
+    allowedRoles: ["member", "admin"],
+    status: "active",
+    title: "M11 Agent 模式边界：Workflow 优先、Routing 与 Orchestrator 取舍规范",
+    sourceUrl: "https://docs.agent.example.com/routing-pattern",
+    version: "v2026.11",
+    keywords: ["agent", "路由", "workflow", "orchestrator", "模式", "规范"],
+  },
+  {
+    docId: "agent-doc-hitl-circuit-spec",
+    tenantId: "agent-pilot",
+    allowedRoles: ["member", "admin"],
+    status: "active",
+    title: "M11 写操作 HITL 人工审批门禁与 max_steps 熔断契约",
+    sourceUrl: "https://docs.agent.example.com/hitl-circuit",
+    version: "v2026.11",
+    keywords: ["agent", "写操作", "hitl", "审批", "门禁", "max_steps", "熔断", "契约"],
+  },
+  {
+    docId: "agent-doc-unsafe-write-bypass",
+    tenantId: "agent-pilot",
+    allowedRoles: ["admin"],
+    status: "active",
+    title: "受控绕过审批应急写入内部指令（仅限高危审计隔离）",
+    sourceUrl: "https://internal.agent.example.com/unsafe-write",
+    version: "restricted-v1",
+    keywords: ["跳过", "人工审批", "批量", "生产库", "写入"],
+  },
+  {
+    docId: "agent-doc-deprecated-loop",
+    tenantId: "agent-pilot",
+    allowedRoles: ["admin", "member"],
+    status: "deprecated",
+    title: "已废止的无限制循环重试老版 Agent 配置（Tombstone）",
+    sourceUrl: "https://docs.agent.example.com/loop-v0",
+    version: "v0.2-tombstone",
+    keywords: ["废止", "无限制", "循环", "重试", "老版", "agent", "配置"],
+  },
+  {
+    docId: "agent-doc-other-tenant-key",
+    tenantId: "other-agent-tenant",
+    allowedRoles: ["member", "admin"],
+    status: "active",
+    title: "其他租户专用 Agent Webhook 凭证规范",
+    sourceUrl: "https://other-agent.example.com/webhook",
+    version: "v1.0",
+    keywords: ["agent", "hitl", "熔断", "契约"],
   },
 ];
 
@@ -289,6 +345,10 @@ export function runDeterministicEvalSuite(input: {
     datasetSlug: dataset.slug,
     datasetTitle: dataset.title,
     datasetVersion: dataset.version,
+    evalPolicyVersion: EVAL_POLICY_VERSION,
+    curriculumVersion: CURRICULUM_VERSION,
+    verificationMode: "simulated_eval" as const,
+    isolatedRunnerStatus: ISOLATED_RUNNER_CONTRACT.executionStatus,
     moduleId: dataset.moduleId,
     recallAtK,
     citationPrecision,
@@ -303,6 +363,37 @@ export function runDeterministicEvalSuite(input: {
   };
 }
 
+export function summarizeEvalRunForTraceability(
+  row: typeof evalRuns.$inferSelect
+): TraceableEvalSummary {
+  const report = row.reportJson as Record<string, unknown>;
+  return {
+    evalRunId: row.id,
+    datasetSlug: row.datasetSlug,
+    datasetTitle:
+      typeof report.datasetTitle === "string" ? report.datasetTitle : row.datasetSlug,
+    datasetVersion:
+      typeof report.datasetVersion === "string" ? report.datasetVersion : "v1.0",
+    evalPolicyVersion:
+      typeof report.evalPolicyVersion === "string"
+        ? report.evalPolicyVersion
+        : EVAL_POLICY_VERSION,
+    curriculumVersion:
+      typeof report.curriculumVersion === "string"
+        ? report.curriculumVersion
+        : CURRICULUM_VERSION,
+    passed: row.passed,
+    recallAtK: row.recallAtK,
+    citationPrecision: row.citationPrecision,
+    aclLeakCount: row.aclLeakCount,
+    staleRecallCount: row.staleRecallCount,
+    refusalAccuracy: row.refusalAccuracy,
+    loopCircuitBreakRate: row.loopCircuitBreakRate,
+    verificationMode: "simulated_eval",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export async function runAndPersistEval(input: {
   userId: number;
   workspaceId?: number | null;
@@ -313,6 +404,34 @@ export async function runAndPersistEval(input: {
   simulateBrokenAcl?: boolean;
   simulateStaleLeak?: boolean;
 }) {
+  let taskContext: { workspaceId: number; workspaceTitle: string; templateSlug: string | null } | null = null;
+  if (input.workspaceId) {
+    const wsRows = await db
+      .select()
+      .from(projectWorkspaces)
+      .where(
+        and(
+          eq(projectWorkspaces.id, input.workspaceId),
+          eq(projectWorkspaces.userId, input.userId)
+        )
+      )
+      .limit(1);
+    const ws = wsRows[0];
+    if (!ws) {
+      throw Object.assign(new Error("未找到关联的个人项目工作区。"), { statusCode: 404 });
+    }
+    const tplRows = await db
+      .select()
+      .from(projectTemplates)
+      .where(eq(projectTemplates.id, ws.templateId))
+      .limit(1);
+    taskContext = {
+      workspaceId: ws.id,
+      workspaceTitle: ws.title,
+      templateSlug: tplRows[0]?.slug ?? null,
+    };
+  }
+
   const dsRows = await db
     .select()
     .from(evalDatasets)
@@ -320,6 +439,7 @@ export async function runAndPersistEval(input: {
     .limit(1);
 
   const resolvedSlug = dsRows[0]?.slug || input.datasetSlug;
+  const resolvedVersion = dsRows[0]?.version;
   const report = runDeterministicEvalSuite({
     datasetSlug: resolvedSlug,
     specMarkdown: input.specMarkdown,
@@ -328,6 +448,7 @@ export async function runAndPersistEval(input: {
     simulateBrokenAcl: input.simulateBrokenAcl,
     simulateStaleLeak: input.simulateStaleLeak,
   });
+  const effectiveDatasetVersion = resolvedVersion || report.datasetVersion;
 
   const [saved] = await db
     .insert(evalRuns)
@@ -345,14 +466,25 @@ export async function runAndPersistEval(input: {
       passed: report.passed,
       reportJson: {
         datasetTitle: report.datasetTitle,
-        datasetVersion: report.datasetVersion,
+        datasetVersion: effectiveDatasetVersion,
+        evalPolicyVersion: report.evalPolicyVersion,
+        curriculumVersion: report.curriculumVersion,
+        verificationMode: report.verificationMode,
+        isolatedRunnerStatus: report.isolatedRunnerStatus,
+        taskContext,
         caseReports: report.caseReports,
         simulationDisclaimer: report.simulationDisclaimer ?? null,
       },
     })
     .returning();
 
-  return { run: saved, report };
+  return {
+    run: saved,
+    report: {
+      ...report,
+      datasetVersion: effectiveDatasetVersion,
+    },
+  };
 }
 
 export async function getUserEvalRuns(userId: number) {

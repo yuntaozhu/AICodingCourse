@@ -1,6 +1,11 @@
+import type { Stage4PilotMetricsSummary } from "@/data/pilotMetrics";
 import type {
+  EvidenceTraceabilityChain,
+  IsolatedRunnerContract,
   ModuleProgressStage,
   ProjectLifecycleState,
+  SubmissionHistoryStatItem,
+  TraceableEvalSummary,
 } from "@/data/projectTemplatesPublic";
 import { getAuthHeaders } from "@/lib/authTokenStore";
 
@@ -115,30 +120,47 @@ export interface CatalogResponse {
     modules: PublicModuleOverview[];
   };
   hasPaidAccess: boolean;
+  accessTier?: "free" | "self_paced" | "cohort_mentored" | "enterprise_training" | "staff";
+  unlockedModuleIds?: string[];
+  canSubmitToCohort?: boolean;
 }
 
 export interface AuthSessionData {
   user: {
     id: number;
-    firebaseUid: string;
+    uid: string;
     email: string;
     displayName: string;
-    photoUrl: string | null;
+    avatarUrl: string;
+  };
+  authMethod?: "email_otp" | "firebase";
+  authPolicy?: {
+    primary: "email_otp";
+    secondary: "firebase_auth";
+    deprecated: string[];
   };
   roles: string[];
   isAdmin: boolean;
   isInstructorOrTa: boolean;
   assignedCohortIds: number[];
   canClaimInitialAdmin: boolean;
+  adminBootstrapRequiresToken?: boolean;
   hasPaidAccess: boolean;
+  accessTier?: "free" | "self_paced" | "cohort_mentored" | "enterprise_training" | "staff";
+  unlockedModuleIds?: string[];
+  canSubmitToCohort?: boolean;
+  allowedCohortCodes?: string[];
   entitlements: Array<{
     id: number;
     productId: number;
+    productType?: string;
+    productTitle?: string;
     scopeType: string;
     scopeRef: string;
     status: string;
     validFrom: string;
     validUntil: string | null;
+    isCurrentlyValid?: boolean;
   }>;
   cohortEnrolled: boolean;
   cohorts: LearnerCohortItem[];
@@ -254,9 +276,10 @@ export function fetchMySession() {
   return apiFetch<AuthSessionData>("/api/auth/me");
 }
 
-export function claimFirstAdminApi() {
+export function claimFirstAdminApi(bootstrapToken?: string) {
   return apiFetch<{ ok: true; role: string }>("/api/auth/claim-admin", {
     method: "POST",
+    body: JSON.stringify(bootstrapToken ? { bootstrapToken } : {}),
   });
 }
 
@@ -291,6 +314,27 @@ export function verifyEmailOtpApi(email: string, code: string) {
   });
 }
 
+export interface InstructorLessonPhasePayload {
+  phaseIndex: string;
+  title: string;
+  durationMinutes: number;
+  goal: string;
+  instructorAction: string;
+  liveRepoCue: string;
+  facilitationPrompt: string;
+}
+
+export interface InstructorPatternPilotScriptPayload {
+  moduleId: "m3" | "m5" | "m8" | "m9";
+  pairTitle: string;
+  lessonTitle: string;
+  totalMinutes: 90;
+  preClassMaterialsNote: string;
+  phases: InstructorLessonPhasePayload[];
+  overAbstractionRedFlags: string[];
+  oralDefenseQuestions: string[];
+}
+
 export function fetchAuthorizedModuleDetail(moduleId: string) {
   return apiFetch<{
     found: true;
@@ -300,6 +344,7 @@ export function fetchAuthorizedModuleDetail(moduleId: string) {
     simulationDisclaimer?: string;
     module: Record<string, unknown>;
     teachingPackage: Record<string, unknown> | null;
+    patternPilotScript?: InstructorPatternPilotScriptPayload | null;
   }>(`/api/curriculum/modules/${encodeURIComponent(moduleId)}`);
 }
 
@@ -629,6 +674,8 @@ export interface StaticAuditResultPayload {
   findings: StaticAuditFindingItem[];
   changedFiles: string[];
   auditedAt: string;
+  ruleVersion?: string;
+  verificationMode?: string;
 }
 
 export interface StaticAuditRunRecord {
@@ -680,6 +727,8 @@ export function fetchMyCohorts() {
     reviewsBySubmissionId: Record<number, SubmissionReviewRecord[]>;
     evidenceBySubmissionId?: Record<number, SubmissionEvidenceRecord>;
     auditBySubmissionId?: Record<number, StaticAuditRunRecord>;
+    evalBySubmissionId?: Record<number, TraceableEvalSummary>;
+    traceabilityBySubmissionId?: Record<number, EvidenceTraceabilityChain>;
   }>("/api/cohorts/my");
 }
 
@@ -714,6 +763,8 @@ export function submitCohortWork(payload: {
   diffSummary?: string;
   testCommandLog?: string;
   handoffSummary?: string;
+  decisionRationale?: string;
+  knownLimitations?: string;
   evalRunId?: number | null;
 }) {
   return apiFetch<{
@@ -734,6 +785,12 @@ export interface InstructorCockpitSubmission extends SubmissionRecord {
   reviews: SubmissionReviewRecord[];
   evidence?: SubmissionEvidenceRecord | null;
   latestAudit?: StaticAuditRunRecord | null;
+  linkedEvalRun?: TraceableEvalSummary | null;
+  humanEvidenceNotes?: {
+    decisionRationale: string;
+    knownLimitations: string;
+  } | null;
+  traceabilityChain?: EvidenceTraceabilityChain;
   simulationDisclaimer?: string;
 }
 
@@ -1041,6 +1098,10 @@ export interface EvalSuiteReport {
   datasetSlug: string;
   datasetTitle: string;
   datasetVersion: string;
+  evalPolicyVersion?: string;
+  curriculumVersion?: string;
+  verificationMode?: string;
+  isolatedRunnerStatus?: string;
   moduleId: string;
   recallAtK: number;
   citationPrecision: number;
@@ -1069,6 +1130,10 @@ export interface EvalRunRecord {
   reportJson: {
     datasetTitle?: string;
     datasetVersion?: string;
+    evalPolicyVersion?: string;
+    curriculumVersion?: string;
+    verificationMode?: string;
+    isolatedRunnerStatus?: string;
     caseReports?: EvalCaseReport[];
     simulationDisclaimer?: string | null;
   };
@@ -1142,6 +1207,7 @@ export interface AdminPilotMetrics {
   totalAiCalls: number;
   prereviewCalls: number;
   tutorCalls: number;
+  stage4?: Stage4PilotMetricsSummary;
 }
 
 export function fetchProjectTemplatesApi() {
@@ -1153,8 +1219,13 @@ export function fetchProjectTemplatesApi() {
 export function fetchProjectWorkspacesApi() {
   return apiFetch<{
     ok: true;
+    curriculumVersion?: string;
+    staticAuditRuleVersion?: string;
+    evalPolicyVersion?: string;
+    isolatedRunnerContract?: IsolatedRunnerContract;
     templates: ProjectTemplateRecord[];
     workspaces: ProjectWorkspaceRecord[];
+    submissions?: SubmissionHistoryStatItem[];
     recentAudits: StaticAuditRunRecord[];
     recentEvals: EvalRunRecord[];
   }>("/api/projects/workspaces");

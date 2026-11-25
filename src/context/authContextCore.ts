@@ -11,7 +11,7 @@ export interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
   refreshSession: () => Promise<AuthSessionData | null>;
-  claimInitialAdmin: () => Promise<void>;
+  claimInitialAdmin: (bootstrapToken?: string) => Promise<void>;
   requestEmailOtp: (email: string) => Promise<{
     deliveryMode: "email" | "dev_preview";
     cooldownSeconds: number;

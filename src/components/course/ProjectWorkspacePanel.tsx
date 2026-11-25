@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  BookOpen,
   Bot,
   CheckCircle2,
   ClipboardCheck,
+  Compass,
+  Cpu,
   Download,
   FileCode2,
   FlaskConical,
@@ -16,14 +19,24 @@ import {
   ShieldAlert,
   ShieldCheck,
   Terminal,
+  UserCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
 import { COURSE_MODULES } from "@/data/courseCurriculum";
 import {
+  buildStudioFlowReadiness,
+  calculateSubmissionStats,
+  EVAL_POLICY_VERSION,
   FIRST_HOUR_DEFAULT_CHECKLIST,
   GEO_EVIDENCE_LAB_DISCLAIMER,
+  ISOLATED_RUNNER_CONTRACT,
   PROJECT_LIFECYCLE_STAGES,
+  PROJECT_STUDIO_VERSION,
   STANDARD_STARTER_KIT_TREE,
+  STATIC_AUDIT_RULE_VERSION,
+  VERIFICATION_MODES,
+  type StudioFlowStepStatus,
+  type SubmissionHistoryStatItem,
 } from "@/data/projectTemplatesPublic";
 import {
   ApiError,
@@ -90,8 +103,13 @@ export default function ProjectWorkspacePanel({
   const [activeTab, setActiveTab] = useState<ProjectHubTab>(initialTab);
 
   // Templates & Workspaces state
+  const [curriculumVersion, setCurriculumVersion] = useState<string>(PROJECT_STUDIO_VERSION);
+  const [staticAuditRuleVersion, setStaticAuditRuleVersion] = useState<string>(
+    STATIC_AUDIT_RULE_VERSION
+  );
   const [templates, setTemplates] = useState<ProjectTemplateRecord[]>([]);
   const [workspaces, setWorkspaces] = useState<ProjectWorkspaceRecord[]>([]);
+  const [submissionsHistory, setSubmissionsHistory] = useState<SubmissionHistoryStatItem[]>([]);
   const [selectedWsId, setSelectedWsId] = useState<number | null>(null);
   const [loadingWs, setLoadingWs] = useState(false);
 
@@ -117,6 +135,8 @@ export default function ProjectWorkspacePanel({
   const [testCommandLogInput, setTestCommandLogInput] = useState(
     "npx tsc --noEmit -> 0 errors\nnpm test -> 31 passed\n静态规则门禁 -> 待验证"
   );
+  const [decisionRationaleInput, setDecisionRationaleInput] = useState("");
+  const [knownLimitationsInput, setKnownLimitationsInput] = useState("");
   const [artifactTitleInput, setArtifactTitleInput] = useState("");
 
   const [wsSaving, setWsSaving] = useState(false);
@@ -126,9 +146,9 @@ export default function ProjectWorkspacePanel({
   const [wsMessage, setWsMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Eval Workbench state
-  const [evalSlug, setEvalSlug] = useState<"geo-evidence-eval-v1" | "runtime-kb-acl-eval-v1">(
-    "geo-evidence-eval-v1"
-  );
+  const [evalSlug, setEvalSlug] = useState<
+    "geo-evidence-eval-v1" | "runtime-kb-acl-eval-v1" | "general-agent-workflow-eval-v1"
+  >("geo-evidence-eval-v1");
   const [simBrokenAcl, setSimBrokenAcl] = useState(false);
   const [simStaleLeak, setSimStaleLeak] = useState(false);
   const [evalRuns, setEvalRuns] = useState<EvalRunRecord[]>([]);
@@ -205,6 +225,7 @@ export default function ProjectWorkspacePanel({
         const res = await fetchProjectTemplatesApi();
         setTemplates(res.templates);
         setWorkspaces([]);
+        setSubmissionsHistory([]);
         return;
       }
       const [wsData, evData, exData] = await Promise.all([
@@ -214,6 +235,11 @@ export default function ProjectWorkspacePanel({
       ]);
       setTemplates(wsData.templates);
       setWorkspaces(wsData.workspaces);
+      setSubmissionsHistory(wsData.submissions ?? []);
+      if (wsData.curriculumVersion) setCurriculumVersion(wsData.curriculumVersion);
+      if (wsData.staticAuditRuleVersion) {
+        setStaticAuditRuleVersion(wsData.staticAuditRuleVersion);
+      }
       setEvalRuns(evData.runs);
       setExamSessions(exData.sessions);
 
@@ -391,6 +417,8 @@ export default function ProjectWorkspacePanel({
         diffSummary: diffSummaryInput,
         testCommandLog: testCommandLogInput,
         handoffSummary: wsHandoff,
+        decisionRationale: decisionRationaleInput,
+        knownLimitations: knownLimitationsInput,
         evalRunId: linkedEval?.id ?? null,
       });
       setWsMessage({
@@ -595,43 +623,286 @@ export default function ProjectWorkspacePanel({
     }
   };
 
+  const submissionStats = useMemo(
+    () => calculateSubmissionStats(submissionsHistory),
+    [submissionsHistory]
+  );
+
   const currentLifecycleIndex = activeWorkspace
     ? PROJECT_LIFECYCLE_STAGES.findIndex((s) => s.state === activeWorkspace.lifecycleState)
     : 0;
+
+  const activeTargetModuleId = activeTemplate?.targetModuleId || initialModuleId || "m13-eng";
+
+  const studioFlow = useMemo(
+    () =>
+      buildStudioFlowReadiness({
+        hasWorkspace: Boolean(activeWorkspace),
+        firstHourDoneCount: firstHourChecked.length,
+        staticAuditPassed: latestAudit ? latestAudit.passed : null,
+        hasPassedEval: evalRuns.some((r) => r.passed),
+        submissionCount: activeWorkspace?.submissionCount ?? submissionsHistory.length,
+        lifecycleState: activeWorkspace?.lifecycleState ?? null,
+      }),
+    [
+      activeWorkspace,
+      firstHourChecked.length,
+      latestAudit,
+      evalRuns,
+      submissionsHistory.length,
+    ]
+  );
+
+  const handleAskTutorFromContext = (questionText: string, modId?: string) => {
+    const resolvedModId = modId || activeTargetModuleId || "";
+    const unlockedSet = new Set(["m1", ...(session?.unlockedModuleIds ?? [])]);
+    setTutorModuleId(hasPaidAccess || unlockedSet.has(resolvedModId) ? resolvedModId : "");
+    setTutorQuestion(questionText);
+    setTutorError(null);
+    setTutorResponse(null);
+    setActiveTab("tutor");
+  };
+
+  const handleStudioStepClick = (step: StudioFlowStepStatus) => {
+    if (step.targetAction === "module") {
+      onOpenModule(activeTargetModuleId);
+      return;
+    }
+    if (step.targetAction === "archive") {
+      setActiveTab("workspace");
+      if (activeWorkspace) {
+        void handleExportHandoffArchive();
+      }
+      return;
+    }
+    if (step.targetAction === "tutor") {
+      const unlockedSet = new Set(["m1", ...(session?.unlockedModuleIds ?? [])]);
+      if (!tutorModuleId && (hasPaidAccess || unlockedSet.has(activeTargetModuleId))) {
+        setTutorModuleId(activeTargetModuleId);
+      }
+    }
+    setActiveTab(step.targetAction);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 text-xs">
       {/* Header Strip */}
       <section className="p-5 sm:p-6 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="font-mono text-[11px] text-gemini-cyan">
-              CODING EVERYTHING · PROJECT WORKBENCH · DETERMINISTIC GATES
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11px] text-slate-300 tabular-nums">
+              <span className="text-gemini-cyan font-semibold">
+                CODING EVERYTHING · PROJECT STUDIO
+              </span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span>课程版本 {curriculumVersion}</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span>静态规则 {staticAuditRuleVersion}</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span>Eval 策略 {EVAL_POLICY_VERSION}</span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span className="text-purple-200">
+                关联模块 {activeTargetModuleId.toUpperCase()}
+              </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Coding Everything 项目学院工作台
+              Coding Everything Project Studio（任务 · 工作区 · 评测 · 归档）
             </h1>
             <p className="text-slate-300 max-w-4xl leading-relaxed">
-              业务问题 → 系统边界 → AI 协作实现 → 服务端静态门禁与 Eval 确定性验证 → 导师人工批准与 Handoff 归档。首推标杆项目为企二代授权真实问题原型 <strong>GEO Evidence Lab</strong>。
+              真实任务 → Spec 与边界 → AI 协作实现 → 静态材料检查 &amp; 模拟 Eval → Course Tutor 引文诊断 → 人工批准与 Handoff 归档。首推标杆项目为企二代授权真实问题原型{" "}
+              <strong>GEO Evidence Lab</strong>。
             </p>
           </div>
-          {!hasPaidAccess && session && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => onOpenBilling?.()}
-              className="px-4 py-2 rounded-xl bg-gemini-purple text-white font-semibold cursor-pointer shrink-0"
+              onClick={() => onOpenModule(activeTargetModuleId)}
+              className="px-3.5 py-2 rounded-xl border border-gemini-cyan/40 bg-gemini-cyan/10 hover:bg-gemini-cyan/20 text-gemini-cyan font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 transition-colors"
             >
-              开通全部模块与 Eval 评测权限
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>打开 {activeTargetModuleId.toUpperCase()} 任务与模式卡</span>
             </button>
-          )}
+            {!hasPaidAccess && session && (
+              <button
+                type="button"
+                onClick={() => onOpenBilling?.()}
+                className="px-4 py-2 rounded-xl bg-gemini-purple text-white font-semibold cursor-pointer whitespace-nowrap shrink-0"
+              >
+                开通全部模块与 Eval 评测权限
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Submissions History Summary Stats Widget */}
+        <dl
+          aria-label="Submissions history summary stats"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-white/10 tabular-nums"
+        >
+          <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <dt className="text-[11px] font-mono text-slate-400">
+                Completed Tasks · 已完成任务
+              </dt>
+              <dd className="text-2xl font-bold font-mono text-white">
+                {submissionStats.completedTasks}
+              </dd>
+              <div className="text-[11px] text-slate-400">
+                {!session
+                  ? "登录后自动统计历史提交记录"
+                  : submissionStats.totalSubmissions > 0
+                  ? `共 ${submissionStats.totalSubmissions} 次历史提交已进入流程`
+                  : "暂无历史提交记录"}
+              </div>
+            </div>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <dt className="text-[11px] font-mono text-slate-400">
+                Static Audit Compliance Rate · 静态门禁合规率
+              </dt>
+              <dd className="text-2xl font-bold font-mono text-gemini-cyan">
+                {submissionStats.staticAuditComplianceRate !== null
+                  ? `${submissionStats.staticAuditComplianceRate}%`
+                  : "—"}
+              </dd>
+              <div className="text-[11px] text-slate-400">
+                {submissionStats.staticAuditedCount > 0
+                  ? `${submissionStats.staticPassedCount}/${submissionStats.staticAuditedCount} 次提交通过静态门禁`
+                  : "尚无关联静态门禁的历史提交"}
+              </div>
+            </div>
+            <ShieldCheck className="w-4 h-4 text-gemini-cyan shrink-0 mt-0.5" />
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <dt className="text-[11px] font-mono text-slate-400">
+                AI Pre-Review Success Rate · AI 预审通过率
+              </dt>
+              <dd className="text-2xl font-bold font-mono text-purple-200">
+                {submissionStats.aiPrereviewSuccessRate !== null
+                  ? `${submissionStats.aiPrereviewSuccessRate}%`
+                  : "—"}
+              </dd>
+              <div className="text-[11px] text-slate-400">
+                {submissionStats.aiPrereviewedCount > 0
+                  ? `${submissionStats.aiPrereviewPassedCount}/${submissionStats.aiPrereviewedCount} 次预审初筛达标`
+                  : "尚无已完成 AI 预审的历史提交"}
+              </div>
+            </div>
+            <Bot className="w-4 h-4 text-gemini-purple shrink-0 mt-0.5" />
+          </div>
+        </dl>
+
+        {/* Continuous 6-Step Project Studio Flow */}
+        <div className="pt-3 border-t border-white/10 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-semibold text-white inline-flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-gemini-cyan" />
+              <span>Project Studio 连续交付闭环（点击任意环节直达）</span>
+            </div>
+            <span className="font-mono text-[11px] text-slate-300 tabular-nums">
+              就绪度 {studioFlow.completedCount}/{studioFlow.totalSteps}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+            {studioFlow.steps.map((step) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => handleStudioStepClick(step)}
+                title={step.detail}
+                className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer space-y-1 ${
+                  step.completed
+                    ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-100"
+                    : step.recommendedNext
+                    ? "border-gemini-cyan/55 bg-gemini-cyan/10 text-white"
+                    : "border-white/10 bg-black/35 text-slate-300 hover:border-white/25"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 font-mono text-[10px] tabular-nums">
+                  <span className="text-gemini-cyan font-semibold">{step.indexLabel}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {step.completed ? (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                        <span className="text-emerald-300">已达标</span>
+                      </>
+                    ) : step.recommendedNext ? (
+                      <>
+                        <ArrowRight className="w-3 h-3 text-gemini-cyan" />
+                        <span className="text-gemini-cyan">建议下一步</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">待推进</span>
+                    )}
+                  </span>
+                </div>
+                <div className="font-semibold text-[11px] text-white truncate">
+                  {step.title}
+                </div>
+                <div className="text-[10px] font-mono text-slate-400 truncate">
+                  {step.verificationModeLabel}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Explicit 4-Mode Verification Honesty Legend */}
+        <div className="pt-3 border-t border-white/10 space-y-2">
+          <div className="font-mono text-[11px] text-slate-400">
+            四类验证口径边界声明（严格区分静态检查 / 模拟评测 / 隔离沙盒待接入 / 人工批准）
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
+            <div className="p-2.5 rounded-xl bg-black/35 border border-white/10 space-y-1">
+              <div className="font-semibold text-gemini-cyan inline-flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>{VERIFICATION_MODES.static_material_check.label}</span>
+              </div>
+              <div className="text-slate-400 leading-relaxed">
+                {VERIFICATION_MODES.static_material_check.boundaryNote}
+              </div>
+            </div>
+            <div className="p-2.5 rounded-xl bg-black/35 border border-white/10 space-y-1">
+              <div className="font-semibold text-purple-200 inline-flex items-center gap-1.5">
+                <FlaskConical className="w-3.5 h-3.5 shrink-0 text-gemini-purple" />
+                <span>{VERIFICATION_MODES.simulated_eval.label}</span>
+              </div>
+              <div className="text-slate-400 leading-relaxed">
+                {VERIFICATION_MODES.simulated_eval.boundaryNote}
+              </div>
+            </div>
+            <div className="p-2.5 rounded-xl bg-black/35 border border-white/10 space-y-1">
+              <div className="font-semibold text-amber-200 inline-flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+                <span>{VERIFICATION_MODES.real_execution_pending_runner.shortLabel}</span>
+              </div>
+              <div className="text-slate-400 leading-relaxed">
+                {VERIFICATION_MODES.real_execution_pending_runner.boundaryNote}
+              </div>
+            </div>
+            <div className="p-2.5 rounded-xl bg-black/35 border border-white/10 space-y-1">
+              <div className="font-semibold text-emerald-200 inline-flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                <span>{VERIFICATION_MODES.human_approval.label}</span>
+              </div>
+              <div className="text-slate-400 leading-relaxed">
+                {VERIFICATION_MODES.human_approval.boundaryNote}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 4 Internal Tabs */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
           {(
             [
-              { id: "workspace", label: "Starter Kit 与项目交付", icon: FolderGit2 },
-              { id: "eval", label: "标准化 Eval 评测台", icon: FlaskConical },
+              { id: "workspace", label: "工作区与静态门禁", icon: FolderGit2 },
+              { id: "eval", label: "模拟 Eval 评测台", icon: FlaskConical },
               { id: "tutor", label: "Course Tutor（只读引文）", icon: Bot },
               { id: "exam", label: "分步认证 Exam", icon: ClipboardCheck },
             ] as const
@@ -643,7 +914,7 @@ export default function ProjectWorkspacePanel({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2 rounded-xl font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`px-3.5 py-2 rounded-xl font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
                   active
                     ? "bg-gemini-cyan text-slate-950 font-semibold"
                     : "bg-white/[0.04] border border-white/10 text-slate-300 hover:text-white hover:bg-white/10"
@@ -1119,13 +1390,40 @@ export default function ProjectWorkspacePanel({
                       </div>
                       <div className="space-y-1">
                         <label className="block text-slate-300 font-medium">
-                          验证命令输出日志（tsc / lint / npm test / eval）
+                          验证命令输出日志（学员自贴本地/CI 输出 · 真实隔离 Runner 待 Stage 3 接入）
                         </label>
                         <textarea
                           rows={4}
                           value={testCommandLogInput}
                           onChange={(e) => setTestCommandLogInput(e.target.value)}
                           className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-slate-300 font-medium">
+                          模式选择理由与反过度设计说明（人工审校证据）
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={decisionRationaleInput}
+                          onChange={(e) => setDecisionRationaleInput(e.target.value)}
+                          placeholder="说明为何选用/拒绝某设计模式、备选简单方案比较、以及边界放在哪里..."
+                          className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-slate-300 font-medium">
+                          已知限制与人工接管条件（Known Limitations）
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={knownLimitationsInput}
+                          onChange={(e) => setKnownLimitationsInput(e.target.value)}
+                          placeholder="明确列出当前原型未覆盖的场景、故障降级方式与必须人工介入接管的条件..."
+                          className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
                         />
                       </div>
                     </div>
@@ -1140,6 +1438,24 @@ export default function ProjectWorkspacePanel({
                         onChange={(e) => setWsHandoff(e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 font-mono text-white"
                       />
+                    </div>
+
+                    {/* Stage 3 Isolated Runner Boundary Contract */}
+                    <div className="p-3 rounded-xl border border-white/10 bg-black/35 space-y-1 text-[11px]">
+                      <div className="font-mono text-amber-200 font-semibold flex flex-wrap items-center justify-between gap-2 tabular-nums">
+                        <span>
+                          执行隔离契约 · {ISOLATED_RUNNER_CONTRACT.executionStatus}
+                        </span>
+                        <span className="text-slate-400">
+                          公网 {ISOLATED_RUNNER_CONTRACT.networkEgress} · 密钥{" "}
+                          {ISOLATED_RUNNER_CONTRACT.secretAccess} · 超时{" "}
+                          {ISOLATED_RUNNER_CONTRACT.maxRuntimeSeconds}s · 内存{" "}
+                          {ISOLATED_RUNNER_CONTRACT.maxMemoryMb}MB
+                        </span>
+                      </div>
+                      <div className="text-slate-400 leading-relaxed">
+                        {ISOLATED_RUNNER_CONTRACT.summary}
+                      </div>
                     </div>
 
                     {/* Authoritative Server Static Audit Result Box */}
@@ -1162,11 +1478,15 @@ export default function ProjectWorkspacePanel({
                             ) : (
                               <ShieldAlert className="w-4 h-4" />
                             )}
-                            服务端静态审计：
-                            {latestAudit.passed ? "PASSED（允许提交审校）" : "BLOCKED（已阻断提交）"}
+                            <span>
+                              {VERIFICATION_MODES.static_material_check.label}（
+                              {latestAudit.ruleVersion || staticAuditRuleVersion}）：
+                              {latestAudit.passed ? "PASSED（允许提交审校）" : "BLOCKED（已阻断提交）"}
+                            </span>
                           </span>
                           <span className="text-slate-300 tabular-nums">
-                            阻塞 {latestAudit.blockingCount} · 警告 {latestAudit.warningCount}
+                            不直接运行代码 · 阻塞 {latestAudit.blockingCount} · 警告{" "}
+                            {latestAudit.warningCount}
                           </span>
                         </div>
                         {latestAudit.findings.length > 0 && (
@@ -1174,19 +1494,34 @@ export default function ProjectWorkspacePanel({
                             {latestAudit.findings.map((f, idx) => (
                               <li
                                 key={`${f.id}-${idx}`}
-                                className="p-2 rounded-lg bg-black/40 border border-white/10"
+                                className="p-2.5 rounded-lg bg-black/40 border border-white/10 space-y-1"
                               >
-                                <span
-                                  className={`font-mono mr-2 ${
-                                    f.severity === "blocking"
-                                      ? "text-rose-300"
-                                      : "text-amber-300"
-                                  }`}
-                                >
-                                  [{f.ruleId} · {f.severity}]
-                                </span>
-                                <span className="font-semibold text-white">{f.title}</span>
-                                <div className="text-slate-300 mt-0.5">{f.detail}</div>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <span
+                                      className={`font-mono mr-2 ${
+                                        f.severity === "blocking"
+                                          ? "text-rose-300"
+                                          : "text-amber-300"
+                                      }`}
+                                    >
+                                      [{f.ruleId} · {f.severity}]
+                                    </span>
+                                    <span className="font-semibold text-white">{f.title}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleAskTutorFromContext(
+                                        `我在 ${activeTargetModuleId.toUpperCase()} 静态检查命中了 ${f.ruleId}（${f.title}）：${f.detail} 请结合已解锁课程材料说明正确边界与修复思路。`
+                                      )
+                                    }
+                                    className="px-2 py-0.5 rounded border border-gemini-purple/40 bg-gemini-purple/15 text-purple-200 hover:bg-gemini-purple/25 font-mono text-[10px] cursor-pointer whitespace-nowrap shrink-0"
+                                  >
+                                    向 Tutor 诊断此问题 →
+                                  </button>
+                                </div>
+                                <div className="text-slate-300">{f.detail}</div>
                               </li>
                             ))}
                           </ul>
@@ -1228,13 +1563,82 @@ export default function ProjectWorkspacePanel({
                         type="button"
                         disabled={submittingWork}
                         onClick={() => void handleSubmitWorkspaceArtifact()}
-                        className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl bg-gemini-cyan text-slate-950 font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>{submittingWork ? "校验并提交中..." : "提交证据给导师审校"}</span>
                       </button>
                     </div>
                   </div>
+
+                  {/* Submission History & Curriculum Version Traceability */}
+                  {submissionsHistory.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-white">
+                          最近提交历史与版本追溯 ({submissionsHistory.length})
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-400">
+                          {VERIFICATION_MODES.human_approval.label}才可正式授证
+                        </span>
+                      </div>
+                      <div className="divide-y divide-white/10 rounded-xl border border-white/10 bg-black/35 overflow-hidden">
+                        {submissionsHistory.slice(0, 6).map((sub) => (
+                          <div
+                            key={sub.id}
+                            className="p-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                          >
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="font-medium text-white truncate">
+                                #{sub.id} · {sub.artifactTitle}
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-400 tabular-nums">
+                                模块 {sub.moduleId.toUpperCase()} · 课程版本{" "}
+                                {sub.curriculumVersion || curriculumVersion} · 更新于{" "}
+                                {sub.updatedAt.slice(0, 10)}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 font-mono text-[10px] shrink-0">
+                              <span
+                                className={
+                                  sub.staticAuditPassed === true
+                                    ? "text-emerald-300"
+                                    : sub.staticAuditPassed === false
+                                    ? "text-rose-300"
+                                    : "text-slate-400"
+                                }
+                              >
+                                静态检查:
+                                {sub.staticAuditPassed === true
+                                  ? "PASS"
+                                  : sub.staticAuditPassed === false
+                                  ? "FAIL"
+                                  : "N/A"}
+                              </span>
+                              <span className="text-slate-300">
+                                AI预审:{sub.hasAiPrereview ? "有草稿(仅供参考)" : "未运行"}
+                              </span>
+                              <span
+                                className={
+                                  sub.status === "approved"
+                                    ? "text-emerald-300 font-semibold"
+                                    : sub.status === "changes_requested"
+                                    ? "text-amber-300 font-semibold"
+                                    : "text-gemini-cyan"
+                                }
+                              >
+                                {sub.status === "approved"
+                                  ? "人工已批准"
+                                  : sub.status === "changes_requested"
+                                  ? "待修改重交"
+                                  : "待导师审校"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1264,13 +1668,19 @@ export default function ProjectWorkspacePanel({
                 value={evalSlug}
                 onChange={(e) =>
                   setEvalSlug(
-                    e.target.value as "geo-evidence-eval-v1" | "runtime-kb-acl-eval-v1"
+                    e.target.value as
+                      | "geo-evidence-eval-v1"
+                      | "runtime-kb-acl-eval-v1"
+                      | "general-agent-workflow-eval-v1"
                   )
                 }
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/15 text-white"
               >
                 <option value="geo-evidence-eval-v1">
-                  geo-evidence-eval-v1 · GEO 公开来源与合规边界集 (M13-Eng)
+                  geo-evidence-eval-v1 · GEO 公开来源与合规边界集 (M13-Eng 真实业务试点)
+                </option>
+                <option value="general-agent-workflow-eval-v1">
+                  general-agent-workflow-eval-v1 · 通用 Agent 路由、HITL 与熔断集 (M11 通用 Agent 试点)
                 </option>
                 <option value="runtime-kb-acl-eval-v1">
                   runtime-kb-acl-eval-v1 · 运行时多租户 ACL 与 Tombstone 集 (M12/M13)
@@ -1370,8 +1780,11 @@ export default function ProjectWorkspacePanel({
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div>
-                    <div className="font-mono text-[11px] text-gemini-cyan">
-                      {activeEvalReport.datasetSlug} · {activeEvalReport.datasetVersion}
+                    <div className="font-mono text-[11px] text-gemini-cyan tabular-nums">
+                      {VERIFICATION_MODES.simulated_eval.label} · {activeEvalReport.datasetSlug} @{" "}
+                      {activeEvalReport.datasetVersion} · 策略{" "}
+                      {activeEvalReport.evalPolicyVersion || EVAL_POLICY_VERSION} · 课程版本{" "}
+                      {activeEvalReport.curriculumVersion || curriculumVersion}
                     </div>
                     <h3 className="text-base font-bold text-white">
                       {activeEvalReport.datasetTitle}
@@ -1384,9 +1797,15 @@ export default function ProjectWorkspacePanel({
                         : "bg-rose-500/20 text-rose-300 border border-rose-400/40"
                     }`}
                   >
-                    {activeEvalReport.passed ? "GATE PASSED" : "GATE FAILED"}
+                    {activeEvalReport.passed ? "SIMULATED GATE PASSED" : "SIMULATED GATE FAILED"}
                   </span>
                 </div>
+
+                {activeEvalReport.simulationDisclaimer && (
+                  <div className="p-2.5 rounded-xl border border-amber-400/35 bg-amber-500/10 text-[11px] text-amber-100 leading-relaxed">
+                    {activeEvalReport.simulationDisclaimer}
+                  </div>
+                )}
 
                 {/* 6 KPI Cells */}
                 <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 tabular-nums font-mono">
@@ -1452,15 +1871,31 @@ export default function ProjectWorkspacePanel({
                           : "border-rose-400/40 bg-rose-500/10"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-white">{c.query}</span>
-                        <span
-                          className={`font-mono text-[10px] shrink-0 ${
-                            c.passed ? "text-emerald-300" : "text-rose-300"
-                          }`}
-                        >
-                          {c.passed ? "PASS" : "FAIL"}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!c.passed && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAskTutorFromContext(
+                                  `在 ${activeEvalReport.datasetSlug} 评测中，Case「${c.query}」失败（${c.reason || c.note}）。请问应当如何调整 ACL Pre-filter、Tombstone 或 Pipeline 边界？`,
+                                  activeEvalReport.moduleId
+                                )
+                              }
+                              className="px-2 py-0.5 rounded border border-gemini-purple/40 bg-gemini-purple/15 text-purple-200 hover:bg-gemini-purple/25 font-mono text-[10px] cursor-pointer whitespace-nowrap"
+                            >
+                              用 Tutor 排查 →
+                            </button>
+                          )}
+                          <span
+                            className={`font-mono text-[10px] ${
+                              c.passed ? "text-emerald-300" : "text-rose-300"
+                            }`}
+                          >
+                            {c.passed ? "PASS" : "FAIL"}
+                          </span>
+                        </div>
                       </div>
                       <div className="text-[11px] text-slate-400">{c.note}</div>
                       <div className="font-mono text-[10px] text-slate-300">
@@ -1485,7 +1920,7 @@ export default function ProjectWorkspacePanel({
           >
             <div className="space-y-1">
               <div className="font-mono text-[11px] text-gemini-purple">
-                READ-ONLY GROUNDED TUTOR · NO PROGRESS/SKILL MUTATION
+                READ-ONLY GROUNDED TUTOR · NO PROGRESS/SKILL MUTATION · v{curriculumVersion}
               </div>
               <h2 className="text-base font-bold text-white">
                 Course-grounded 课程伴学助教（与 Exam 严格隔离）
@@ -1494,6 +1929,36 @@ export default function ProjectWorkspacePanel({
                 Tutor 仅检索当前账号已解锁的课程章节与知识库（未付费用户仅检索 M1），回答必附来源引用与下一步可验证实操；拒绝透露测验答案、越权访问未解锁模块或跨纲编造。
               </p>
             </div>
+
+            {activeTemplate && (
+              <div className="p-2.5 rounded-xl border border-gemini-cyan/30 bg-gemini-cyan/[0.06] space-y-1.5 text-[11px]">
+                <div className="font-mono text-gemini-cyan">
+                  当前联动项目：{activeWorkspace?.title || activeTemplate.title} (
+                  {activeTargetModuleId.toUpperCase()})
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAskTutorFromContext(
+                        `围绕当前项目「${activeWorkspace?.title || activeTemplate.title}」，如何检查 SPEC.md 边界、规则隔离与失败回退条件？`,
+                        activeTargetModuleId
+                      )
+                    }
+                    className="px-2 py-1 rounded bg-white/10 hover:bg-white/15 text-slate-100 font-mono text-[10px] cursor-pointer whitespace-nowrap"
+                  >
+                    带入当前工作区边界提问
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenModule(activeTargetModuleId)}
+                    className="px-2 py-1 rounded border border-white/15 text-slate-300 hover:text-white font-mono text-[10px] cursor-pointer whitespace-nowrap"
+                  >
+                    回到 {activeTargetModuleId.toUpperCase()} 模块
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="block text-slate-300 font-medium">限定课程模块（可选）</label>
@@ -1648,8 +2113,8 @@ export default function ProjectWorkspacePanel({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           <div className="lg:col-span-4 p-5 rounded-2xl bg-[#0b0f19] border border-white/10 space-y-4">
             <div className="space-y-1">
-              <div className="font-mono text-[11px] text-gemini-cyan">
-                BACKEND-GRADED STEP EXAM · ZERO CLIENT ANSWERS
+              <div className="font-mono text-[11px] text-gemini-cyan tabular-nums">
+                BACKEND-GRADED STEP EXAM · ZERO CLIENT ANSWERS · v{curriculumVersion}
               </div>
               <h2 className="text-base font-bold text-white">
                 分步认证 Exam（服务端逐题判分）

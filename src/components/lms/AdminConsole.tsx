@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Ban,
   CalendarPlus,
   CheckCircle2,
+  Clock,
   CreditCard,
+  GitCompare,
   KeyRound,
+  Layers,
   MessageSquare,
   Plus,
   ShieldCheck,
@@ -13,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/authContextCore";
 import { COURSE_MODULES } from "@/data/courseCurriculum";
+import { STAGE4_PILOT_MILESTONE_PRESETS } from "@/data/pilotMetrics";
 import {
   adminAssignInstructorApi,
   adminCancelOrderApi,
@@ -177,55 +182,238 @@ export default function AdminConsole() {
         data && (
           <div className="space-y-6">
             {pilotMetrics && (
-              <section className="p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-3">
+              <section className="p-5 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-semibold text-white">
-                    Coding Everything 试点量化指标看板（严格统计自云端真实数据库）
+                  <div>
+                    <h2 className="text-sm font-semibold text-white">
+                      小班试点量化指标与课程演进决策台
+                    </h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      严格汇总自真实数据库记录（无数据样本时显示 —，不生成估算或模拟数值）
+                    </p>
                   </div>
-                  <span className="font-mono text-[10px] text-slate-400">
-                    实时聚合 /api/admin/metrics
+                  <span className="font-mono text-[11px] tabular-nums text-slate-400">
+                    工作区 {pilotMetrics.totalWorkspaces} · 提交 {pilotMetrics.totalSubmissions} · 人工审校{" "}
+                    {pilotMetrics.totalReviews}
                   </span>
                 </div>
+
+                {/* Top 6 Platform Baseline Metrics */}
                 <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono tabular-nums">
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">项目工作区 / 已交付</dt>
+                    <dt className="text-[11px] text-slate-400">项目工作区 / 已交付</dt>
                     <dd className="text-base font-bold text-white mt-0.5">
                       {pilotMetrics.totalWorkspaces} / {pilotMetrics.completedProjects}
                     </dd>
                   </div>
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">作业人工通过率</dt>
+                    <dt className="text-[11px] text-slate-400">作业人工通过率</dt>
                     <dd className="text-base font-bold text-emerald-300 mt-0.5">
                       {pilotMetrics.submissionPassRatePct}% ({pilotMetrics.approvedSubmissions}/
                       {pilotMetrics.totalSubmissions})
                     </dd>
                   </div>
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">静态门禁阻断率</dt>
+                    <dt className="text-[11px] text-slate-400">静态门禁阻断率</dt>
                     <dd className="text-base font-bold text-amber-300 mt-0.5">
                       {pilotMetrics.staticBlockRatePct}% ({pilotMetrics.blockedAudits}/
                       {pilotMetrics.totalAudits})
                     </dd>
                   </div>
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">标准化 Eval 通过</dt>
+                    <dt className="text-[11px] text-slate-400">标准化 Eval 通过</dt>
                     <dd className="text-base font-bold text-gemini-cyan mt-0.5">
                       {pilotMetrics.passedEvalRuns} / {pilotMetrics.totalEvalRuns}
                     </dd>
                   </div>
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">认证 Exam 完考/通过</dt>
+                    <dt className="text-[11px] text-slate-400">认证 Exam 完考/通过</dt>
                     <dd className="text-base font-bold text-white mt-0.5">
                       {pilotMetrics.completedExams} / {pilotMetrics.passedExams}
                     </dd>
                   </div>
                   <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                    <dt className="text-[10px] text-slate-400">Tutor / 预审调用</dt>
+                    <dt className="text-[11px] text-slate-400">Tutor / 预审调用</dt>
                     <dd className="text-base font-bold text-purple-200 mt-0.5">
                       {pilotMetrics.tutorCalls} / {pilotMetrics.prereviewCalls}
                     </dd>
                   </div>
                 </dl>
+
+                {/* Stage 4: 5 Core Pre-Pilot Metrics */}
+                {pilotMetrics.stage4 && (
+                  <div className="pt-4 border-t border-white/10 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold text-white">
+                        Stage 4 五项核心试点度量（首次产出、证据完整度、失败修复、判断迁移、导师反馈）
+                      </h3>
+                      <span className="text-[11px] text-slate-400 font-mono tabular-nums">
+                        待导师人工复核 {pilotMetrics.stage4.reviewTurnaround.pendingReviewCount} 份
+                      </span>
+                    </div>
+
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 tabular-nums">
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                        <dt className="text-[11px] text-slate-400">1. 首次产出时间</dt>
+                        <dd className="font-mono text-base font-bold text-white">
+                          {pilotMetrics.stage4.timeToFirstOutput.avgHours !== null
+                            ? `${pilotMetrics.stage4.timeToFirstOutput.avgHours}h`
+                            : "—"}
+                        </dd>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          中位数{" "}
+                          {pilotMetrics.stage4.timeToFirstOutput.medianHours !== null
+                            ? `${pilotMetrics.stage4.timeToFirstOutput.medianHours}h`
+                            : "—"}{" "}
+                          · 样本 {pilotMetrics.stage4.timeToFirstOutput.sampleCount}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                        <dt className="text-[11px] text-slate-400">2. 证据完整度均值</dt>
+                        <dd className="font-mono text-base font-bold text-emerald-300">
+                          {pilotMetrics.stage4.evidenceCompleteness.avgScorePct !== null
+                            ? `${pilotMetrics.stage4.evidenceCompleteness.avgScorePct}%`
+                            : "—"}
+                        </dd>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          全齐备 {pilotMetrics.stage4.evidenceCompleteness.fullComplianceCount}/
+                          {pilotMetrics.stage4.evidenceCompleteness.sampleCount}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                        <dt className="text-[11px] text-slate-400">3. 测试/门禁失败修复率</dt>
+                        <dd className="font-mono text-base font-bold text-gemini-cyan">
+                          {pilotMetrics.stage4.failureFixRate.fixRatePct !== null
+                            ? `${pilotMetrics.stage4.failureFixRate.fixRatePct}%`
+                            : "—"}
+                        </dd>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          已修复 {pilotMetrics.stage4.failureFixRate.resolvedFailureEpisodes}/
+                          {pilotMetrics.stage4.failureFixRate.totalFailureEpisodes} 次失败事件
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                        <dt className="text-[11px] text-slate-400">4. 设计判断迁移情况</dt>
+                        <dd className="font-mono text-base font-bold text-purple-200">
+                          {pilotMetrics.stage4.patternJudgmentTransfer.transferRatePct !== null
+                            ? `${pilotMetrics.stage4.patternJudgmentTransfer.transferRatePct}%`
+                            : "—"}
+                        </dd>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          理由说明率{" "}
+                          {pilotMetrics.stage4.patternJudgmentTransfer.rationaleDocumentedRatePct !==
+                          null
+                            ? `${pilotMetrics.stage4.patternJudgmentTransfer.rationaleDocumentedRatePct}%`
+                            : "—"}{" "}
+                          · 试点 {pilotMetrics.stage4.patternJudgmentTransfer.pilotLearnerCount} 人
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-1">
+                        <dt className="text-[11px] text-slate-400">5. 导师反馈周期</dt>
+                        <dd className="font-mono text-base font-bold text-amber-300">
+                          {pilotMetrics.stage4.reviewTurnaround.avgHours !== null
+                            ? `${pilotMetrics.stage4.reviewTurnaround.avgHours}h`
+                            : "—"}
+                        </dd>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          中位数{" "}
+                          {pilotMetrics.stage4.reviewTurnaround.medianHours !== null
+                            ? `${pilotMetrics.stage4.reviewTurnaround.medianHours}h`
+                            : "—"}{" "}
+                          · 已审 {pilotMetrics.stage4.reviewTurnaround.sampleCount}
+                        </div>
+                      </div>
+                    </dl>
+
+                    {/* Dual-Project Pilot Comparison + Expansion Gate */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 pt-1">
+                      {[
+                        pilotMetrics.stage4.pilotProjectTracks.realBusiness,
+                        pilotMetrics.stage4.pilotProjectTracks.generalAgent,
+                      ].map((track) => (
+                        <div
+                          key={track.slug}
+                          className="lg:col-span-4 p-3.5 rounded-xl bg-black/35 border border-white/10 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                            <span className="inline-flex items-center gap-1.5 text-slate-200 font-medium">
+                              <Layers className="w-3.5 h-3.5 text-gemini-cyan shrink-0" />
+                              <span>{track.categoryLabel}</span>
+                            </span>
+                            <span className="font-mono uppercase">{track.targetModuleId}</span>
+                          </div>
+                          <div className="text-xs font-semibold text-white">{track.label}</div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 font-mono text-[11px] tabular-nums text-slate-300">
+                            <div>
+                              工作区 / 交付：
+                              <span className="text-white font-semibold">
+                                {track.workspaceCount} / {track.completedCount}
+                              </span>
+                            </div>
+                            <div>
+                              提交 / 通过：
+                              <span className="text-emerald-300 font-semibold">
+                                {track.submissionCount} / {track.approvedCount}
+                              </span>
+                            </div>
+                            <div>
+                              Eval 通过率：
+                              <span className="text-gemini-cyan font-semibold">
+                                {track.evalPassRatePct !== null ? `${track.evalPassRatePct}%` : "—"}
+                              </span>
+                            </div>
+                            <div>
+                              证据完整度：
+                              <span className="text-white font-semibold">
+                                {track.avgCompletenessPct !== null
+                                  ? `${track.avgCompletenessPct}%`
+                                  : "—"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="lg:col-span-4 p-3.5 rounded-xl bg-black/35 border border-white/10 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white">
+                          {pilotMetrics.stage4.iterationDecision.curriculumExpansionStatus ===
+                          "ready_to_expand" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          ) : pilotMetrics.stage4.iterationDecision.curriculumExpansionStatus ===
+                            "keep_piloting" ? (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          ) : (
+                            <Clock className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                          )}
+                          <span>
+                            {pilotMetrics.stage4.iterationDecision.curriculumExpansionLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                          <GitCompare className="w-3.5 h-3.5 text-gemini-cyan shrink-0" />
+                          <span>
+                            Runner 演进：
+                            {pilotMetrics.stage4.iterationDecision.automationRunnerLabel}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          {pilotMetrics.stage4.iterationDecision.summaryRationale}
+                        </p>
+                        <ul className="space-y-1 pt-1 border-t border-white/10 text-[11px] text-slate-400">
+                          {pilotMetrics.stage4.iterationDecision.nextRecommendedActions
+                            .slice(0, 2)
+                            .map((act, idx) => (
+                              <li key={idx}>· {act}</li>
+                            ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 
@@ -625,26 +813,54 @@ export default function AdminConsole() {
                     className="px-2 py-1.5 rounded-lg bg-black/50 border border-white/15 text-white"
                   />
                 </div>
-                <button
-                  type="button"
-                  disabled={!msCohortId || msTitle.trim().length < 3}
-                  onClick={() =>
-                    void runAction(
-                      async () => {
-                        await adminCreateMilestoneApi(msCohortId, {
-                          title: msTitle.trim(),
-                          moduleId: msModuleId,
-                          dueDate: msDueDate,
-                        });
-                        setMsTitle("");
-                      },
-                      "已为该班期新增里程碑节点。"
-                    )
-                  }
-                  className="w-full py-2 rounded-lg bg-emerald-400 text-slate-950 font-semibold cursor-pointer disabled:opacity-50"
-                >
-                  添加里程碑
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={!msCohortId || msTitle.trim().length < 3}
+                    onClick={() =>
+                      void runAction(
+                        async () => {
+                          await adminCreateMilestoneApi(msCohortId, {
+                            title: msTitle.trim(),
+                            moduleId: msModuleId,
+                            dueDate: msDueDate,
+                          });
+                          setMsTitle("");
+                        },
+                        "已为该班期新增里程碑节点。"
+                      )
+                    }
+                    className="w-full py-2 px-3 rounded-lg bg-emerald-400 text-slate-950 font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                  >
+                    添加里程碑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!msCohortId}
+                    onClick={() =>
+                      void runAction(
+                        async () => {
+                          const baseMs = Date.now();
+                          for (const preset of STAGE4_PILOT_MILESTONE_PRESETS) {
+                            const due = new Date(baseMs + preset.offsetDays * 86_400_000)
+                              .toISOString()
+                              .slice(0, 10);
+                            await adminCreateMilestoneApi(msCohortId, {
+                              title: preset.title,
+                              moduleId: preset.moduleId,
+                              dueDate: due,
+                              sortOrder: preset.sortOrder,
+                            });
+                          }
+                        },
+                        "已批量导入 Stage 4 双项目试点（M9/M5/M11/M13-Eng）4 个检查点里程碑。"
+                      )
+                    }
+                    className="w-full py-2 px-3 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 font-medium cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
+                  >
+                    导入双项目试点里程碑
+                  </button>
+                </div>
               </div>
 
               <div className="lg:col-span-8 p-4 rounded-2xl border border-white/12 bg-[#0b0f19] space-y-3">

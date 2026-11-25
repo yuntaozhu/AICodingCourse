@@ -12,10 +12,18 @@ import {
   submissions,
 } from "../../db/schema.ts";
 import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.ts";
-import { GEO_EVIDENCE_LAB_DISCLAIMER } from "../../data/projectTemplatesPublic.ts";
+import {
+  EVAL_POLICY_VERSION,
+  GEO_EVIDENCE_LAB_DISCLAIMER,
+  ISOLATED_RUNNER_CONTRACT,
+  STATIC_AUDIT_RULE_VERSION,
+  VERIFICATION_MODES,
+} from "../../data/projectTemplatesPublic.ts";
+import { computePilotMetricsSummary } from "../../data/pilotMetrics.ts";
 import type { AuthContext } from "../auth.ts";
 import { checkAndRunGuardedAiCall } from "./aiService.ts";
 import { ensureCatalogSeeded } from "./catalogSeed.ts";
+import { CURRICULUM_VERSION } from "./curriculumService.ts";
 import { runDeterministicStaticAudit } from "./staticAuditService.ts";
 
 export async function getPublicProjectTemplates() {
@@ -56,15 +64,57 @@ export async function getUserProjectWorkspaces(userId: number) {
   ]);
 
   const subIds = userSubs.map((s) => s.id);
-  const evidenceRows =
+  const [evidenceRows, subAuditRows] =
     subIds.length > 0
-      ? await db
-          .select()
-          .from(submissionEvidences)
-          .where(inArray(submissionEvidences.submissionId, subIds))
-      : [];
+      ? await Promise.all([
+          db
+            .select()
+            .from(submissionEvidences)
+            .where(inArray(submissionEvidences.submissionId, subIds)),
+          db
+            .select()
+            .from(staticAuditRuns)
+            .where(inArray(staticAuditRuns.submissionId, subIds))
+            .orderBy(desc(staticAuditRuns.createdAt)),
+        ])
+      : [[], []];
+
+  const submissionsHistory = userSubs.map((sub) => {
+    const ev = evidenceRows.find((row) => row.submissionId === sub.id);
+    const linkedAudit = subAuditRows.find((a) => a.submissionId === sub.id);
+    const snapPassed =
+      sub.staticAuditJson && typeof sub.staticAuditJson.passed === "boolean"
+        ? sub.staticAuditJson.passed
+        : null;
+    const staticAuditPassed =
+      linkedAudit !== undefined ? linkedAudit.passed : snapPassed;
+
+    const aiPrereview = ev?.aiPrereviewJson ?? null;
+    const hasAiPrereview = Boolean(aiPrereview);
+    const aiPrereviewPassed =
+      aiPrereview && typeof aiPrereview.staticPassed === "boolean"
+        ? aiPrereview.staticPassed
+        : null;
+
+    return {
+      id: sub.id,
+      moduleId: sub.moduleId,
+      artifactTitle: sub.artifactTitle,
+      status: sub.status,
+      curriculumVersion: sub.curriculumVersion,
+      updatedAt: sub.updatedAt.toISOString(),
+      workspaceId: ev?.workspaceId ?? null,
+      staticAuditPassed,
+      hasAiPrereview,
+      aiPrereviewPassed,
+    };
+  });
 
   return {
+    curriculumVersion: CURRICULUM_VERSION,
+    staticAuditRuleVersion: STATIC_AUDIT_RULE_VERSION,
+    evalPolicyVersion: EVAL_POLICY_VERSION,
+    isolatedRunnerContract: ISOLATED_RUNNER_CONTRACT,
     templates,
     workspaces: workspaces.map((ws) => {
       const template = templates.find((t) => t.id === ws.templateId) ?? null;
@@ -79,6 +129,7 @@ export async function getUserProjectWorkspaces(userId: number) {
         submissionCount: wsEvidences.length,
       };
     }),
+    submissions: submissionsHistory,
     recentAudits: audits.slice(0, 10),
     recentEvals: evals.slice(0, 10),
   };
@@ -214,11 +265,44 @@ export async function buildProjectArchiveMarkdown(userId: number, workspaceId: n
   const latestEval = evals[0];
   const latestEv = evRows[0];
 
+  const evalDatasetVersion =
+    latestEval?.reportJson &&
+    typeof (latestEval.reportJson as { datasetVersion?: unknown }).datasetVersion === "string"
+      ? (latestEval.reportJson as { datasetVersion: string }).datasetVersion
+      : "v1.0";
+  const evalPolicyVersion =
+    latestEval?.reportJson &&
+    typeof (latestEval.reportJson as { evalPolicyVersion?: unknown }).evalPolicyVersion === "string"
+      ? (latestEval.reportJson as { evalPolicyVersion: string }).evalPolicyVersion
+      : EVAL_POLICY_VERSION;
+
+  const linkedSub = latestEv
+    ? (
+        await db
+          .select()
+          .from(submissions)
+          .where(eq(submissions.id, latestEv.submissionId))
+          .limit(1)
+      )[0]
+    : undefined;
+  const rawNotes =
+    linkedSub?.staticAuditJson &&
+    typeof linkedSub.staticAuditJson.humanEvidenceNotes === "object" &&
+    linkedSub.staticAuditJson.humanEvidenceNotes
+      ? (linkedSub.staticAuditJson.humanEvidenceNotes as {
+          decisionRationale?: string;
+          knownLimitations?: string;
+        })
+      : null;
+
   const lines: string[] = [
     `# Coding Everything 项目学院 · 数字资产交付与 Handoff 归档`,
     ``,
     `- 项目名称：${ws.title}`,
     `- 模板类型：${tpl?.title || "Standard Starter Kit"} (${tpl?.trackType || "custom"})`,
+    `- 课程版本 (curriculumVersion)：${linkedSub?.curriculumVersion || CURRICULUM_VERSION}`,
+    `- 静态门禁规则版本：${STATIC_AUDIT_RULE_VERSION}`,
+    `- Eval 策略版本：${evalPolicyVersion}`,
     `- 生命周期状态：${ws.lifecycleState}`,
     `- 仓库/PR 链接：${ws.repoUrl || "（未绑定外链）"}`,
     `- 首小时检查完成：${ws.firstHourCheckedJson.length} / ${tpl?.firstHourChecklistJson.length ?? 6}`,
@@ -226,6 +310,13 @@ export async function buildProjectArchiveMarkdown(userId: number, workspaceId: n
     ``,
     `> ${tpl?.boundaryDisclaimer || GEO_EVIDENCE_LAB_DISCLAIMER}`,
     ...(tpl?.targetModuleId === "m13-gov" ? [`> ${M13_GOV_SIMULATION_DISCLAIMER}`] : []),
+    ``,
+    `## 0. 验证边界说明与隔离 Runner 契约`,
+    `- **${VERIFICATION_MODES.static_material_check.label}**：${VERIFICATION_MODES.static_material_check.boundaryNote}`,
+    `- **${VERIFICATION_MODES.simulated_eval.label}**：${VERIFICATION_MODES.simulated_eval.boundaryNote}`,
+    `- **${VERIFICATION_MODES.real_execution_pending_runner.label}**：${VERIFICATION_MODES.real_execution_pending_runner.boundaryNote}`,
+    `- **${VERIFICATION_MODES.human_approval.label}**：${VERIFICATION_MODES.human_approval.boundaryNote}`,
+    `- **隔离沙盒契约 (${ISOLATED_RUNNER_CONTRACT.executionStatus})**：禁止在 ${ISOLATED_RUNNER_CONTRACT.forbiddenRuntime} 运行；公网=${ISOLATED_RUNNER_CONTRACT.networkEgress}、密钥=${ISOLATED_RUNNER_CONTRACT.secretAccess}、超时=${ISOLATED_RUNNER_CONTRACT.maxRuntimeSeconds}s、内存=${ISOLATED_RUNNER_CONTRACT.maxMemoryMb}MB。`,
     ``,
     `## 1. SPEC.md（需求与系统边界）`,
     ``,
@@ -237,19 +328,19 @@ export async function buildProjectArchiveMarkdown(userId: number, workspaceId: n
     ws.rulesMarkdown,
     "```",
     ``,
-    `## 3. 服务端确定性静态审计证据`,
+    `## 3. ${VERIFICATION_MODES.static_material_check.label}证据（规则版本 ${STATIC_AUDIT_RULE_VERSION}）`,
     latestAudit
-      ? `- 结果：${latestAudit.passed ? "PASSED" : "BLOCKED"}（阻塞项 ${latestAudit.blockingCount} · 警告项 ${latestAudit.warningCount}）\n- 变更文件：${latestAudit.changedFilesJson.join(", ") || "无"}\n- 审计时间：${latestAudit.createdAt.toISOString()}`
+      ? `- Audit Run #${latestAudit.id} · 结果：${latestAudit.passed ? "PASSED" : "BLOCKED"}（阻塞项 ${latestAudit.blockingCount} · 警告项 ${latestAudit.warningCount}）\n- 变更文件：${latestAudit.changedFilesJson.join(", ") || "无"}\n- 审计时间：${latestAudit.createdAt.toISOString()}`
       : `- 尚未执行服务端静态审计记录`,
     ``,
-    `## 4. 标准化 Eval 评测记录`,
+    `## 4. ${VERIFICATION_MODES.simulated_eval.label}记录`,
     latestEval
-      ? `- 数据集：${latestEval.datasetSlug} · 结果：${latestEval.passed ? "PASSED" : "FAILED"}\n- Recall@K：${latestEval.recallAtK}% ｜ Citation Precision：${latestEval.citationPrecision}%\n- ACL 越权数：${latestEval.aclLeakCount} ｜ Tombstone 过期召回：${latestEval.staleRecallCount}\n- 拒答准确率：${latestEval.refusalAccuracy}% ｜ 步数熔断率：${latestEval.loopCircuitBreakRate}%`
+      ? `- Eval Run #${latestEval.id} · 数据集：${latestEval.datasetSlug} @ ${evalDatasetVersion} · 策略：${evalPolicyVersion} · 结果：${latestEval.passed ? "PASSED" : "FAILED"}\n- Recall@K：${latestEval.recallAtK}% ｜ Citation Precision：${latestEval.citationPrecision}%\n- ACL 越权数：${latestEval.aclLeakCount} ｜ Tombstone 过期召回：${latestEval.staleRecallCount}\n- 拒答准确率：${latestEval.refusalAccuracy}% ｜ 步数熔断率：${latestEval.loopCircuitBreakRate}%`
       : `- 尚未运行标准化 Eval 评测`,
     ``,
-    `## 5. 最近一次提交 Diff 与命令测试日志`,
+    `## 5. 最近一次提交 Diff、架构取舍与${VERIFICATION_MODES.real_execution_pending_runner.shortLabel}`,
     latestEv
-      ? `### Changed Files\n${latestEv.changedFilesJson.join(", ") || "无"}\n\n### Diff 摘要\n\`\`\`diff\n${latestEv.diffSummary || "无"}\n\`\`\`\n\n### 验证命令输出\n\`\`\`text\n${latestEv.testCommandLog || "无"}\n\`\`\``
+      ? `### Changed Files\n${latestEv.changedFilesJson.join(", ") || "无"}\n\n### 模式选择理由与备选方案\n${rawNotes?.decisionRationale || "（未单独填写）"}\n\n### 已知限制与风险边界\n${rawNotes?.knownLimitations || "（未单独填写）"}\n\n### Diff 摘要\n\`\`\`diff\n${latestEv.diffSummary || "无"}\n\`\`\`\n\n### 学员自贴命令验证输出\n\`\`\`text\n${latestEv.testCommandLog || "无"}\n\`\`\``
       : `- 尚未生成提交证据记录`,
     ``,
     `## 6. HANDOFF.md（运维、成本与人工接管说明）`,
@@ -409,43 +500,77 @@ SPEC 摘要：${(evidence?.specSnapshot || "").slice(0, 1200)}
 }
 
 export async function getAdminPilotMetrics() {
+  await ensureCatalogSeeded();
   const [
-    [wsStats],
-    [auditStats],
-    [subStats],
-    [reviewStats],
-    [evalStats],
+    templates,
+    workspaces,
+    audits,
+    allSubmissions,
+    evidences,
+    reviews,
+    evals,
     [examStats],
     [aiStats],
   ] = await Promise.all([
+    db.select().from(projectTemplates),
     db
       .select({
-        totalWorkspaces: sql<number>`count(*)::int`,
-        approvedOrArchived: sql<number>`count(*) filter (where ${projectWorkspaces.lifecycleState} in ('approved', 'archived'))::int`,
+        id: projectWorkspaces.id,
+        userId: projectWorkspaces.userId,
+        templateId: projectWorkspaces.templateId,
+        lifecycleState: projectWorkspaces.lifecycleState,
+        createdAt: projectWorkspaces.createdAt,
       })
       .from(projectWorkspaces),
     db
       .select({
-        totalAudits: sql<number>`count(*)::int`,
-        blockedAudits: sql<number>`count(*) filter (where ${staticAuditRuns.passed} = false)::int`,
+        id: staticAuditRuns.id,
+        userId: staticAuditRuns.userId,
+        workspaceId: staticAuditRuns.workspaceId,
+        moduleId: staticAuditRuns.moduleId,
+        passed: staticAuditRuns.passed,
+        createdAt: staticAuditRuns.createdAt,
       })
       .from(staticAuditRuns),
     db
       .select({
-        totalSubmissions: sql<number>`count(*)::int`,
-        approvedSubmissions: sql<number>`count(*) filter (where ${submissions.status} = 'approved')::int`,
-        changesRequestedSubmissions: sql<number>`count(*) filter (where ${submissions.status} = 'changes_requested')::int`,
+        id: submissions.id,
+        userId: submissions.userId,
+        moduleId: submissions.moduleId,
+        status: submissions.status,
+        submittedAt: submissions.submittedAt,
+        staticAuditJson: submissions.staticAuditJson,
       })
       .from(submissions),
     db
       .select({
-        totalReviews: sql<number>`count(*)::int`,
+        submissionId: submissionEvidences.submissionId,
+        workspaceId: submissionEvidences.workspaceId,
+        specSnapshot: submissionEvidences.specSnapshot,
+        diffSummary: submissionEvidences.diffSummary,
+        testCommandLog: submissionEvidences.testCommandLog,
+        changedFilesJson: submissionEvidences.changedFilesJson,
+        handoffSummary: submissionEvidences.handoffSummary,
+        evalRunId: submissionEvidences.evalRunId,
+      })
+      .from(submissionEvidences),
+    db
+      .select({
+        id: submissionReviews.id,
+        submissionId: submissionReviews.submissionId,
+        decision: submissionReviews.decision,
+        createdAt: submissionReviews.createdAt,
       })
       .from(submissionReviews),
     db
       .select({
-        totalEvalRuns: sql<number>`count(*)::int`,
-        passedEvalRuns: sql<number>`count(*) filter (where ${evalRuns.passed} = true)::int`,
+        id: evalRuns.id,
+        userId: evalRuns.userId,
+        workspaceId: evalRuns.workspaceId,
+        moduleId: evalRuns.moduleId,
+        datasetSlug: evalRuns.datasetSlug,
+        passed: evalRuns.passed,
+        createdAt: evalRuns.createdAt,
       })
       .from(evalRuns),
     db
@@ -463,32 +588,77 @@ export async function getAdminPilotMetrics() {
       .from(aiUsageLogs),
   ]);
 
-  const totalAudits = auditStats?.totalAudits ?? 0;
-  const blockedAudits = auditStats?.blockedAudits ?? 0;
+  const tplById = new Map(templates.map((t) => [t.id, t]));
+  const evBySubId = new Map(evidences.map((ev) => [ev.submissionId, ev]));
+
+  const totalWorkspaces = workspaces.length;
+  const completedProjects = workspaces.filter(
+    (w) => w.lifecycleState === "approved" || w.lifecycleState === "archived"
+  ).length;
+
+  const totalAudits = audits.length;
+  const blockedAudits = audits.filter((a) => !a.passed).length;
   const staticBlockRatePct =
     totalAudits > 0 ? Math.round((blockedAudits / totalAudits) * 100) : 0;
 
-  const totalSubmissions = subStats?.totalSubmissions ?? 0;
-  const approvedSubmissions = subStats?.approvedSubmissions ?? 0;
+  const totalSubmissions = allSubmissions.length;
+  const approvedSubmissions = allSubmissions.filter((s) => s.status === "approved").length;
+  const changesRequestedSubmissions = allSubmissions.filter(
+    (s) => s.status === "changes_requested"
+  ).length;
   const submissionPassRatePct =
-    totalSubmissions > 0
-      ? Math.round((approvedSubmissions / totalSubmissions) * 100)
-      : 0;
+    totalSubmissions > 0 ? Math.round((approvedSubmissions / totalSubmissions) * 100) : 0;
 
-  const totalEvalRuns = evalStats?.totalEvalRuns ?? 0;
-  const passedEvalRuns = evalStats?.passedEvalRuns ?? 0;
+  const totalEvalRuns = evals.length;
+  const passedEvalRuns = evals.filter((e) => e.passed).length;
+
+  const stage4 = computePilotMetricsSummary({
+    workspaces: workspaces.map((ws) => {
+      const tpl = tplById.get(ws.templateId);
+      return {
+        id: ws.id,
+        userId: ws.userId,
+        templateSlug: tpl?.slug ?? null,
+        trackType: tpl?.trackType ?? null,
+        targetModuleId: tpl?.targetModuleId ?? null,
+        lifecycleState: ws.lifecycleState,
+        createdAt: ws.createdAt,
+      };
+    }),
+    audits,
+    evals,
+    submissions: allSubmissions.map((sub) => {
+      const ev = evBySubId.get(sub.id);
+      return {
+        id: sub.id,
+        userId: sub.userId,
+        moduleId: sub.moduleId,
+        status: sub.status,
+        submittedAt: sub.submittedAt,
+        staticAuditJson: sub.staticAuditJson,
+        workspaceId: ev?.workspaceId ?? null,
+        specSnapshot: ev?.specSnapshot ?? null,
+        diffSummary: ev?.diffSummary ?? null,
+        testCommandLog: ev?.testCommandLog ?? null,
+        changedFiles: ev?.changedFilesJson ?? null,
+        handoffSummary: ev?.handoffSummary ?? null,
+        linkedEvalRunId: ev?.evalRunId ?? null,
+      };
+    }),
+    reviews,
+  });
 
   return {
-    totalWorkspaces: wsStats?.totalWorkspaces ?? 0,
-    completedProjects: wsStats?.approvedOrArchived ?? 0,
+    totalWorkspaces,
+    completedProjects,
     totalSubmissions,
     approvedSubmissions,
-    changesRequestedSubmissions: subStats?.changesRequestedSubmissions ?? 0,
+    changesRequestedSubmissions,
     submissionPassRatePct,
     totalAudits,
     blockedAudits,
     staticBlockRatePct,
-    totalReviews: reviewStats?.totalReviews ?? 0,
+    totalReviews: reviews.length,
     totalEvalRuns,
     passedEvalRuns,
     completedExams: examStats?.completedExams ?? 0,
@@ -496,5 +666,6 @@ export async function getAdminPilotMetrics() {
     totalAiCalls: aiStats?.totalAiCalls ?? 0,
     prereviewCalls: aiStats?.prereviewCalls ?? 0,
     tutorCalls: aiStats?.tutorCalls ?? 0,
+    stage4,
   };
 }

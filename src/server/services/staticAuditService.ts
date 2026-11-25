@@ -1,5 +1,6 @@
 import { db } from "../../db/index.ts";
 import { staticAuditRuns } from "../../db/schema.ts";
+import { STATIC_AUDIT_RULE_VERSION } from "../../data/projectTemplatesPublic.ts";
 
 export interface StaticAuditFinding {
   id: string;
@@ -16,6 +17,8 @@ export interface StaticAuditResult {
   findings: StaticAuditFinding[];
   changedFiles: string[];
   auditedAt: string;
+  ruleVersion: string;
+  verificationMode: "static_material_check";
 }
 
 const SECRET_TOKEN_REGEX =
@@ -210,6 +213,8 @@ export function runDeterministicStaticAudit(input: {
     findings,
     changedFiles,
     auditedAt: new Date().toISOString(),
+    ruleVersion: STATIC_AUDIT_RULE_VERSION,
+    verificationMode: "static_material_check",
   };
 }
 

@@ -54,11 +54,12 @@ export default function V4() {
             {/* Right: Auth & Deployment Matrix */}
             <div className="col-span-5 space-y-3">
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
-                <div className="font-mono text-gemini-cyan">身份认证四选一（CH.14）</div>
+                <div className="font-mono text-gemini-cyan">身份认证选型矩阵（本平台采用 Email OTP + Firebase Auth）</div>
                 <div className="space-y-1 text-slate-300">
-                  <div><strong className="text-white">Supabase Auth：</strong>使用 Supabase Postgres 时的零磨合内置首选</div>
-                  <div><strong className="text-white">Clerk：</strong>开箱即用高颜值登录 UI，接入极快</div>
-                  <div><strong className="text-white">Auth.js / Firebase Auth：</strong>自托管全控 vs 移动/Google 生态</div>
+                  <div><strong className="text-white">Email 6 位 OTP + HMAC Bearer：</strong>国内直连首选（本平台主登录通道）</div>
+                  <div><strong className="text-white">Firebase Auth：</strong>Google / 移动生态与可信 ID Token 校验（本平台备选通道）</div>
+                  <div><strong className="text-white">Supabase Auth / Auth.js：</strong>开源自托管 / Postgres 绑定场景</div>
+                  <div><strong className="text-white">Clerk（历史参考项）：</strong>纯海外托管 UI 方案，本系统不依赖</div>
                 </div>
               </div>
 

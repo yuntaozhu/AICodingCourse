@@ -128,8 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth);
   }, []);
 
-  const claimInitialAdmin = useCallback(async () => {
-    await claimFirstAdminApi();
+  const claimInitialAdmin = useCallback(async (bootstrapToken?: string) => {
+    await claimFirstAdminApi(bootstrapToken);
     await refreshSession();
   }, [refreshSession]);
 

@@ -29,6 +29,7 @@ import { M13_GOV_SIMULATION_DISCLAIMER } from "../../data/courseWorkspaceStore.t
 import { MODULE_QUIZZES } from "../data/privateQuizBank.ts";
 import { getModuleTeachingPackage } from "../data/privateTeachingPackages.ts";
 import { getQuestionRemediation } from "../../data/quizRemediation.ts";
+import { getInstructorPatternScriptForModule } from "../data/privatePatternScripts.ts";
 import type { AuthContext } from "../auth.ts";
 
 export const CURRICULUM_VERSION = "2026.11";
@@ -49,7 +50,14 @@ export function canViewInstructorMaterials(authContext?: AuthContext): boolean {
   );
 }
 
-export function getPublicCurriculumOverview(hasPaidAccess: boolean) {
+export function getPublicCurriculumOverview(
+  hasPaidAccess: boolean | ((moduleId: string) => boolean)
+) {
+  const isModuleUnlocked =
+    typeof hasPaidAccess === "function"
+      ? (moduleId: string) => isFreeTrialModule(moduleId) || hasPaidAccess(moduleId)
+      : (moduleId: string) => isFreeTrialModule(moduleId) || hasPaidAccess;
+
   return {
     curriculumVersion: CURRICULUM_VERSION,
     quizVersion: QUIZ_VERSION,
@@ -63,7 +71,7 @@ export function getPublicCurriculumOverview(hasPaidAccess: boolean) {
       isFreeTrial: l.moduleId === "m1",
     })),
     modules: COURSE_MODULES.map((m) => {
-      const unlocked = isFreeTrialModule(m.id) || hasPaidAccess;
+      const unlocked = isModuleUnlocked(m.id);
       return {
         id: m.id,
         code: m.code,
@@ -128,6 +136,9 @@ export function getAuthorizedModuleDetail(
   }));
 
   const pkg = includeInstructor ? getModuleTeachingPackage(mod.id) ?? null : null;
+  const patternPilotScript = includeInstructor
+    ? getInstructorPatternScriptForModule(mod.id)
+    : null;
 
   return {
     found: true as const,
@@ -141,6 +152,7 @@ export function getAuthorizedModuleDetail(
       units: sanitizedUnits,
     },
     teachingPackage: pkg,
+    patternPilotScript,
   };
 }
 
@@ -424,6 +436,36 @@ export function buildInstructorLessonPlanMarkdown(
 
     lines.push(``);
   });
+
+  const patternScript = getInstructorPatternScriptForModule(moduleId);
+  if (patternScript) {
+    lines.push(`---`);
+    lines.push(``);
+    lines.push(`## 90 分钟项目实战课教师带教脚本（Stage 1 设计模式试点）`);
+    lines.push(`- 课程主题：${patternScript.lessonTitle}`);
+    lines.push(`- 课前材料定位：${patternScript.preClassMaterialsNote}`);
+    lines.push(``);
+    for (const phase of patternScript.phases) {
+      lines.push(
+        `### 阶段 ${phase.phaseIndex}（${phase.durationMinutes} 分钟）· ${phase.title}`
+      );
+      lines.push(`- 阶段目标：${phase.goal}`);
+      lines.push(`- 教师操作：${phase.instructorAction}`);
+      lines.push(`- 现场仓库锚点：${phase.liveRepoCue}`);
+      lines.push(`- 课堂追问话术：${phase.facilitationPrompt}`);
+      lines.push(``);
+    }
+    lines.push(`### 课堂反过度抽象红线（Over-Abstraction Red Flags）`);
+    for (const rf of patternScript.overAbstractionRedFlags) {
+      lines.push(`- ${rf}`);
+    }
+    lines.push(``);
+    lines.push(`### 口头答辩核验提问`);
+    for (const q of patternScript.oralDefenseQuestions) {
+      lines.push(`- ${q}`);
+    }
+    lines.push(``);
+  }
 
   return lines.join("\n");
 }

@@ -81,17 +81,43 @@ export async function createPendingOrder(input: {
   }
 
   let resolvedCohortId: number | null = null;
-  if (product.productType === "cohort_mentored") {
+  if (
+    product.productType === "cohort_mentored" ||
+    product.productType === "enterprise_training"
+  ) {
     if (input.cohortId) {
       const cRows = await db
         .select()
         .from(cohorts)
         .where(eq(cohorts.id, input.cohortId))
         .limit(1);
-      if (!cRows[0]) {
+      const targetCohort = cRows[0];
+      if (!targetCohort) {
         return { ok: false as const, status: 404, error: "指定的实战班期不存在。" };
       }
-      resolvedCohortId = cRows[0].id;
+      if (targetCohort.status === "completed") {
+        return { ok: false as const, status: 409, error: "该实战班期已结营，无法继续下单。" };
+      }
+      if (targetCohort.productId && targetCohort.productId !== product.id) {
+        return {
+          ok: false as const,
+          status: 400,
+          error: "所选班期与当前课程商品方案不匹配，请重新选择。",
+        };
+      }
+      const [{ activeSeats }] = await db
+        .select({ activeSeats: sql<number>`count(*)::int` })
+        .from(cohortEnrollments)
+        .where(
+          and(
+            eq(cohortEnrollments.cohortId, targetCohort.id),
+            eq(cohortEnrollments.status, "active")
+          )
+        );
+      if (activeSeats >= targetCohort.maxSeats) {
+        return { ok: false as const, status: 409, error: "该班期名额已满，请选择其他班期。" };
+      }
+      resolvedCohortId = targetCohort.id;
     } else {
       const activeCohort = await db
         .select()
@@ -258,6 +284,56 @@ export function verifyWebhookSignature(
   return crypto.timingSafeEqual(a, b);
 }
 
+export function validateWebhookOrderConsistency(
+  order: { provider: string; amountCents: number; currency: string; status: string },
+  input: {
+    provider: string;
+    eventType: "payment.succeeded" | "payment.refunded" | "subscription.cancelled";
+    summaryJson?: Record<string, unknown>;
+  }
+): { valid: true } | { valid: false; status: number; error: string } {
+  if (order.provider !== input.provider) {
+    return {
+      valid: false,
+      status: 400,
+      error: `支付渠道不匹配：订单渠道为 ${order.provider}，回调渠道为 ${input.provider}。`,
+    };
+  }
+
+  if (input.summaryJson) {
+    if (
+      typeof input.summaryJson.amountCents === "number" &&
+      input.summaryJson.amountCents !== order.amountCents
+    ) {
+      return {
+        valid: false,
+        status: 400,
+        error: "Webhook 回调金额与订单应付金额不一致，已拒绝开通。",
+      };
+    }
+    if (
+      typeof input.summaryJson.currency === "string" &&
+      input.summaryJson.currency.trim().toUpperCase() !== order.currency.toUpperCase()
+    ) {
+      return {
+        valid: false,
+        status: 400,
+        error: "Webhook 回调币种与订单币种不一致，已拒绝开通。",
+      };
+    }
+  }
+
+  if (input.eventType === "payment.succeeded" && order.status !== "pending") {
+    return {
+      valid: false,
+      status: 409,
+      error: `订单当前状态为 ${order.status}，仅待支付（pending）订单可响应 payment.succeeded。`,
+    };
+  }
+
+  return { valid: true };
+}
+
 export async function processPaymentWebhookEvent(input: {
   provider: string;
   externalEventId: string;
@@ -297,6 +373,15 @@ export async function processPaymentWebhookEvent(input: {
       };
     }
 
+    const consistency = validateWebhookOrderConsistency(order, input);
+    if ("error" in consistency) {
+      return {
+        ok: false as const,
+        status: consistency.status,
+        error: consistency.error,
+      };
+    }
+
     if (input.eventType === "payment.succeeded") {
       const [price] = await tx
         .select()
@@ -315,21 +400,34 @@ export async function processPaymentWebhookEvent(input: {
       const now = new Date();
       const validUntil = new Date(now.getTime() + price.durationDays * 86400 * 1000);
 
-      await tx
+      const updatedOrders = await tx
         .update(orders)
         .set({ status: "paid", paidAt: now })
-        .where(eq(orders.id, order.id));
+        .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+        .returning();
 
-      await tx.insert(entitlements).values({
-        userId: order.userId,
-        productId: product.id,
-        sourceOrderId: order.id,
-        scopeType: product.scopeType,
-        scopeRef: product.scopeRef,
-        status: "active",
-        validFrom: now,
-        validUntil,
-      });
+      if (updatedOrders.length === 0) {
+        return { ok: true as const, deduplicated: true, orderNo: order.orderNo };
+      }
+
+      const existingEnt = await tx
+        .select({ id: entitlements.id })
+        .from(entitlements)
+        .where(eq(entitlements.sourceOrderId, order.id))
+        .limit(1);
+
+      if (existingEnt.length === 0) {
+        await tx.insert(entitlements).values({
+          userId: order.userId,
+          productId: product.id,
+          sourceOrderId: order.id,
+          scopeType: product.scopeType,
+          scopeRef: product.scopeRef,
+          status: "active",
+          validFrom: now,
+          validUntil,
+        });
+      }
 
       if (order.cohortId) {
         await tx

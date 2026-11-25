@@ -657,7 +657,12 @@ const MODULE_STARTER_ARTIFACTS: Record<string, UnitLearnerArtifactSpec> = {
 - 400 Bad Request: 字段校验失败返回结构化 fieldErrors
 - 401/403: 未认证或越权操作拒绝写库（须附带 401/403 拒绝测试输出或签名验证日志）
 - 重要声明: 仅勾选完成 M3 不会自动解锁 skill-backend-api-auth / skill-ai-project-exp，须在模块页提交 Starter 证据或通过诊断测评
-- 验证命令: npx tsc --noEmit && curl 异常与正常状态码`,
+- 验证命令: npx tsc --noEmit && curl 异常与正常状态码
+
+## Stage 1 设计模式与反过度抽象决策
+- 识别坏味道: （例：前端传 isPaid/userId、第三方回调与写库未隔离）
+- 选定模式与依据: （例：分层边界 + 单一 Facade 门面 + 垂直切片）
+- 为何没有过度抽象（KISS / YAGNI）: （写明拒绝的多余抽象层与未来拆分阈值）`,
   },
   m4: {
     title: "M4 作用域规则与最小特权 MCP 配置骨架",
@@ -682,7 +687,12 @@ alwaysApply: false
 ## 退出前必跑客观命令
 1. npx tsc --noEmit
 2. npm run lint
-3. npm test`,
+3. npm test
+
+## Stage 1 模式与反过度抽象核对
+- 识别坏味道: （如 while(true) 无界重试 / AI 修改 tests/ 断言）
+- 选定模式: （如 显式状态机 + <=3 轮同错即熔断）
+- 为何没有过度抽象: （写明为何不用重型 Saga/事件总线框架）`,
   },
   m6: {
     title: "M6 异步 Agent 分支隔离与 Bugbot 审查卡",
@@ -718,7 +728,11 @@ alwaysApply: false
 5. 验证与反馈（Verification & Feedback）: 3-Nudge 错因分流 + npm run lint && npx tsc --noEmit && npm run build
 
 ## 可选参考场景：原型工程化三步迁移
-- 仅在迁入 AI Studio 原型时执行：拆 types/api/ui -> 补 Zod 与单测 -> 替换 Mock 为受控接口`,
+- 仅在迁入 AI Studio 原型时执行：拆 types/api/ui -> 补 Zod 与单测 -> 替换 Mock 为受控接口
+
+## Stage 1 模式与交接反过度抽象说明
+- 状态锚点模式: （说明 ACC 检查点与 feature_list.json 如何替代重型状态中间件）
+- 为何暂不引入全局 Pub-Sub 总线: （写明旁路订阅消费者触发条件）`,
   },
   m9: {
     title: "M9 全栈三层架构决策记录 (ADR) 与排错卡",
@@ -729,7 +743,11 @@ alwaysApply: false
 - 放弃方案与代价: 放弃纯前端直写规则，减少后期越权返工
 
 ## 高频报错解码入口
-- 跨域 CORS / 401 / 500 -> 先看 Network 状态码与服务端 stderr，再定位路由与环境变量`,
+- 跨域 CORS / 401 / 500 -> 先看 Network 状态码与服务端 stderr，再定位路由与环境变量
+
+## Stage 1 架构模式与反过度抽象说明
+- 识别的混层坏味道: （说明 UI / API / DB 跨层污染调用链）
+- 拒绝的过度设计方案: （例：拒绝单表建 RepositoryFactory 或 MVP 拆微服务）`,
   },
   m10: {
     title: "M10 高信噪比 UI 视觉参考拆解与组件契约",
