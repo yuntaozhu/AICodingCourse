@@ -364,7 +364,7 @@ export default function OfficialHomePage({
                 <strong className="text-white font-semibold">
                   业务问题 → 系统边界 → AI 协作实现 → 确定性验证 → 人工批准 → 可维护数字资产
                 </strong>{" "}
-                打造项目型培训平台，服务企二代真实业务项目营、独立开发者、企业内训与青少年科创营。
+                打造项目型培训平台，服务数字创变者真实业务项目营、独立开发者、企业内训与青少年科创营。
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -569,7 +569,7 @@ export default function OfficialHomePage({
             <div className="lg:col-span-3 p-5 rounded-2xl border border-gemini-purple/40 bg-[#100e1c] flex flex-col justify-between gap-3">
               <div className="space-y-2">
                 <div className="text-xs font-mono text-purple-200">
-                  PILOT TRACK · 首推企二代真实业务项目营
+                  PILOT TRACK · 首推数字创变者真实业务项目营
                 </div>
                 <h3 className="text-base font-bold text-white">
                   GEO Evidence Lab 与企业私有知识库试点
@@ -1152,7 +1152,7 @@ export default function OfficialHomePage({
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white">
-                  {cohortProduct?.title || "Coding Everything 企二代与小班实战营"}
+                  {cohortProduct?.title || "Coding Everything 数字创变者与小班实战营"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {cohortProduct?.description ||

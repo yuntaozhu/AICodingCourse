@@ -43,7 +43,13 @@ async function seedProjectTemplatesAndEvals(): Promise<void> {
         boundaryDisclaimer: tpl.boundaryDisclaimer,
         active: true,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: projectTemplates.slug,
+        set: {
+          title: tpl.title,
+          subtitle: tpl.subtitle,
+        },
+      });
   }
 
   for (const ds of SEED_EVAL_DATASETS) {
@@ -90,7 +96,7 @@ async function runSeed(): Promise<void> {
     .insert(products)
     .values({
       skuCode: "cohort-mentored-camp",
-      title: "Coding Everything 企二代与小班实战营",
+      title: "Coding Everything 数字创变者与小班实战营",
       subtitle:
         "基于真实授权业务场景开展项目交付，含 Starter Kit 双门禁审校、AI 预审草稿、人工批准与三锁技能认证",
       productType: "cohort_mentored",
@@ -148,6 +154,13 @@ async function runSeed(): Promise<void> {
         .where(eq(products.skuCode, "cohort-mentored-camp"))
         .limit(1)
     )[0];
+
+  if (resolvedCohort && resolvedCohort.title.includes("企二代")) {
+    await db
+      .update(products)
+      .set({ title: "Coding Everything 数字创变者与小班实战营" })
+      .where(eq(products.id, resolvedCohort.id));
+  }
 
   const resolvedEnterprise =
     enterpriseCohort ||
@@ -246,7 +259,7 @@ async function runSeed(): Promise<void> {
         .insert(cohorts)
         .values({
           code: "COHORT-2026-Q4",
-          title: "2026 Q4 · Coding Everything 企二代与可控 Agent 项目营第 1 期",
+          title: "2026 Q4 · Coding Everything 数字创变者与可控 Agent 项目营第 1 期",
           productId: resolvedCohort.id,
           description:
             "6 周阶段式项目交付带练：从 Intent/SPEC 边界、Starter Kit 首小时闭环，到 Eval 评测与双轨 Capstone 人工终审。",
@@ -282,6 +295,11 @@ async function runSeed(): Promise<void> {
           },
         ]);
       }
+    } else if (existingCohorts[0].title.includes("企二代")) {
+      await db
+        .update(cohorts)
+        .set({ title: "2026 Q4 · Coding Everything 数字创变者与可控 Agent 项目营第 1 期" })
+        .where(eq(cohorts.id, existingCohorts[0].id));
     }
   }
 }

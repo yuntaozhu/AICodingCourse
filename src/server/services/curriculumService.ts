@@ -439,9 +439,15 @@ export function buildInstructorLessonPlanMarkdown(
 
   const patternScript = getInstructorPatternScriptForModule(moduleId);
   if (patternScript) {
+    const isStage1Pilot =
+      moduleId === "m3" || moduleId === "m5" || moduleId === "m8" || moduleId === "m9";
     lines.push(`---`);
     lines.push(``);
-    lines.push(`## 90 分钟项目实战课教师带教脚本（Stage 1 设计模式试点）`);
+    lines.push(
+      `## 90 分钟项目实战课教师带教脚本（${
+        isStage1Pilot ? "Stage 1 设计模式试点" : "设计模式与架构边界核心主线"
+      }）`
+    );
     lines.push(`- 课程主题：${patternScript.lessonTitle}`);
     lines.push(`- 课前材料定位：${patternScript.preClassMaterialsNote}`);
     lines.push(``);

@@ -142,9 +142,12 @@ function DesignPatternPilotStudioInner({
     window.setTimeout(() => setAppliedNotice(false), 2600);
   }
 
+  const isStage1Pilot =
+    moduleId === "m3" || moduleId === "m5" || moduleId === "m8" || moduleId === "m9";
+
   return (
     <section
-      aria-label={`${moduleCode} Stage 1 设计模式试点工作台`}
+      aria-label={`${moduleCode} 设计模式与架构边界工作台`}
       className="p-5 sm:p-6 rounded-2xl bg-[#0b0f19] border border-gemini-cyan/35 space-y-5"
     >
       {/* Header */}
@@ -153,7 +156,11 @@ function DesignPatternPilotStudioInner({
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 tabular-nums">
             <span className="text-gemini-cyan font-semibold inline-flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5" />
-              <span>Stage 1 设计模式课程试点</span>
+              <span>
+                {isStage1Pilot
+                  ? "Stage 1 设计模式先导试点"
+                  : "核心课 · 软件设计模式与架构边界实战"}
+              </span>
             </span>
             <span aria-hidden="true">·</span>
             <span>{group.moduleLabel}</span>
@@ -243,7 +250,7 @@ function DesignPatternPilotStudioInner({
           }`}
         >
           <ClipboardCheck className="w-3.5 h-3.5" />
-          <span>03 Stage 1 四维 Rubric</span>
+          <span>03 工程四维 Rubric</span>
         </button>
 
         {isInstructorView && patternPilotScript && (

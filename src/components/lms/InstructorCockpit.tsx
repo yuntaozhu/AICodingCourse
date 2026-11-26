@@ -591,14 +591,14 @@ export default function InstructorCockpit() {
                       </div>
                     )}
 
-                    {/* Stage 1 Design Pattern Pilot Grading Reference (m3, m5, m8, m9) */}
+                    {/* Design Pattern & Architecture Boundary Grading Reference */}
                     {(() => {
                       const pilotGroup = getPilotGroupForModule(selectedSub.moduleId);
                       if (!pilotGroup) return null;
                       return (
                         <details className="rounded-xl border border-gemini-cyan/35 bg-gemini-cyan/[0.05] p-3 text-[11px]">
                           <summary className="cursor-pointer font-mono text-gemini-cyan font-semibold">
-                            Stage 1 试点四维验收参考 · {pilotGroup.title}（点击展开批改要点）
+                            设计模式与架构边界四维验收参考 · {pilotGroup.title}（点击展开批改要点）
                           </summary>
                           <div className="mt-2.5 grid grid-cols-1 md:grid-cols-2 gap-2">
                             {STAGE1_PILOT_RUBRIC.map((item) => (

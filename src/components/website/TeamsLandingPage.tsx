@@ -139,7 +139,7 @@ export default function TeamsLandingPage({
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 lg:py-20 space-y-8">
           <div className="space-y-4 max-w-3xl">
             <div className="text-xs font-mono text-gemini-purple tracking-wide">
-              CODING EVERYTHING 项目学院 · 企二代真实业务项目营 · 团队内训与高校试点
+              CODING EVERYTHING 项目学院 · 数字创变者真实业务项目营 · 团队内训与高校试点
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.15] [text-wrap:balance]">
               从真实业务问题到可维护数字资产：
@@ -155,7 +155,7 @@ export default function TeamsLandingPage({
               href="#teams-inquiry"
               className="px-5 py-3 rounded-xl bg-gemini-cyan text-slate-950 font-semibold text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2"
             >
-              <span>预约团队 / 企二代项目营诊断</span>
+              <span>预约团队 / 数字创变者项目营诊断</span>
               <ArrowRight className="w-4 h-4" />
             </a>
             <button
@@ -301,10 +301,10 @@ export default function TeamsLandingPage({
               <ShieldCheck className="w-5 h-5 text-emerald-300 shrink-0 mt-0.5" />
               <div className="space-y-1 text-xs text-slate-300">
                 <div className="font-semibold text-white">
-                  企二代试点与企业内训边界说明（不承诺直接上线或指标担保）
+                  数字创变者试点与企业内训边界说明（不承诺直接上线或指标担保）
                 </div>
                 <p>
-                  {GEO_EVIDENCE_LAB_DISCLAIMER} 内训与企二代项目营重点交付“监测/知识库/审核工作流可演示原型、静态审计与 Eval 报告及 handoff.md 接管清单”，企业核心生产架构与真实密钥始终由客户团队自主掌控。
+                  {GEO_EVIDENCE_LAB_DISCLAIMER} 内训与数字创变者项目营重点交付“监测/知识库/审核工作流可演示原型、静态审计与 Eval 报告及 handoff.md 接管清单”，企业核心生产架构与真实密钥始终由客户团队自主掌控。
                 </p>
               </div>
             </div>
@@ -423,7 +423,7 @@ export default function TeamsLandingPage({
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="text-slate-300 font-medium">
-              Coding Everything 项目学院 · 企二代、团队内训与高校试点专页
+              Coding Everything 项目学院 · 数字创变者、团队内训与高校试点专页
             </div>
             <div>{M13_GOV_SIMULATION_DISCLAIMER}</div>
           </div>

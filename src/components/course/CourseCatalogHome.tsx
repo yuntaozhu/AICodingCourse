@@ -39,7 +39,7 @@ import {
   type WorkspaceQuizScoreSummary,
 } from "@/data/courseWorkspaceStore";
 import { fetchInstructorHandbookMarkdownApi } from "@/lib/apiClient";
-import { STAGE1_PILOT_GROUPS } from "@/data/designPatternPilots";
+import { DESIGN_PATTERN_CURRICULUM_GROUPS } from "@/data/designPatternPilots";
 import { RUNTIME_WORKSHOP_KNOWLEDGE_BASE } from "@/data/runtimeKnowledgeBase";
 import { TEAM_KNOWLEDGE_BASE, type KnowledgeBaseTrack } from "@/data/teamKnowledgeBase";
 
@@ -190,7 +190,7 @@ export default function CourseCatalogHome({
               className="px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/15 text-slate-200 hover:bg-white/10 transition-colors text-xs sm:text-sm font-medium cursor-pointer inline-flex items-center gap-2 whitespace-nowrap"
             >
               <PresentationIcon className="w-4 h-4 text-gemini-cyan" />
-              <span>打开 Reveal.js 幻灯片模式</span>
+              <span>课前预习 / 课后速查（PPT 辅材）</span>
             </button>
           </div>
         </div>
@@ -446,24 +446,24 @@ export default function CourseCatalogHome({
         </div>
       </section>
 
-      {/* Stage 1: Design Pattern Curriculum Pilot Entry */}
+      {/* Core Curriculum Line: Design Patterns & Architecture Boundaries (All 6 Groups) */}
       <section className="p-4 sm:p-5 rounded-2xl bg-[#0b0f19] border border-gemini-cyan/35 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="space-y-0.5">
             <div className="text-xs font-mono text-gemini-cyan font-semibold">
-              Stage 1 新教学主线试点 · 项目驱动 + 模式判断 + 证据验收
+              新教学主线 · 项目驱动 + 模式判断 + 证据验收（PPT 退居课前预习与课后速查）
             </div>
             <h2 className="text-sm sm:text-base font-bold text-white">
-              AI 时代软件设计模式与架构边界实战（M9/M3 与 M5/M8 两组先行试点）
+              《AI 时代的软件设计模式与架构边界实战》全 6 组核心主线（M3–M13 全覆盖）
             </h2>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">
-            含 7 步模式卡 · 故障演练台 · 反过度抽象 Rubric · 90 分钟带教脚本
+          <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+            18 张 7 步模式卡 · 6 套故障演练台 · 反过度抽象 Rubric · 10 份 90 分钟带教脚本
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          {STAGE1_PILOT_GROUPS.map((pilot) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+          {DESIGN_PATTERN_CURRICULUM_GROUPS.map((pilot) => (
             <div
               key={pilot.id}
               className="p-3.5 rounded-xl bg-[#070b14] border border-white/12 flex flex-col justify-between gap-3"
@@ -481,9 +481,9 @@ export default function CourseCatalogHome({
                     key={mid}
                     type="button"
                     onClick={() => onOpenModule(mid)}
-                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-gemini-cyan hover:text-slate-950 border border-white/15 text-slate-100 font-mono text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-gemini-cyan hover:text-slate-950 border border-white/15 text-slate-100 font-mono text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap shrink-0"
                   >
-                    <span>进入 {mid.toUpperCase()} 试点工作台</span>
+                    <span>进入 {formatModuleCodeFromId(mid)} 工作台</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 ))}

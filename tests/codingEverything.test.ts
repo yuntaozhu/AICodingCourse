@@ -33,6 +33,7 @@ import {
 import { askCourseGroundedTutor } from "../src/server/services/tutorService.ts";
 import {
   buildPatternPilotEvidenceMarkdown,
+  DESIGN_PATTERN_CURRICULUM_GROUPS,
   evaluateFaultDrill,
   getPilotGroupForModule,
   STAGE1_PILOT_GROUPS,
@@ -761,6 +762,156 @@ test("Stage 4 computePilotMetricsSummary honestly handles zero data and evaluate
     "ready_for_isolated_runner"
   );
 });
+
+test("Curriculum expansion covers all 6 design pattern groups (10 modules), 7-step cards, deterministic fault drills, and server-gated 90-min scripts", () => {
+  assert.equal(DESIGN_PATTERN_CURRICULUM_GROUPS.length, 6);
+
+  const coveredModuleIds = [
+    "m3",
+    "m4",
+    "m5",
+    "m6",
+    "m8",
+    "m9",
+    "m11",
+    "m12",
+    "m13-eng",
+    "m13-gov",
+  ];
+  for (const modId of coveredModuleIds) {
+    const group = getPilotGroupForModule(modId);
+    assert.ok(group, `Expected pattern group for ${modId}`);
+    assert.ok(group.patterns.length >= 3, `Expected >= 3 pattern cards for ${modId}`);
+    for (const pat of group.patterns) {
+      assert.ok(pat.problemAndChangeAxis.length > 10);
+      assert.ok(pat.simplestImplementation.length > 10);
+      assert.ok(pat.patternSolution.length > 10);
+      assert.ok(pat.tradeoffsAndAntiExamples.length > 10);
+      assert.ok(pat.aiCollabProtocol.length > 10);
+      assert.ok(pat.verificationChecks.length >= 1);
+      assert.ok(pat.whenNotToUse.length > 10);
+    }
+
+    const drill = group.faultDrill;
+    const realSmells = drill.smellOptions.filter((s) => s.isActualSmell).map((s) => s.id);
+    const decoySmell = drill.smellOptions.find((s) => !s.isActualSmell)!.id;
+    const rightSized = drill.decisionOptions.find((d) => d.category === "right-sized")!;
+    const overAbstracted = drill.decisionOptions.find((d) => d.category === "over-abstracted")!;
+    const underEngineered = drill.decisionOptions.find((d) => d.category === "under-engineered")!;
+
+    assert.equal(
+      evaluateFaultDrill({
+        drill,
+        selectedSmellIds: realSmells,
+        selectedDecisionId: rightSized.id,
+        antiOverAbstractionNote: drill.antiOverAbstractionSample,
+      }).passed,
+      true
+    );
+    assert.equal(
+      evaluateFaultDrill({
+        drill,
+        selectedSmellIds: [...realSmells, decoySmell],
+        selectedDecisionId: rightSized.id,
+        antiOverAbstractionNote: drill.antiOverAbstractionSample,
+      }).passed,
+      false
+    );
+    assert.equal(
+      evaluateFaultDrill({
+        drill,
+        selectedSmellIds: realSmells,
+        selectedDecisionId: overAbstracted.id,
+        antiOverAbstractionNote: drill.antiOverAbstractionSample,
+      }).passed,
+      false
+    );
+    assert.equal(
+      evaluateFaultDrill({
+        drill,
+        selectedSmellIds: realSmells,
+        selectedDecisionId: underEngineered.id,
+        antiOverAbstractionNote: drill.antiOverAbstractionSample,
+      }).passed,
+      false
+    );
+  }
+
+  const learnerCtx: AuthContext = {
+    userId: 101,
+    uid: "learner-101",
+    email: "learner@example.com",
+    displayName: "Learner",
+    avatarUrl: "",
+    authMethod: "email_otp",
+    roles: ["learner"],
+    isAdmin: false,
+    isInstructorOrTa: false,
+    assignedCohortIds: [],
+  };
+
+  const instructorCtx: AuthContext = {
+    userId: 202,
+    uid: "instructor-202",
+    email: "instructor@example.com",
+    displayName: "Instructor",
+    avatarUrl: "",
+    authMethod: "email_otp",
+    roles: ["instructor"],
+    isAdmin: false,
+    isInstructorOrTa: true,
+    assignedCohortIds: [1],
+  };
+
+  for (const modId of ["m4", "m6", "m11", "m12", "m13-eng", "m13-gov"]) {
+    const learnerDetail = getAuthorizedModuleDetail(modId, learnerCtx, true);
+    assert.equal(learnerDetail.allowed, true);
+    assert.equal(learnerDetail.instructorAuthorized, false);
+    assert.equal(learnerDetail.patternPilotScript, null);
+
+    const instructorDetail = getAuthorizedModuleDetail(modId, instructorCtx, true);
+    assert.equal(instructorDetail.allowed, true);
+    assert.equal(instructorDetail.instructorAuthorized, true);
+    assert.ok(instructorDetail.patternPilotScript !== null);
+    assert.equal(instructorDetail.patternPilotScript!.totalMinutes, 90);
+    assert.equal(instructorDetail.patternPilotScript!.phases.length, 5);
+    const total = instructorDetail.patternPilotScript!.phases.reduce(
+      (sum, p) => sum + p.durationMinutes,
+      0
+    );
+    assert.equal(total, 90);
+    assert.ok(instructorDetail.patternPilotScript!.overAbstractionRedFlags.length >= 3);
+    assert.ok(instructorDetail.patternPilotScript!.oralDefenseQuestions.length >= 3);
+
+    const handbook = buildInstructorLessonPlanMarkdown(modId);
+    assert.ok(handbook && handbook.includes("90 分钟项目实战课教师带教脚本"));
+  }
+
+  // Ensure instructor-only scripts never leak into client-bundled src/data/*
+  const publicDataDir = path.resolve(process.cwd(), "src/data");
+  for (const file of fs.readdirSync(publicDataDir)) {
+    if (!file.endsWith(".ts")) continue;
+    const raw = fs.readFileSync(path.join(publicDataDir, file), "utf8");
+    assert.equal(
+      raw.includes("PRIVATE_PATTERN_PILOT_SCRIPTS"),
+      false,
+      `Found server script identifier in client file src/data/${file}`
+    );
+    assert.equal(
+      raw.includes("overAbstractionRedFlags"),
+      false,
+      `Found instructor red-flag key in client file src/data/${file}`
+    );
+  }
+
+  for (const tpl of SEED_PROJECT_TEMPLATES) {
+    assert.equal(tpl.title.includes("企二代"), false);
+    assert.equal(tpl.subtitle.includes("企二代"), false);
+  }
+  const indexHtml = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf8");
+  assert.equal(indexHtml.includes("企二代"), false);
+});
+
 
 
 

@@ -22,7 +22,7 @@ export const SEED_PROJECT_TEMPLATES: SeedProjectTemplate[] = [
     slug: "geo-evidence-lab",
     title: "GEO Evidence Lab · 品牌公开信息监测与引用一致性质检台",
     subtitle:
-      "企二代与品牌业务首推标杆项目：建立公开来源登记、结构化语料、引用核验、抽样评测与人工审核工作流（两周交付可维护原型）。",
+      "数字创变者与品牌业务首推标杆项目：建立公开来源登记、结构化语料、引用核验、抽样评测与人工审核工作流（两周交付可维护原型）。",
     trackType: "geo-evidence",
     targetModuleId: "m13-eng",
     allowedGlobs: ["app/**", "src/**", "specs/**", "tests/**", "eval/**", "rules/20-*", "handoff/**"],
@@ -55,7 +55,7 @@ alwaysApply: false
   },
   {
     slug: "enterprise-kb-workbench",
-    title: "企业私有知识库目录与受控检索工作流（企二代 / 团队试点）",
+    title: "企业私有知识库目录与受控检索工作流（数字创变者 / 团队试点）",
     subtitle:
       "针对企业制度、研发 SOP 或产品手册，构建带 ACL 检索前过滤、Tombstone 版本淘汰与人工审核草稿工作流。",
     trackType: "enterprise-heir",
@@ -87,7 +87,7 @@ alwaysApply: false
     slug: "gov-hitl-audit-lab",
     title: "M13-Gov 无代码 Agent 产品蓝图与预制轨迹评审项目",
     subtitle:
-      "面向产品经理、业务负责人与企二代管理者：交付 Data PRD、Prompt PRD、HITL 审批矩阵与轨迹风险审签报告。",
+      "面向产品经理、业务负责人与数字化业务开拓者：交付 Data PRD、Prompt PRD、HITL 审批矩阵与轨迹风险审签报告。",
     trackType: "runtime-kb",
     targetModuleId: "m13-gov",
     allowedGlobs: ["specs/**", "rules/20-*", "eval/**", "handoff/**"],

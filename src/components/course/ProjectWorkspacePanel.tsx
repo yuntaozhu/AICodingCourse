@@ -709,7 +709,7 @@ export default function ProjectWorkspacePanel({
               Coding Everything Project Studio（任务 · 工作区 · 评测 · 归档）
             </h1>
             <p className="text-slate-300 max-w-4xl leading-relaxed">
-              真实任务 → Spec 与边界 → AI 协作实现 → 静态材料检查 &amp; 模拟 Eval → Course Tutor 引文诊断 → 人工批准与 Handoff 归档。首推标杆项目为企二代授权真实问题原型{" "}
+              真实任务 → Spec 与边界 → AI 协作实现 → 静态材料检查 &amp; 模拟 Eval → Course Tutor 引文诊断 → 人工批准与 Handoff 归档。首推标杆项目为数字化业务授权真实问题原型{" "}
               <strong>GEO Evidence Lab</strong>。
             </p>
           </div>
